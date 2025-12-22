@@ -1,0 +1,39 @@
+# Make sure you're in the project directory
+cd gex-options-platform
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy environment file
+cp .env.example .env
+
+# Edit .env with your credentials
+nano .env  # or use your preferred editor
+
+# Set up database
+psql -U postgres -f config/database_schema.sql
+
+# Get TradeStation tokens
+python scripts/get_tradestation_tokens.py
+
+# Run the test suite
+python tests/test_full_pipeline.py
+
+# If tests pass, initialize git
+git init
+git add .
+git commit -m "Initial commit: Complete GEX Options Platform
+
+- Real-time TradeStation streaming ingestion
+- Greeks calculation with validation
+- GEX analytics engine
+- TimescaleDB storage
+- Production-ready with tests"
+
+# Create GitHub repo and push
+gh repo create gex-options-platform --public --source=. --remote=origin
+git push -u origin main
