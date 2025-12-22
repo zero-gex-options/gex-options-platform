@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Environment and secrets
 .env
 .env.local
@@ -45,6 +46,8 @@ tmp/
 temp/
 *.tmp
 =======
+=======
+>>>>>>> ba34be0414aa161a41e5f43addf4f25e1738af74
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
