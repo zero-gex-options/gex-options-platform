@@ -13,8 +13,9 @@ from dotenv import load_dotenv
 from datetime import date, datetime
 import logging
 
-# Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# Add src directories to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'ingestion'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'gex'))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ async def test_full_pipeline():
     logger.info("\nTest 2: Data Ingestion (30 seconds)")
     logger.info("-" * 40)
     
-    from src.ingestion.tradestation_streaming_ingestion_engine import StreamingIngestionEngine
+    from tradestation_streaming_ingestion_engine import StreamingIngestionEngine
     
     engine = StreamingIngestionEngine()
     
@@ -150,7 +151,7 @@ async def test_full_pipeline():
     gex_ok = False
     
     if count > 0:
-        from src.gex.gex_calculator import GEXCalculator
+        from gex_calculator import GEXCalculator
         
         calculator = GEXCalculator(db)
         

@@ -30,6 +30,12 @@ sudo apt update && sudo apt upgrade -y
 3. Install essential tools
 sudo apt install -y git curl wget build-essential python3-pip python3-venv postgresql postgresql-contrib
 
+4. Update timezone
+sudo timedatectl set-timezone America/New_York
+
+5. Verify timezone update
+date
+
 ##########################################################################################
 ### Step 3: Install TimescaleDB
 
@@ -140,11 +146,12 @@ Wants=postgresql.service
 Type=simple
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/gex-options-platform
+WorkingDirectory=/home/ubuntu/gex-options-platform/src/ingestion
 Environment="PATH=/home/ubuntu/gex-options-platform/venv/bin"
+Environment="PYTHONPATH=/home/ubuntu/gex-options-platform/src/ingestion"
 EnvironmentFile=/home/ubuntu/gex-options-platform/.env
 
-ExecStart=/home/ubuntu/gex-options-platform/venv/bin/python src/ingestion/tradestation_streaming_ingestion_engine.py
+ExecStart=/home/ubuntu/gex-options-platform/venv/bin/python tradestation_streaming_ingestion_engine.py
 
 # Restart behavior
 Restart=always
@@ -170,11 +177,12 @@ Wants=postgresql.service
 Type=simple
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/gex-options-platform
+WorkingDirectory=/home/ubuntu/gex-options-platform/src/gex
 Environment="PATH=/home/ubuntu/gex-options-platform/venv/bin"
+Environment="PYTHONPATH=/home/ubuntu/gex-options-platform/src/gex"
 EnvironmentFile=/home/ubuntu/gex-options-platform/.env
 
-ExecStart=/home/ubuntu/gex-options-platform/venv/bin/python src/gex/gex_scheduler.py
+ExecStart=/home/ubuntu/gex-options-platform/venv/bin/python gex_scheduler.py
 
 # Restart behavior
 Restart=always
