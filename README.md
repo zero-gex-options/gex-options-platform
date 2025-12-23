@@ -12,9 +12,11 @@ Real-time gamma exposure (GEX) analysis for 0DTE SPY options.
 
 ## Architecture
 ```
-Market APIs → Ingestion Engine → TimescaleDB → GEX Calculator → Dashboard
-                    ↓                             ↓
-              Greeks Calculator              ML Pipeline (future)
+Real-time Data → Ingestion Layer → Storage → Calculation Engine → Dashboard
+     ↓              ↓                  ↓            ↓                  ↓
+  Market APIs   Python/Lambda    TimescaleDB    Real-time GEX      React/
+  TradeStation  Event streams    PostgreSQL     Analytics          Plotly Dash
+  CBOE/others   Kafka/Redis      S3 backup      Greeks calc        Cloud hosted
 
 ## Project Structure
 ```

@@ -49,6 +49,14 @@ wget -qO- https://packagecloud.io/timescale/timescaledb/gpgkey | sudo gpg --dear
 3. Update and install
 sudo apt update
 sudo apt install -y timescaledb-2-postgresql-14
+# If Unable to locate package timescaledb-2-postgresql-14, try:
+PG_VERSION=$(psql --version | grep -oP '\d+' | head -1)
+echo "PostgreSQL version: $PG_VERSION"
+sudo apt install -y gnupg postgresql-common apt-transport-https lsb-release wget
+echo "deb https://packagecloud.io/timescale/timescaledb/ubuntu/ $(lsb_release -c -s) main" | sudo tee /etc/apt/sources.list.d/timescaledb.list
+wget --quiet -O - https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/timescaledb.gpg > /dev/null
+sudo apt update
+sudo apt install -y timescaledb-2-postgresql-${PG_VERSION}
 
 4. Tune PostgreSQL for TimescaleDB
 sudo timescaledb-tune --quiet --yes
@@ -63,6 +71,7 @@ sudo systemctl restart postgresql
 sudo -i -u postgres
 
 2. Create database and user
+***** Update your_secure_password_here ****
 psql << EOF
 CREATE DATABASE gex_db;
 CREATE USER gex_user WITH PASSWORD 'your_secure_password_here';
@@ -279,29 +288,75 @@ chmod +x ~/monitor.sh
 ##########################################################################################
 ### Step 8: Set Up Automated Backups
 
-1. Create backup script
+1. Create .pgpass file in ubuntu's home directory
+cat > ~/.pgpass << 'EOF'
+localhost:5432:gex_db:gex_user:your_secure_password_here
+EOF
+# Then, replace placeholder with actual password:
+vi ~/.pgpass
+
+2. Set strict permissions (required by PostgreSQL)
+chmod 600 ~/.pgpass
+
+3. Test it works
+pg_dump -U gex_user -h localhost gex_db | head -n 20
+
+4. Create DB backup script
 sudo vi /usr/local/bin/backup-gex-db.sh
-# Add:
+
 #!/bin/bash
+
+# Configuration
 BACKUP_DIR="/home/ubuntu/backups"
+DB_NAME="gex_db"
+DB_USER="gex_user"
+DB_HOST="localhost"
 DATE=$(date +%Y%m%d_%H%M%S)
-mkdir -p $BACKUP_DIR
+RETENTION_DAYS=7
+
+# Create backup directory
+mkdir -p "$BACKUP_DIR"
 
 # Backup database
-pg_dump -U gex_user -h localhost gex_db | gzip > $BACKUP_DIR/gex_db_$DATE.sql.gz
+echo "[$(date)] Starting backup..."
 
-# Keep only last 7 days
-find $BACKUP_DIR -name "gex_db_*.sql.gz" -mtime +7 -delete
+if pg_dump -U "$DB_USER" -h "$DB_HOST" "$DB_NAME" | gzip > "$BACKUP_DIR/${DB_NAME}_${DATE}.sql.gz"; then
+    echo "[$(date)] ✅ Backup completed: ${DB_NAME}_${DATE}.sql.gz"
+    
+    # Get backup size
+    SIZE=$(du -h "$BACKUP_DIR/${DB_NAME}_${DATE}.sql.gz" | cut -f1)
+    echo "[$(date)] Backup size: $SIZE"
+    
+    # Clean up old backups
+    DELETED=$(find "$BACKUP_DIR" -name "${DB_NAME}_*.sql.gz" -mtime +$RETENTION_DAYS -delete -print | wc -l)
+    if [ "$DELETED" -gt 0 ]; then
+        echo "[$(date)] Deleted $DELETED old backup(s)"
+    fi
+    
+    # List current backups
+    echo "[$(date)] Current backups:"
+    ls -lh "$BACKUP_DIR/${DB_NAME}_"*.sql.gz | tail -5
+    
+else
+    echo "[$(date)] ❌ Backup failed!"
+    exit 1
+fi
 
-echo "Backup completed: gex_db_$DATE.sql.gz"
+echo "[$(date)] Backup process complete"
 
-2. Make executable
+5. Make it executable
 sudo chmod +x /usr/local/bin/backup-gex-db.sh
 
-3. Add to crontab (daily at 2 AM)
-sudo crontab -e
+6. Test the backup script
+# Run manually to test
+sudo -u ubuntu /usr/local/bin/backup-gex-db.sh
+# Check the backup was created
+ls -lh /home/ubuntu/backups/
+
+7. Setup automated backups via crontab
+crontab -e
 # Add:
-0 2 * * * /usr/local/bin/backup-gex-db.sh >> /var/log/gex-backup.log 2>&1
+0 2 * * * /usr/local/bin/backup-gex-db.sh >> /home/ubuntu/backup.log 2>&1
 
 ##########################################################################################
 ### Step 9: Security Hardening
