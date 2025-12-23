@@ -128,12 +128,16 @@ class StreamingIngestionEngine:
         """Handle incoming option update from stream"""
         
         self.options_received += 1
-        
+
+        if self.options_received % 10 == 0:
+            logger.info(f"DEBUG: Received {self.options_received} options so far")
+
         try:
             # Parse the option data
             option = self._parse_option_update(data)
             
             if not option:
+                logger.warning("DEBUG: Failed to parse option data")
                 return
             
             # Validate Greeks if enabled
