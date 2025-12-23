@@ -81,11 +81,11 @@ gex-options-platform/
 ### Installation
 ```bash
 # Clone and setup
-git clone <your-repo>
+git clone git@github.com:zero-gex-options/gex-options-platform.git
 cd gex-options-platform
 
 # Virtual environment
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
