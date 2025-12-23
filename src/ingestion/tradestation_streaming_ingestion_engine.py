@@ -31,6 +31,7 @@ class StreamingIngestionEngine:
     """Ingestion engine for TradeStation streaming options data with Greeks validation"""
     
     def __init__(self):
+        logger.setLevel(logging.DEBUG)
         logger.info("Initializing Streaming Ingestion Engine")
         
         self.db_conn = self._connect_db()
@@ -341,9 +342,15 @@ class StreamingIngestionEngine:
     
     def _store_options_batch(self, batch: List[Dict]):
         """Store batch of options to database"""
-        
+
+        logger.info(f"=== STORING BATCH ===")
+        logger.info(f"Batch size: {len(batch)}")
+
+        if len(batch) > 0:
+            logger.info(f"Sample option: {batch[0]['symbol']} {batch[0]['strike']} {batch[0]['option_type']}")
+
         cursor = self.db_conn.cursor()
-        
+
         values = []
         for opt in batch:
             values.append((
@@ -370,7 +377,9 @@ class StreamingIngestionEngine:
                 opt['spread_pct'],
                 'tradestation_stream'
             ))
-        
+
+        logger.info(f"Prepared {len(values)} rows for insertion")
+
         insert_query = """
             INSERT INTO options_quotes 
             (timestamp, symbol, underlying_price, strike, expiration, dte,
@@ -392,11 +401,17 @@ class StreamingIngestionEngine:
                 theta = EXCLUDED.theta,
                 vega = EXCLUDED.vega
         """
-        
-        execute_values(cursor, insert_query, values)
-        self.db_conn.commit()
-        cursor.close()
-    
+
+        try:
+            execute_values(cursor, insert_query, values)
+            self.db_conn.commit()
+            logger.info(f"✅ Database commit successful")
+            cursor.close()
+        except Exception as e:
+            logger.error(f"❌ Database error: {e}")
+            logger.error(f"Query: {insert_query[:200]}")
+            raise
+
     def _store_underlying_price(self, symbol: str, price: float):
         """Store underlying price update"""
         

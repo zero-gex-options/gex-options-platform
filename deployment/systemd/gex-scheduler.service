@@ -7,18 +7,12 @@ Wants=postgresql.service
 Type=simple
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/gex-options-platform/src/gex
-Environment="PATH=/home/ubuntu/gex-options-platform/venv/bin"
-Environment="PYTHONPATH=/home/ubuntu/gex-options-platform/src/gex"
-EnvironmentFile=/home/ubuntu/gex-options-platform/.env
+WorkingDirectory=/home/ubuntu/gex-options-platform
 
-ExecStart=/home/ubuntu/gex-options-platform/venv/bin/python gex_scheduler.py
+ExecStart=/home/ubuntu/gex-options-platform/deployment/run/scheduler.sh
 
-# Restart behavior
 Restart=always
 RestartSec=10
-
-# Logging
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=gex-scheduler
