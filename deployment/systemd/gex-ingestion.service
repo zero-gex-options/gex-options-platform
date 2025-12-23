@@ -1,16 +1,27 @@
 [Unit]
-Description=GEX Options Data Ingestion (TradeStation)
+Description=GEX Options Data Ingestion
 After=network.target postgresql.service
+Wants=postgresql.service
 
 [Service]
 Type=simple
-User=YOUR_USER
-WorkingDirectory=/path/to/gex-options-platform
-Environment="PATH=/path/to/gex-options-platform/venv/bin"
-EnvironmentFile=/path/to/gex-options-platform/.env
-ExecStart=/path/to/gex-options-platform/venv/bin/python src/ingestion/tradestation_streaming_ingestion_engine.py
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/gex-options-platform/src/ingestion
+Environment="PATH=/home/ubuntu/gex-options-platform/venv/bin"
+Environment="PYTHONPATH=/home/ubuntu/gex-options-platform/src/ingestion"
+EnvironmentFile=/home/ubuntu/gex-options-platform/.env
+
+ExecStart=/home/ubuntu/gex-options-platform/venv/bin/python tradestation_streaming_ingestion_engine.py
+
+# Restart behavior
 Restart=always
 RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gex-ingestion
 
 [Install]
 WantedBy=multi-user.target

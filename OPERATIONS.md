@@ -151,8 +151,16 @@ curl -I https://api.tradestation.com
 - PostgreSQL: `localhost:5432`
 - Project Directory: `/home/ubuntu/gex-options-platform`
 
+## Restore database from backup
+```bash
+# List available backups
+sudo /usr/local/bin/restore-gex-db.sh
+# Restore from the latest backup
+sudo /usr/local/bin/restore-gex-db.sh /home/ubuntu/backups/gex_db_20241222_143052.dump
+```
+
 ## Emergency Contacts
 
 - AWS Console: https://console.aws.amazon.com/
 - TradeStation API: https://api.tradestation.com/docs/
-- Project Repo: https://github.com/YOUR_USERNAME/gex-options-platform
+- Project Repo: https://github.com/zero-gex-options/gex-options-platform

@@ -1,0 +1,27 @@
+[Unit]
+Description=GEX Calculation Scheduler
+After=network.target postgresql.service gex-ingestion.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/gex-options-platform/src/gex
+Environment="PATH=/home/ubuntu/gex-options-platform/venv/bin"
+Environment="PYTHONPATH=/home/ubuntu/gex-options-platform/src/gex"
+EnvironmentFile=/home/ubuntu/gex-options-platform/.env
+
+ExecStart=/home/ubuntu/gex-options-platform/venv/bin/python gex_scheduler.py
+
+# Restart behavior
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gex-scheduler
+
+[Install]
+WantedBy=multi-user.target
