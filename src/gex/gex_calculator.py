@@ -5,7 +5,8 @@ Calculates dealer gamma exposure from options market data.
 """
 
 import psycopg2
-from datetime import datetime, date
+from datetime import datetime, date, timezone
+import pytz
 from typing import Dict, Optional, List
 from dataclasses import dataclass
 import logging
@@ -47,12 +48,13 @@ class GEXCalculator:
         """
         self.db = db_connection
 
-    def calculate_current_gex(self, symbol: str) -> Optional[GEXMetrics]:
+    def calculate_current_gex(self, symbol: str, current_price: Optional[float] = None) -> Optional[GEXMetrics]:
         """
         Calculate GEX for the most recent data
 
         Args:
             symbol: Underlying symbol (e.g., 'SPY')
+            current_price: Optional current price (if not provided, uses price from data)
 
         Returns:
             GEXMetrics object or None if no data
@@ -60,7 +62,6 @@ class GEXCalculator:
         cursor = self.db.cursor()
 
         # Get the most recent data for each strike for today's 0DTE
-        # No time filter - just get the latest data per strike
         query = """
             SELECT DISTINCT ON (strike, option_type)
                 strike,
@@ -92,7 +93,7 @@ class GEXCalculator:
 
                 # Debug
                 cursor.execute("""
-                    SELECT
+                    SELECT 
                         COUNT(*) as total,
                         COUNT(DISTINCT DATE(expiration)) as exp_dates,
                         MIN(DATE(expiration)) as min_exp,
@@ -111,11 +112,20 @@ class GEXCalculator:
 
             # Parse data
             options_data = []
-            underlying_price = rows[0][7]
             expiration = rows[0][8]
-            timestamp = rows[0][9]
 
-            logger.info(f"Underlying: ${underlying_price:.2f}, Expiration: {expiration}, Timestamp: {timestamp}")
+            # Store timestamp in UTC for database
+            timestamp = datetime.now(timezone.utc)
+
+            # Use provided current price, or fallback to price from data
+            if current_price is not None:
+                underlying_price = current_price
+                logger.info(f"Using provided current price: ${underlying_price:.2f}")
+            else:
+                underlying_price = rows[0][7]
+                logger.info(f"Using price from options data: ${underlying_price:.2f}")
+
+            logger.info(f"Expiration: {expiration}, Timestamp: {timestamp}")
 
             for row in rows:
                 options_data.append({

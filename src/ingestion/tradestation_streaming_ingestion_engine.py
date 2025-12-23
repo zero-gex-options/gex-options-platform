@@ -8,7 +8,7 @@ Optionally validates TradeStation Greeks against calculated values.
 import asyncio
 import psycopg2
 from psycopg2.extras import execute_values
-from datetime import datetime, time as dt_time, date
+from datetime import datetime, time as dt_time, date, timezone
 import pytz
 import logging
 from typing import Dict, List, Optional
@@ -29,28 +29,28 @@ logger = logging.getLogger(__name__)
 
 class StreamingIngestionEngine:
     """Ingestion engine for TradeStation streaming options data with Greeks validation"""
-    
+
     def __init__(self):
         logger.setLevel(logging.DEBUG)
         logger.info("Initializing Streaming Ingestion Engine")
-        
+
         self.db_conn = self._connect_db()
-        
+
         # TradeStation credentials
         self.ts_client_id = os.getenv('TRADESTATION_CLIENT_ID')
         self.ts_client_secret = os.getenv('TRADESTATION_CLIENT_SECRET')
         self.ts_refresh_token = os.getenv('TRADESTATION_REFRESH_TOKEN')
         self.ts_sandbox = os.getenv('TRADESTATION_USE_SANDBOX', 'false').lower() == 'true'
-        
+
         # Batch processing
         self.batch_size = int(os.getenv('BATCH_SIZE', 100))
         self.batch_buffer = []
         self.batch_lock = asyncio.Lock()
-        
+
         # Greeks validation
         self.validate_greeks = os.getenv('VALIDATE_GREEKS', 'false').lower() == 'true'
         self.greeks_calc = GreeksCalculator() if self.validate_greeks else None
-        
+
         # Validation tolerances (percentage)
         # Note: 0DTE options have larger expected mismatches due to:
         # - American vs European option differences
@@ -61,12 +61,12 @@ class StreamingIngestionEngine:
         self.gamma_tolerance = 0.25  # 25% (was 10%)
         self.vega_tolerance = 0.20   # 20% (was 10%)
         self.theta_tolerance = 0.25  # 25% (new)
-        
+
         # Stats
         self.options_received = 0
         self.options_stored = 0
         self.errors = 0
-        
+
         # Validation stats
         self.greeks_validated = 0
         self.greeks_mismatches = {
@@ -75,18 +75,18 @@ class StreamingIngestionEngine:
             'theta': 0,
             'vega': 0
         }
-        
+
         # Track underlying price
         self.underlying_price = None
-        
+
         logger.info(f"Batch size: {self.batch_size}")
         logger.info(f"Sandbox mode: {self.ts_sandbox}")
         logger.info(f"Greeks validation: {'ENABLED' if self.validate_greeks else 'DISABLED'}")
-    
+
     def _connect_db(self):
         """Connect to PostgreSQL/TimescaleDB"""
         logger.info("Connecting to database...")
-        
+
         conn = psycopg2.connect(
             host=os.getenv('DB_HOST'),
             database=os.getenv('DB_NAME'),
@@ -94,7 +94,7 @@ class StreamingIngestionEngine:
             password=os.getenv('DB_PASSWORD'),
             port=os.getenv('DB_PORT')
         )
-        
+
         logger.info("✅ Database connected")
         return conn
 
@@ -113,9 +113,9 @@ class StreamingIngestionEngine:
             logger.debug("Market closed: Weekend")
             return False
 
-        # Market hours: 9:30 AM - 4:00 PM ET
+        # Market hours: 9:30 AM - 4:15 PM ET
         market_open = dt_time(9, 30)
-        market_close = dt_time(16, 0)
+        market_close = dt_time(16, 15)
         current_time = now.time()
 
         is_open = market_open <= current_time <= market_close
@@ -127,7 +127,7 @@ class StreamingIngestionEngine:
 
     async def option_update_handler(self, data: Dict):
         """Handle incoming option update from stream"""
-        
+
         self.options_received += 1
 
         if self.options_received % 10 == 0:
@@ -136,59 +136,59 @@ class StreamingIngestionEngine:
         try:
             # Parse the option data
             option = self._parse_option_update(data)
-            
+
             if not option:
                 logger.warning("DEBUG: Failed to parse option data")
                 return
-            
+
             # Validate Greeks if enabled
             if self.validate_greeks and option['implied_vol'] > 0:
                 self._validate_greeks(option)
-            
+
             # Add to batch buffer
             async with self.batch_lock:
                 self.batch_buffer.append(option)
-                
+
                 # Flush batch if full
                 if len(self.batch_buffer) >= self.batch_size:
                     logger.info(f"Batch full ({len(self.batch_buffer)} records), flushing...")
                     await self._flush_batch()
-                    
+
         except Exception as e:
             logger.error(f"Error in option handler: {e}", exc_info=True)
             self.errors += 1
-    
+
     def _parse_option_update(self, data: Dict) -> Optional[Dict]:
         """Parse TradeStation option update into standardized format"""
-        
+
         try:
             # Extract leg info
             if not data.get('Legs') or len(data['Legs']) == 0:
                 return None
-            
+
             leg = data['Legs'][0]
-            
+
             # Parse symbol
             symbol = leg.get('Symbol')
             if not symbol:
                 return None
-            
+
             parts = symbol.split()
             if len(parts) < 2:
                 return None
-            
+
             underlying = parts[0]
-            
+
             # Parse expiration
             exp_str = leg.get('Expiration')
             expiration = datetime.fromisoformat(exp_str.replace('Z', '+00:00')).date()
-            
+
             # Parse strike
             strike = float(leg.get('StrikePrice', 0))
-            
+
             # Parse option type
             option_type = leg.get('OptionType', '').lower()
-            
+
             # Build option dict with TradeStation Greeks
             option = {
                 'symbol': symbol,
@@ -208,20 +208,20 @@ class StreamingIngestionEngine:
                 'theta': float(data.get('Theta', 0)),
                 'vega': float(data.get('Vega', 0)),
                 'rho': float(data.get('Rho', 0)),
-                'timestamp': datetime.now(),
+                'timestamp': datetime.now(timezone.utc),
                 'underlying_price': self.underlying_price,
                 'dte': (expiration - date.today()).days,
                 'is_calculated': False
             }
-            
+
             # Calculate spread percentage
             if option['bid'] > 0 and option['ask'] > 0:
                 option['spread_pct'] = (option['ask'] - option['bid']) / option['mid'] if option['mid'] > 0 else 0
             else:
                 option['spread_pct'] = None
-            
+
             return option
-            
+
         except Exception as e:
             logger.error(f"Failed to parse option: {e}")
             return None
@@ -303,10 +303,10 @@ class StreamingIngestionEngine:
 
     def _log_validation_summary(self):
         """Log summary of Greeks validation"""
-        
+
         total_mismatches = sum(self.greeks_mismatches.values())
         mismatch_rate = (total_mismatches / self.greeks_validated * 100) if self.greeks_validated > 0 else 0
-        
+
         logger.info(f"\n{'='*60}")
         logger.info(f"GREEKS VALIDATION SUMMARY")
         logger.info(f"{'='*60}")
@@ -318,28 +318,28 @@ class StreamingIngestionEngine:
         logger.info(f"  Theta: {self.greeks_mismatches['theta']}")
         logger.info(f"  Vega: {self.greeks_mismatches['vega']}")
         logger.info(f"{'='*60}\n")
-    
+
     async def _flush_batch(self):
         """Flush batch buffer to database"""
-        
+
         if not self.batch_buffer:
             return
-        
+
         logger.info(f"Flushing {len(self.batch_buffer)} options to database")
-        
+
         try:
             self._store_options_batch(self.batch_buffer)
-            
+
             self.options_stored += len(self.batch_buffer)
             logger.info(f"✅ Stored {len(self.batch_buffer)} options (total: {self.options_stored})")
-            
+
             self.batch_buffer.clear()
-            
+
         except Exception as e:
             logger.error(f"Error flushing batch: {e}", exc_info=True)
             self.errors += 1
             self.batch_buffer.clear()
-    
+
     def _store_options_batch(self, batch: List[Dict]):
         """Store batch of options to database"""
 
@@ -414,18 +414,18 @@ class StreamingIngestionEngine:
 
     def _store_underlying_price(self, symbol: str, price: float):
         """Store underlying price update"""
-        
+
         cursor = self.db_conn.cursor()
-        
+
         insert_query = """
             INSERT INTO underlying_prices 
             (timestamp, symbol, price, bid, ask, volume, source)
             VALUES (%s, %s, %s, %s, %s, %s, 'tradestation_stream')
             ON CONFLICT (timestamp, symbol) DO NOTHING
         """
-        
+
         cursor.execute(insert_query, (
-            datetime.now(),
+            datetime.now(timezone.utc),
             symbol,
             price,
             price,
@@ -434,32 +434,32 @@ class StreamingIngestionEngine:
         ))
         self.db_conn.commit()
         cursor.close()
-    
+
     async def run(self, symbol: str = 'SPY'):
         """Main ingestion loop"""
-        
+
         logger.info("="*80)
         logger.info(f"Starting Streaming Ingestion Engine for {symbol}")
         if self.validate_greeks:
             logger.info("Greeks validation: ENABLED")
         logger.info("="*80)
-        
+
         async with TradeStationStreamingClient(
             self.ts_client_id,
             self.ts_client_secret,
             self.ts_refresh_token,
             sandbox=self.ts_sandbox
         ) as client:
-            
+
             while True:
                 try:
                     if not self.is_market_open():
                         logger.info("Market closed, waiting 5 minutes...")
                         await asyncio.sleep(300)
                         continue
-                    
+
                     logger.info("Market is open, starting stream...")
-                    
+
                     # Get underlying price
                     quote = await client.get_quote(symbol)
                     if quote:
@@ -510,22 +510,22 @@ class StreamingIngestionEngine:
 
                     logger.info("Market closed or stream ended")
                     await client.stop_streaming()
-                    
+
                     # Final flush
                     if self.batch_buffer:
                         async with self.batch_lock:
                             await self._flush_batch()
-                    
+
                     if self.validate_greeks and self.greeks_validated > 0:
                         self._log_validation_summary()
-                    
+
                 except KeyboardInterrupt:
                     logger.info("Shutting down...")
                     break
                 except Exception as e:
                     logger.error(f"Error in main loop: {e}", exc_info=True)
                     await asyncio.sleep(30)
-        
+
         self.db_conn.close()
         logger.info("Ingestion engine stopped")
 
