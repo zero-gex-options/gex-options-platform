@@ -46,14 +46,15 @@ EOF
 
 ### View Latest GEX
 ```bash
-psql -U gex_user -d gex_db -h localhost << EOF
+psql -U gex_user -d gex_db -h localhost << 'EOF'
 SELECT 
-    timestamp,
-    underlying_price,
+    timestamp AT TIME ZONE 'America/New_York' as et_time,
+    underlying_price as spot,
     total_gamma_exposure/1e6 as total_gex_M,
     net_gex/1e6 as net_gex_M,
     max_gamma_strike,
-    gamma_flip_point
+    gamma_flip_point,
+    put_call_ratio
 FROM gex_metrics
 ORDER BY timestamp DESC
 LIMIT 10;
@@ -137,6 +138,9 @@ systemctl is-active gex-ingestion gex-scheduler postgresql
 ```bash
 ~/monitor.sh
 ```
+
+# Watch data flowing in real-time
+watch -n 5 'psql -U gex_user -d gex_db -h localhost -c "SELECT COUNT(*) as records_last_min, MAX(timestamp) AT TIME ZONE '\''America/New_York'\'' as latest FROM options_quotes WHERE timestamp > NOW() - INTERVAL '\''1 minute'\'';"'
 
 ### Network Check
 ```bash
