@@ -1,44 +1,69 @@
 """
-TradeStation OAuth 2.0 Authentication Handler
+TradeStation Authentication Manager
 
-Manages access tokens with automatic refresh.
+Handles OAuth2 authentication with TradeStation API.
 """
 
+import os
 import requests
-import time
-import logging
 from datetime import datetime, timedelta
+import logging
+from dotenv import load_dotenv
 
+load_dotenv()
+
+# Get and validate logging level from environment
+log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
+valid_levels = {
+    'DEBUG': logging.DEBUG,
+    'INFO': logging.INFO,
+    'WARNING': logging.WARNING,
+    'ERROR': logging.ERROR,
+    'CRITICAL': logging.CRITICAL
+}
+
+if log_level_str in valid_levels:
+    log_level = valid_levels[log_level_str]
+else:
+    log_level = logging.INFO
+    print(f"Warning: Invalid LOG_LEVEL '{log_level_str}', defaulting to INFO. Valid options: {', '.join(valid_levels.keys())}")
+
+logging.basicConfig(
+    level=log_level,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 
 class TradeStationAuth:
-    """Handle TradeStation OAuth 2.0 authentication and token refresh"""
-    
-    TOKEN_URL = "https://signin.tradestation.com/oauth/token"
-    SANDBOX_TOKEN_URL = "https://sim-signin.tradestation.com/oauth/token"
+    """Manage TradeStation API authentication"""
     
     def __init__(self, client_id: str, client_secret: str, refresh_token: str, sandbox: bool = False):
         """
-        Initialize authentication handler
+        Initialize auth manager
         
         Args:
             client_id: TradeStation API client ID
             client_secret: TradeStation API client secret
-            refresh_token: OAuth refresh token from initial authorization
+            refresh_token: Refresh token for obtaining access tokens
             sandbox: Use sandbox environment (default False)
         """
+        logger.debug(f"Initializing TradeStationAuth (sandbox={sandbox})")
+        
+        if not client_id or not client_secret or not refresh_token:
+            logger.critical("Missing required authentication credentials!")
+            raise ValueError("Client ID, Client Secret, and Refresh Token are required")
+        
         self.client_id = client_id
         self.client_secret = client_secret
         self.refresh_token = refresh_token
         self.sandbox = sandbox
         
-        self.token_url = self.SANDBOX_TOKEN_URL if sandbox else self.TOKEN_URL
-        
+        self.token_url = "https://signin.tradestation.com/oauth/token"
         self.access_token = None
         self.token_expiry = None
         
-        logger.info(f"TradeStation Auth initialized (sandbox={sandbox})")
+        logger.info(f"TradeStation auth initialized for {'sandbox' if sandbox else 'production'}")
     
     def get_access_token(self) -> str:
         """
@@ -47,27 +72,32 @@ class TradeStationAuth:
         Returns:
             Valid access token
         """
-        # Check if we need to refresh
-        if self.access_token is None or self._is_token_expired():
-            logger.info("Access token missing or expired, refreshing...")
-            self._refresh_access_token()
+        logger.debug("Checking access token validity")
         
-        return self.access_token
+        if self.access_token and self.token_expiry:
+            time_until_expiry = (self.token_expiry - datetime.now()).total_seconds()
+            logger.debug(f"Token expires in {time_until_expiry:.0f} seconds")
+            
+            if datetime.now() < self.token_expiry:
+                logger.debug("Using cached access token")
+                return self.access_token
+            else:
+                logger.info("Access token expired, refreshing...")
+        else:
+            logger.info("No cached token, obtaining new access token...")
+        
+        return self._refresh_access_token()
     
-    def _is_token_expired(self) -> bool:
-        """Check if current token is expired or will expire soon"""
-        if self.token_expiry is None:
-            return True
+    def _refresh_access_token(self) -> str:
+        """
+        Refresh access token using refresh token
         
-        # Refresh if less than 5 minutes remaining
-        return datetime.now() >= (self.token_expiry - timedelta(minutes=5))
-    
-    def _refresh_access_token(self):
-        """Refresh the access token using refresh token"""
+        Returns:
+            New access token
+        """
+        logger.debug(f"Requesting new access token from {self.token_url}")
         
-        logger.info("Requesting new access token...")
-        
-        data = {
+        payload = {
             'grant_type': 'refresh_token',
             'client_id': self.client_id,
             'client_secret': self.client_secret,
@@ -75,86 +105,68 @@ class TradeStationAuth:
         }
         
         try:
-            response = requests.post(self.token_url, data=data)
-            response.raise_for_status()
+            response = requests.post(self.token_url, data=payload, timeout=10)
             
-            token_data = response.json()
+            logger.debug(f"Token request status code: {response.status_code}")
             
-            self.access_token = token_data['access_token']
-            expires_in = token_data.get('expires_in', 1200)  # Default 20 minutes
-            self.token_expiry = datetime.now() + timedelta(seconds=expires_in)
+            if response.status_code != 200:
+                logger.error(f"Token refresh failed with status {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                response.raise_for_status()
             
-            # Update refresh token if provided
-            if 'refresh_token' in token_data:
-                self.refresh_token = token_data['refresh_token']
-                logger.info("Refresh token updated")
+            data = response.json()
             
-            logger.info(f"✅ Access token obtained, expires in {expires_in} seconds")
+            self.access_token = data['access_token']
+            expires_in = data.get('expires_in', 1200)  # Default 20 minutes
             
+            # Set expiry with 60 second buffer
+            self.token_expiry = datetime.now() + timedelta(seconds=expires_in - 60)
+            
+            logger.info(f"✅ Access token refreshed successfully (expires in {expires_in}s)")
+            logger.debug(f"Token expiry set to: {self.token_expiry}")
+            
+            return self.access_token
+            
+        except requests.exceptions.Timeout:
+            logger.error("Token refresh request timed out")
+            raise
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to refresh access token: {e}")
+            logger.error(f"Token refresh request failed: {e}")
+            raise
+        except KeyError as e:
+            logger.error(f"Unexpected token response format, missing key: {e}")
+            logger.debug(f"Response data: {data}")
+            raise
+        except Exception as e:
+            logger.critical(f"Unexpected error during token refresh: {e}", exc_info=True)
             raise
     
     def get_headers(self) -> dict:
         """
-        Get HTTP headers with valid authorization
+        Get authorization headers for API requests
         
         Returns:
-            Dictionary of headers for API requests
+            Dictionary with Authorization header
         """
         token = self.get_access_token()
-        
-        return {
-            'Authorization': f'Bearer {token}',
-            'Content-Type': 'application/json'
-        }
-    
-    def revoke_token(self):
-        """Revoke the current access token"""
-        # TradeStation doesn't provide token revocation endpoint
-        # Just clear local tokens
-        self.access_token = None
-        self.token_expiry = None
-        logger.info("Tokens cleared")
+        headers = {'Authorization': f'Bearer {token}'}
+        logger.debug("Generated authorization headers")
+        return headers
 
 
-# Test function
+# Test
 if __name__ == '__main__':
-    import os
-    from dotenv import load_dotenv
+    logger.info("Testing TradeStation authentication...")
     
-    load_dotenv()
-    
-    logging.basicConfig(level=logging.INFO)
-    
-    print("Testing TradeStation Authentication")
-    print("="*60)
-    
-    client_id = os.getenv('TRADESTATION_CLIENT_ID')
-    client_secret = os.getenv('TRADESTATION_CLIENT_SECRET')
-    refresh_token = os.getenv('TRADESTATION_REFRESH_TOKEN')
-    sandbox = os.getenv('TRADESTATION_USE_SANDBOX', 'false').lower() == 'true'
-    
-    if not all([client_id, client_secret, refresh_token]):
-        print("❌ Missing credentials in .env file")
-        exit(1)
-    
-    # Test authentication
-    auth = TradeStationAuth(client_id, client_secret, refresh_token, sandbox)
+    auth = TradeStationAuth(
+        os.getenv('TRADESTATION_CLIENT_ID'),
+        os.getenv('TRADESTATION_CLIENT_SECRET'),
+        os.getenv('TRADESTATION_REFRESH_TOKEN'),
+        sandbox=os.getenv('TRADESTATION_USE_SANDBOX', 'false').lower() == 'true'
+    )
     
     try:
-        # Get access token
         token = auth.get_access_token()
-        print(f"✅ Access token obtained: {token[:20]}...")
-        
-        # Get headers
-        headers = auth.get_headers()
-        print(f"✅ Headers generated")
-        print(f"   Authorization: Bearer {headers['Authorization'][7:27]}...")
-        
-        print("\n" + "="*60)
-        print("✅ Authentication test passed!")
-        
+        logger.info(f"✅ Auth test successful! Token: {token[:20]}...")
     except Exception as e:
-        print(f"❌ Authentication test failed: {e}")
-        exit(1)
+        logger.error(f"❌ Auth test failed: {e}")
