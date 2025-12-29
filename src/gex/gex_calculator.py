@@ -63,7 +63,7 @@ class GEXMetrics:
 
 class GEXCalculator:
     """Calculate gamma exposure metrics from options data"""
-    
+
     def __init__(self, db_connection):
         """
         Args:
@@ -72,23 +72,23 @@ class GEXCalculator:
         logger.debug("Initializing GEXCalculator")
         self.db = db_connection
         logger.info("GEX Calculator initialized")
-        
+
     def calculate_current_gex(self, symbol: str, current_price: Optional[float] = None) -> Optional[GEXMetrics]:
         """
         Calculate GEX for the most recent data
-        
+
         Args:
             symbol: Underlying symbol (e.g., 'SPY')
             current_price: Optional current price (if not provided, uses price from data)
-            
+
         Returns:
             GEXMetrics object or None if no data
         """
         logger.info(f"Starting GEX calculation for {symbol}")
         logger.debug(f"Current price provided: {current_price}")
-        
+
         cursor = self.db.cursor()
-        
+
         # Get the most recent data for each strike for today's 0DTE
         query = """
             SELECT DISTINCT ON (strike, option_type)
@@ -107,18 +107,18 @@ class GEXCalculator:
                 AND DATE(expiration) = CURRENT_DATE
             ORDER BY strike, option_type, timestamp DESC
         """
-        
+
         logger.debug(f"Querying for {symbol} options with expiration {date.today()}")
-        
+
         try:
             cursor.execute(query, (symbol,))
             rows = cursor.fetchall()
-            
+
             logger.info(f"Query returned {len(rows)} option contracts")
-            
+
             if not rows:
                 logger.warning(f"No options data for {symbol} with today's expiration")
-                
+
                 # Debug
                 cursor.execute("""
                     SELECT 
@@ -130,21 +130,21 @@ class GEXCalculator:
                     FROM options_quotes
                     WHERE symbol = %s
                 """, (symbol,))
-                
+
                 debug = cursor.fetchone()
                 logger.debug(f"Debug - Total: {debug[0]}, Exp dates: {debug[1]}, "
                            f"Range: {debug[2]} to {debug[3]}, Latest: {debug[4]}")
-                
+
                 cursor.close()
                 return None
-            
+
             # Parse data
             options_data = []
             expiration = rows[0][8]
             timestamp = datetime.now(timezone.utc)
-            
+
             logger.debug(f"Expiration: {expiration}, Timestamp: {timestamp}")
-            
+
             # Use provided current price, or fallback to price from data
             if current_price is not None:
                 underlying_price = current_price
@@ -152,18 +152,18 @@ class GEXCalculator:
             else:
                 underlying_price = rows[0][7]
                 logger.warning(f"No current price provided, using price from options data: ${underlying_price:.2f}")
-            
+
             # Separate calls and puts for logging
             call_count = 0
             put_count = 0
-            
+
             for row in rows:
                 option_type = row[1]
                 if option_type == 'call':
                     call_count += 1
                 else:
                     put_count += 1
-                    
+
                 options_data.append({
                     'strike': float(row[0]),
                     'option_type': option_type,
@@ -173,17 +173,17 @@ class GEXCalculator:
                     'open_interest': int(row[5]) if row[5] else 0,
                     'volume': int(row[6]) if row[6] else 0
                 })
-            
+
             logger.info(f"Parsed {len(options_data)} options ({call_count} calls, {put_count} puts)")
-            
+
             cursor.close()
-            
+
             # Calculate GEX
             logger.info(f"Calculating GEX metrics...")
             metrics = self._calculate_gex_metrics(
                 symbol, expiration, timestamp, underlying_price, options_data
             )
-            
+
             # Store metrics
             if metrics:
                 logger.info(f"✅ GEX calculated successfully")
@@ -192,124 +192,124 @@ class GEXCalculator:
                 logger.info(f"   Max Gamma Strike: ${metrics.max_gamma_strike:.2f}")
                 if metrics.gamma_flip_point:
                     logger.info(f"   Gamma Flip Point: ${metrics.gamma_flip_point:.2f}")
-                
+
                 logger.debug(f"   Call Gamma: ${metrics.call_gamma/1e6:.1f}M")
                 logger.debug(f"   Put Gamma: ${metrics.put_gamma/1e6:.1f}M")
                 logger.debug(f"   P/C Ratio: {metrics.put_call_ratio:.2f}")
                 logger.debug(f"   Total Contracts: {metrics.total_contracts:,}")
-                
+
                 self._store_gex_metrics(metrics)
             else:
                 logger.error("GEX metrics calculation returned None")
-            
+
             return metrics
-            
+
         except Exception as e:
             logger.error(f"Error calculating GEX: {e}", exc_info=True)
             cursor.close()
             return None
-    
+
     def _calculate_gex_metrics(self, symbol: str, expiration: date, 
                                timestamp: datetime, underlying_price: float,
                                options_data: List[Dict]) -> GEXMetrics:
         """Calculate GEX metrics from options data"""
-        
+
         logger.debug(f"Calculating GEX metrics for {len(options_data)} options")
-        
+
         # Separate calls and puts
         calls = [opt for opt in options_data if opt['option_type'] == 'call']
         puts = [opt for opt in options_data if opt['option_type'] == 'put']
-        
+
         logger.debug(f"Separated: {len(calls)} calls, {len(puts)} puts")
-        
+
         # Contract multiplier (100 shares per contract)
         CONTRACT_MULTIPLIER = 100
-        
+
         # Calculate gamma exposure by strike
         strike_gamma = {}
-        
+
         # Calls: positive gamma for dealers (they're short)
         for call in calls:
             strike = call['strike']
             gamma_exp = call['gamma'] * call['open_interest'] * CONTRACT_MULTIPLIER * underlying_price
-            
+
             if strike not in strike_gamma:
                 strike_gamma[strike] = {'call': 0, 'put': 0}
             strike_gamma[strike]['call'] += gamma_exp
-        
+
         logger.debug(f"Calculated call gamma for {len(strike_gamma)} strikes")
-        
+
         # Puts: negative gamma for dealers
         for put in puts:
             strike = put['strike']
             gamma_exp = put['gamma'] * put['open_interest'] * CONTRACT_MULTIPLIER * underlying_price
-            
+
             if strike not in strike_gamma:
                 strike_gamma[strike] = {'call': 0, 'put': 0}
             strike_gamma[strike]['put'] += gamma_exp
-        
+
         logger.debug(f"Calculated put gamma for {len(strike_gamma)} total strikes")
-        
+
         # Aggregate metrics
         total_call_gamma = sum(s['call'] for s in strike_gamma.values())
         total_put_gamma = sum(s['put'] for s in strike_gamma.values())
-        
+
         logger.debug(f"Total call gamma: ${total_call_gamma/1e6:.1f}M")
         logger.debug(f"Total put gamma: ${total_put_gamma/1e6:.1f}M")
-        
+
         # Net GEX (calls are positive, puts are negative for dealers)
         net_gex = total_call_gamma - total_put_gamma
-        
+
         # Total absolute gamma exposure
         total_gamma = total_call_gamma + total_put_gamma
-        
+
         logger.debug(f"Net GEX: ${net_gex/1e6:.1f}M, Total: ${total_gamma/1e6:.1f}M")
-        
+
         # Find max gamma strike
         max_strike = None
         max_gamma = 0
-        
+
         for strike, gamma in strike_gamma.items():
             total_strike_gamma = gamma['call'] + gamma['put']
             if total_strike_gamma > max_gamma:
                 max_gamma = total_strike_gamma
                 max_strike = strike
-        
+
         if max_strike:
             logger.info(f"Max gamma strike: ${max_strike:.2f} with ${max_gamma/1e6:.1f}M exposure")
         else:
             logger.warning("Could not determine max gamma strike")
-        
+
         # Find gamma flip point (where net GEX crosses zero)
         gamma_flip = self._find_gamma_flip(strike_gamma, underlying_price)
-        
+
         if gamma_flip:
             logger.info(f"Gamma flip point found at ${gamma_flip:.2f}")
         else:
             logger.debug("No gamma flip point found")
-        
+
         # Volume and OI totals
         call_volume = sum(c['volume'] for c in calls)
         put_volume = sum(p['volume'] for p in puts)
         call_oi = sum(c['open_interest'] for c in calls)
         put_oi = sum(p['open_interest'] for p in puts)
-        
+
         logger.debug(f"Call volume: {call_volume:,}, Put volume: {put_volume:,}")
         logger.debug(f"Call OI: {call_oi:,}, Put OI: {put_oi:,}")
-        
+
         # Put/Call ratio
         pc_ratio = put_oi / call_oi if call_oi > 0 else 0
-        
+
         logger.debug(f"Put/Call ratio: {pc_ratio:.2f}")
-        
+
         # Vanna and Charm (simplified calculations)
         vanna = sum(opt['vega'] * opt['delta'] * opt['open_interest'] 
                    for opt in options_data)
         charm = sum(opt['gamma'] * opt['delta'] * opt['open_interest'] 
                    for opt in options_data)
-        
+
         logger.debug(f"Vanna: {vanna:.2f}, Charm: {charm:.2f}")
-        
+
         metrics = GEXMetrics(
             symbol=symbol,
             expiration=expiration,
@@ -331,44 +331,44 @@ class GEXCalculator:
             vanna_exposure=vanna,
             charm_exposure=charm
         )
-        
+
         logger.debug("GEX metrics object created")
-        
+
         return metrics
-    
+
     def _find_gamma_flip(self, strike_gamma: Dict, spot_price: float) -> Optional[float]:
         """Find the strike where net GEX changes sign"""
-        
+
         logger.debug(f"Searching for gamma flip near spot ${spot_price:.2f}")
-        
+
         strikes = sorted(strike_gamma.keys())
-        
+
         logger.debug(f"Analyzing {len(strikes)} strikes")
-        
+
         for i in range(len(strikes) - 1):
             strike1 = strikes[i]
             strike2 = strikes[i + 1]
-            
+
             net1 = strike_gamma[strike1]['call'] - strike_gamma[strike1]['put']
             net2 = strike_gamma[strike2]['call'] - strike_gamma[strike2]['put']
-            
+
             # Check for sign change
             if (net1 > 0 and net2 < 0) or (net1 < 0 and net2 > 0):
                 # Linear interpolation
                 flip = strike1 + (strike2 - strike1) * abs(net1) / (abs(net1) + abs(net2))
                 logger.debug(f"Found flip between ${strike1:.2f} and ${strike2:.2f} at ${flip:.2f}")
                 return flip
-        
+
         logger.debug("No gamma flip point found")
         return None
-    
+
     def _store_gex_metrics(self, metrics: GEXMetrics):
         """Store GEX metrics to database"""
-        
+
         logger.debug(f"Storing GEX metrics for {metrics.symbol}")
-        
+
         cursor = self.db.cursor()
-        
+
         insert_query = """
             INSERT INTO gex_metrics 
             (timestamp, symbol, expiration, underlying_price,
@@ -387,7 +387,7 @@ class GEXCalculator:
                 max_gamma_strike = EXCLUDED.max_gamma_strike,
                 gamma_flip_point = EXCLUDED.gamma_flip_point
         """
-        
+
         try:
             cursor.execute(insert_query, (
                 metrics.timestamp,
@@ -410,11 +410,11 @@ class GEXCalculator:
                 metrics.vanna_exposure,
                 metrics.charm_exposure
             ))
-            
+
             self.db.commit()
             logger.info(f"✅ Stored GEX metrics for {metrics.symbol}")
             logger.debug(f"Metrics timestamp: {metrics.timestamp}")
-            
+
         except Exception as e:
             logger.error(f"Failed to store GEX metrics: {e}", exc_info=True)
             self.db.rollback()
@@ -427,12 +427,12 @@ class GEXCalculator:
 if __name__ == '__main__':
     import os
     from dotenv import load_dotenv
-    
+
     load_dotenv()
     logging.basicConfig(level=logging.INFO)
-    
+
     logger.info("Testing GEX Calculator...")
-    
+
     try:
         db = psycopg2.connect(
             host=os.getenv('DB_HOST'),
@@ -441,12 +441,12 @@ if __name__ == '__main__':
             password=os.getenv('DB_PASSWORD'),
             port=os.getenv('DB_PORT')
         )
-        
+
         logger.info("Database connected")
-        
+
         calc = GEXCalculator(db)
         metrics = calc.calculate_current_gex('SPY')
-        
+
         if metrics:
             print("\n✅ GEX Metrics:")
             print(f"  Spot: ${metrics.underlying_price:.2f}")
@@ -457,8 +457,8 @@ if __name__ == '__main__':
                 print(f"  Gamma Flip: ${metrics.gamma_flip_point:.2f}")
         else:
             logger.error("No metrics calculated")
-        
+
         db.close()
-        
+
     except Exception as e:
         logger.error(f"Test failed: {e}", exc_info=True)
