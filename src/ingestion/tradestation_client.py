@@ -7,6 +7,7 @@ Handles streaming market data from TradeStation API.
 import asyncio
 import aiohttp
 import json
+from datetime import datetime, date
 from typing import Dict, List, Optional, Callable, Any
 import logging
 import os
@@ -41,6 +42,9 @@ logger = logging.getLogger(__name__)
 class TradeStationStreamingClient:
     """Async client for TradeStation streaming API"""
 
+    BASE_URL = "https://api.tradestation.com/v3"
+    SANDBOX_URL = "https://sim-api.tradestation.com/v3"
+
     def __init__(self, client_id: str, client_secret: str, refresh_token: str, sandbox: bool = False):
         """
         Initialize streaming client
@@ -51,35 +55,41 @@ class TradeStationStreamingClient:
             refresh_token: Refresh token
             sandbox: Use sandbox environment
         """
-        logger.debug(f"Initializing TradeStationStreamingClient (sandbox={sandbox})")
+        logger.debug(f"Initializing TradeStationStreamingClient...")
 
         self.auth = TradeStationAuth(client_id, client_secret, refresh_token, sandbox)
         self.sandbox = sandbox
+        self.base_url = self.SANDBOX_URL if sandbox else self.BASE_URL
 
         if sandbox:
-            logger.warning("Using SANDBOX environment - data may not be real-time")
-            self.base_url = "https://sim-api.tradestation.com/v3"
-            self.stream_url = "https://sim-api.tradestation.com/v3/marketdata/stream/options/quotes"
+            logger.warning("Using SANDBOX environment [self.base_url] - data may not be real-time")
         else:
-            logger.info("Using PRODUCTION environment")
-            self.base_url = "https://api.tradestation.com/v3"
-            self.stream_url = "https://api.tradestation.com/v3/marketdata/stream/options/quotes"
+            logger.info("Using PRODUCTION environment [self.base_url]")
 
-        self.session: Optional[aiohttp.ClientSession] = None
-        self.stream_task: Optional[asyncio.Task] = None
+        self.session = None
+        self.is_streaming = False
+        self.stream_task = None
+
+        # Stats
+        self.messages_received = 0
+        self.errors_count = 0
+        self.last_message_time = None
 
         logger.info("TradeStation streaming client initialized")
 
     async def __aenter__(self):
         """Context manager entry"""
-        logger.debug("Entering TradeStationStreamingClient context")
+        logger.debug("Entering TradeStationStreamingClient context...")
+        timeout = aiohttp.ClientTimeout(total=None, connect=30, sock_read=300)
         self.session = aiohttp.ClientSession()
         logger.debug("Created aiohttp session")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
-        logger.debug("Exiting TradeStationStreamingClient context")
+        logger.debug("Exiting TradeStationStreamingClient context...")
+        logger.info("Stopping stream...")
+        self.is_streaming = False
 
         if self.stream_task and not self.stream_task.done():
             logger.info("Cancelling stream task...")
@@ -90,10 +100,11 @@ class TradeStationStreamingClient:
                 logger.debug("Stream task cancelled successfully")
 
         if self.session:
-            logger.debug("Closing aiohttp session")
+            logger.debug("Closing aiohttp session...")
             await self.session.close()
 
         logger.info("TradeStation client closed")
+        logger.info("✅ Stream stopped")
 
     async def get_quote(self, symbol: str) -> Optional[Dict]:
         """
@@ -105,7 +116,7 @@ class TradeStationStreamingClient:
         Returns:
             Quote data or None
         """
-        logger.debug(f"Requesting quote for {symbol}")
+        logger.debug(f"Requesting quote for {symbol}...")
 
         url = f"{self.base_url}/marketdata/quotes/{symbol}"
         headers = self.auth.get_headers()
@@ -147,7 +158,7 @@ class TradeStationStreamingClient:
             logger.error(f"Error getting quote for {symbol}: {e}", exc_info=True)
             return None
 
-    async def get_option_expirations(self, underlying: str) -> List[str]:
+    async def get_option_expirations(self, underlying: str) -> List[date]:
         """
         Get available option expiration dates
 
@@ -155,9 +166,9 @@ class TradeStationStreamingClient:
             underlying: Underlying symbol
 
         Returns:
-            List of expiration dates (YYYY-MM-DD)
+            List of expiration dates
         """
-        logger.debug(f"Requesting option expirations for {underlying}")
+        logger.debug(f"Requesting option expirations for {underlying}...")
 
         url = f"{self.base_url}/marketdata/options/expirations/{underlying}"
         headers = self.auth.get_headers()
@@ -172,12 +183,16 @@ class TradeStationStreamingClient:
                     return []
 
                 data = await response.json()
-                expirations = data.get('Expirations', [])
 
-                logger.info(f"✅ Found {len(expirations)} expirations for {underlying}")
-                logger.debug(f"Expirations: {expirations[:5]}..." if len(expirations) > 5 else f"Expirations: {expirations}")
+                expirations = []
+                if 'Expirations' in data:
+                    for exp in data['Expirations']:
+                        exp_date = datetime.strptime(exp['Date'], '%Y-%m-%dT%H:%M:%SZ').date()
+                        expirations.append(exp_date)
+                    logger.info(f"✅ Found {len(expirations)} expirations for {underlying}")
+                    logger.debug(f"Expirations: {expirations[:5]}..." if len(expirations) > 5 else f"Expirations: {expirations}")
 
-                return expirations
+                return sorted(expirations)
 
         except asyncio.TimeoutError:
             logger.error(f"Expirations request timed out for {underlying}")
@@ -186,143 +201,113 @@ class TradeStationStreamingClient:
             logger.error(f"Error getting expirations for {underlying}: {e}", exc_info=True)
             return []
 
-    async def stream_options(self, underlying: str, expiration: str, handler: Callable[[Dict], Any]):
+    async def stream_options_chain(self, underlying: str, expiration: date, handler: Callable):
         """
-        Stream option quotes for given underlying and expiration
+        Stream real-time options chain for given underlying and expiration
 
         Args:
             underlying: Underlying symbol (e.g., 'SPY')
-            expiration: Expiration date (YYYY-MM-DD)
+            expiration: Option expiration date
             handler: Async callback function to handle each update
         """
-        logger.info(f"🚀 Starting options stream for {underlying} {expiration}")
+
+        exp_str = expiration.strftime('%Y-%m-%d')
+        stream_url = f"{self.base_url}/marketdata/stream/options/chains/{underlying}"
+        logger.info(f"🚀 Starting options stream for {underlying} exp {exp_str}")
 
         # Get fresh token
         headers = self.auth.get_headers()
         headers['Content-Type'] = 'application/json'
 
-        payload = {
-            "UnderlyingSymbol": underlying,
-            "Expirations": [expiration]
-        }
+        # Set params for API GET
+        # { 'expiration': expiration string ('YYYY-MM-DD') }
+        params = {'expiration': exp_str}
+        logger.debug(f"Stream URL: {stream_url}")
+        logger.debug(f"Stream request params: {params}")
 
-        logger.debug(f"Stream request payload: {payload}")
-        logger.debug(f"Stream URL: {self.stream_url}")
+        try:
+            async with self.session.get(stream_url, headers=headers, params=params) as response:
+                logger.debug(f"Response status: {response.status}")
 
-        retry_count = 0
-        max_retries = 3
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.critical(f"Stream connection failed with status {response.status}: {error_text}")
+                    return
 
-        while retry_count < max_retries:
-            try:
-                logger.debug(f"Initiating stream connection (attempt {retry_count + 1}/{max_retries})")
+                logger.info(f"✅ Stream connection established!")
+                logger.debug(f"Response headers: {dict(response.headers)}")
+                self.is_streaming = True
+                logger.debug(f"is_streaming flag set to True")
 
-                async with self.session.post(
-                    self.stream_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=None)  # No timeout for streaming
-                ) as response:
+                buffer = ""
 
-                    logger.debug(f"Stream response status: {response.status}")
+                async for chunk in response.content.iter_chunked(8192):
+                    try:
+                        chunk_text = chunk.decode('utf-8')
+                        buffer += chunk_text
 
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"Stream connection failed with status {response.status}: {error_text}")
+                        while '\n' in buffer:
+                            line, buffer = buffer.split('\n', 1)
+                            line = line.strip()
 
-                        if response.status in [401, 403]:
-                            logger.warning("Authentication failed, refreshing token...")
-                            headers = self.auth.get_headers()
-                            headers['Content-Type'] = 'application/json'
-
-                        retry_count += 1
-                        if retry_count < max_retries:
-                            wait_time = 2 ** retry_count
-                            logger.info(f"Retrying in {wait_time} seconds...")
-                            await asyncio.sleep(wait_time)
-                            continue
-                        else:
-                            logger.critical("Max retries reached, giving up on stream connection")
-                            return
-
-                    logger.info("✅ Stream connection established")
-                    retry_count = 0  # Reset on successful connection
-
-                    message_count = 0
-                    heartbeat_count = 0
-                    error_count = 0
-
-                    async for line in response.content:
-                        try:
                             if not line:
                                 continue
 
-                            line_str = line.decode('utf-8').strip()
-
-                            if not line_str:
-                                continue
-
-                            logger.debug(f"Raw stream data: {line_str[:200]}...")
-
-                            # Handle heartbeats
-                            if line_str == 'Heartbeat':
-                                heartbeat_count += 1
-                                if heartbeat_count % 10 == 0:
-                                    logger.debug(f"Received {heartbeat_count} heartbeats")
-                                continue
-
-                            # Parse JSON
                             try:
-                                data = json.loads(line_str)
+                                data = json.loads(line)
+
+                                self.messages_received += 1
+                                self.last_message_time = datetime.now()
+
+                                if self.messages_received <= 3:
+                                    logger.debug(f"Stream Message #{self.messages_received}:")
+                                    logger.debug(json.dumps(data, indent=2)[:2000])
+                                elif self.messages_received % 100 == 0:
+                                    logger.info(f"📊 Received {self.messages_received} messages")
+
+                                await handler(data)
+
                             except json.JSONDecodeError as e:
-                                logger.warning(f"Failed to parse JSON: {e}")
-                                logger.debug(f"Invalid JSON: {line_str}")
-                                error_count += 1
-                                if error_count > 10:
-                                    logger.error("Too many JSON parse errors, may indicate stream issue")
-                                continue
+                                logger.warning(f"JSON parse error: {e}")
+                                self.errors_count += 1
 
-                            message_count += 1
+                    except UnicodeDecodeError as e:
+                        logger.error(f"Decode error: {e}")
+                        self.errors_count += 1
+                    except Exception as e:
+                        logger.error(f"Chunk processing error: {e}", exc_info=True)
+                        self.errors_count += 1
 
-                            if message_count % 100 == 0:
-                                logger.info(f"Stream Message #{message_count} (heartbeats: {heartbeat_count})")
-                            else:
-                                logger.debug(f"Stream Message #{message_count}")
+                self.is_streaming = False
+                logger.info("Stream ended")
 
-                            # Call handler
-                            try:
-                                if asyncio.iscoroutinefunction(handler):
-                                    await handler(data)
-                                else:
-                                    handler(data)
-                            except Exception as e:
-                                logger.error(f"Error in stream handler: {e}", exc_info=True)
+        except aiohttp.ClientError as e:
+            logger.error(f"Stream connection error: {e}", exc_info=True)
+            self.is_streaming = False
+            self.errors_count += 1
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}", exc_info=True)
+            self.is_streaming = False
+            self.errors_count += 1
+            raise
 
-                        except Exception as e:
-                            logger.error(f"Error processing stream line: {e}", exc_info=True)
-
-                    logger.warning(f"Stream ended after {message_count} messages and {heartbeat_count} heartbeats")
-
-            except asyncio.CancelledError:
-                logger.info("Stream cancelled")
-                raise
-            except asyncio.TimeoutError:
-                logger.error("Stream connection timed out")
-                retry_count += 1
-            except Exception as e:
-                logger.error(f"Stream error: {e}", exc_info=True)
-                retry_count += 1
-
-            if retry_count < max_retries:
-                wait_time = 2 ** retry_count
-                logger.info(f"Reconnecting in {wait_time} seconds...")
-                await asyncio.sleep(wait_time)
-
-        logger.critical(f"Stream failed after {max_retries} retries")
+    def get_stats(self) -> Dict:
+        """Get streaming statistics"""
+        return {
+            'is_streaming': self.is_streaming,
+            'messages_received': self.messages_received,
+            'errors_count': self.errors_count,
+            'last_message_time': self.last_message_time
+        }
 
 
 # Test
 async def main():
-    logger.info("Testing TradeStation streaming client...")
+
+    print("\n" + "="*60)
+    print("Testing TradeStation streaming client...")
+    print("="*60 + "\n\n")
 
     async with TradeStationStreamingClient(
         os.getenv('TRADESTATION_CLIENT_ID'),
@@ -331,15 +316,97 @@ async def main():
         sandbox=os.getenv('TRADESTATION_USE_SANDBOX', 'false').lower() == 'true'
     ) as client:
 
-        # Test quote
+        # Test 1: Get quote
+        print("\n" + "="*60)
+        print("--- Test 1: Getting Quote ---\n")
         quote = await client.get_quote('SPY')
         if quote:
-            logger.info(f"Quote test successful: {quote}")
+            print(f"✅ Quote test successful: SPY @ ${quote['price']:.2f}")
+            print(f"   Bid: ${quote['bid']:.2f}, Ask: ${quote['ask']:.2f}, Volume: {quote['volume']:,}")
+        else:
+            print("❌ Quote test failed")
 
-        # Test expirations
+        # Test 2: Get expirations
+        print("\n" + "="*60)
+        print("--- Test 2: Getting Expirations ---\n")
         exps = await client.get_option_expirations('SPY')
         if exps:
-            logger.info(f"Expirations test successful: {len(exps)} found")
+            print(f"✅ Expirations test successful: {len(exps)} expirations found")
+
+            print("   ", end="")
+            for exp in exps[:5]:
+                exp_str = exp.strftime('%Y-%m-%d')
+                print(f"{exp_str}, ", end="")
+            print("...")
+
+            # Find today's expiration (0DTE)
+            today = date.today()
+            if today in exps:
+                print(f"   ✅ 0DTE expiration available: {today}")
+                test_expiration = today
+            else:
+                print(f"   No 0DTE today, using nearest: {exps[0]}")
+                test_expiration = exps[0]
+
+            # Test 3: Stream options for 30 seconds
+            print("\n" + "="*60)
+            print(f"--- Test 3: Streaming Options for {test_expiration} ---\n")
+            print("*** will stream for 30 seconds and show sample quotes ***")
+
+            options_received = 0
+            sample_quotes = []
+
+            async def test_handler(data: Dict):
+                """Handler to collect sample quotes"""
+                nonlocal options_received, sample_quotes
+                options_received += 1
+
+                # Collect first 5 unique quotes
+                if len(sample_quotes) < 5:
+                    symbol = data.get('Symbol', '')
+                    if symbol and symbol not in [q.get('Symbol') for q in sample_quotes]:
+                        sample_quotes.append(data)
+                        print(f"   Sample quote #{len(sample_quotes)}: {symbol}")
+                        print(f"      Bid: ${data.get('Bid', 0):.2f}, Ask: ${data.get('Ask', 0):.2f}")
+                        print(f"      Strike: ${data.get('Strike', 0):.2f}, OI: {data.get('OpenInterest', 0):,}")
+
+                if options_received % 50 == 0:
+                    print(f"   Received {options_received} option quotes so far...")
+
+            # Create stream task
+            stream_task = asyncio.create_task(
+                client.stream_options_chain('SPY', test_expiration, test_handler)
+            )
+
+            # Let it run for 30 seconds
+            try:
+                await asyncio.wait_for(stream_task, timeout=30)
+            except asyncio.TimeoutError:
+                print("   Stream test timeout reached (30s)")
+                stream_task.cancel()
+                try:
+                    await stream_task
+                except asyncio.CancelledError:
+                    pass
+
+            print(f"\n✅ Stream test complete!")
+            print(f"   Total quotes received: {options_received}")
+            print(f"   Sample quotes collected: {len(sample_quotes)}")
+
+            if options_received > 0:
+                print("\n📊 Stream Performance:")
+                print(f"   Quotes/second: {options_received / 30:.1f}")
+                print(f"   Connection: Successful")
+                print(f"   Data flow: Active")
+            else:
+                print("⚠️  No quotes received during test period")
+                print("   This may indicate market is closed or no activity")
+        else:
+            print("❌ Expirations test failed")
+
+    print("\n" + "="*60)
+    print("All tests complete!")
+    print("="*60 + "\n")
 
 
 if __name__ == '__main__':
