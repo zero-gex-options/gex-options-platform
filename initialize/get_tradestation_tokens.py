@@ -38,7 +38,7 @@ if not CLIENT_ID or not CLIENT_SECRET:
     print("❌ Error: TRADESTATION_CLIENT_ID and TRADESTATION_CLIENT_SECRET must be set in .env file")
     print("\nPlease add these lines to /home/ubuntu/gex-options-platform/.env:")
     print("TRADESTATION_CLIENT_ID=your_client_id_here")
-    print("TRADESTATION_CLIENT_SECRET=your_client_secret_here")
+    print("TRADESTATION_CLIENT_SECRET=your_client_secret_here\n")
     exit(1)
 
 print(f"✅ Loaded credentials from .env file")
@@ -63,25 +63,27 @@ params = {
 
 auth_url = f"{AUTH_URL}?{urlencode(params)}"
 
-print("\nSTEP 1: Visit this URL in your browser:\n")
+print("\n" + "="*60)
+print("STEP 1: Visit this URL in your browser:\n")
 print(auth_url)
 
-print("\n\nSTEP 2: After authorizing, you'll be redirected to a URL like:")
-print("http://localhost:3000/callback?code=XXXXX")
+print("\n" + "="*60)
+print("STEP 2: After authorizing, you'll be redirected to a URL (e.g. http://localhost:3000/callback?code=XXXXX")
 print("\nThe page won't load (that's OK). Just copy the ENTIRE URL from your browser.")
 
-callback_url = input("\n\nPaste the callback URL here: ").strip()
+callback_url = input("\nPaste the callback URL here: ").strip()
 
 # Extract code
 parsed = urlparse(callback_url)
 params = parse_qs(parsed.query)
 
 if 'code' not in params:
-    print("❌ No authorization code found in URL")
+    print("❌ No authorization code found in URL\n")
     exit(1)
 
 auth_code = params['code'][0]
-print(f"\n✅ Authorization code: {auth_code[:20]}...")
+print(f"\n✅ Received authorization code:")
+print(f"   {auth_code[:20]}...")
 
 # Exchange for tokens
 print("\n🔄 Exchanging code for tokens...")
@@ -105,36 +107,39 @@ if response.status_code == 200:
     # parsed from JSON response
     token_types = ["access_token", "refresh_token", "expires_in"]
     if all(key in tokens for key in token_types):
+
+        # Get relevant bits from JSON response
         access_token = tokens.get('access_token')
         refresh_token = tokens.get('refresh_token')
         expires_in = tokens.get('expires_in')
-        print("✅ Tokens received!")
-        print(f"\nAccess Token: {access_token[:20]}...")
-        print(f"Refresh Token: {refresh_token[:20]}...")
-        print(f"Expires in: {expires_in} seconds")
 
-    # Save to .env
-    env_path = '/home/ubuntu/gex-options-platform/.env'
-    
-    with open(env_path, 'r') as f:
-        lines = f.readlines()
-    
-    # Remove old token lines
-    lines = [l for l in lines if not l.startswith('TRADESTATION_ACCESS_TOKEN=') 
-             and not l.startswith('TRADESTATION_REFRESH_TOKEN=')]
-    
-    # Add new tokens
-    lines.append(f"TRADESTATION_ACCESS_TOKEN={tokens['access_token']}\n")
-    lines.append(f"TRADESTATION_REFRESH_TOKEN={tokens['refresh_token']}\n")
-    
-    with open(env_path, 'w') as f:
-        f.writelines(lines)
-    
-    print(f"\n💾 Tokens saved to {env_path}")
-    print("\n✅ Done! You can now start your services:")
-    print("   sudo systemctl start gex-ingestion")
-    print("   sudo systemctl start gex-scheduler")
-    
+        print("\n✅ Tokens received!")
+        print(f"   Access Token: {access_token[:20]}...")
+        print(f"   Refresh Token: {refresh_token[:20]}...")
+        print(f"   Expires in: {expires_in} seconds")
+
+        # Read lines from .env
+        env_path = '/home/ubuntu/gex-options-platform/.env'
+        with open(env_path, 'r') as f:
+            lines = f.readlines()
+
+        # Update .env with updated refresh tokens
+        with open(env_path, 'w') as f:
+            for line in lines:
+                if line.startswith('TRADESTATION_REFRESH_TOKEN='):
+                    f.write(f"TRADESTATION_REFRESH_TOKEN={refresh_token}\n")
+                else:
+                    f.write(line)
+
+        print(f"\n💾 Refresh token saved to {env_path}")
+        print("\n✅ Done! You can now start your services:")
+        print("   sudo systemctl start gex-ingestion")
+        print("   sudo systemctl start gex-scheduler\n")
+
+    else:
+        print(f"❌ Failed: Could not parse tokens from JSON response\n")
+
 else:
     print(f"❌ Failed: {response.status_code}")
     print(response.text)
+    print("\n")
