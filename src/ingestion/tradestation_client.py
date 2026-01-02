@@ -92,7 +92,7 @@ class TradeStationStreamingClient:
         self.is_streaming = False
 
         if self.stream_task and not self.stream_task.done():
-            logger.info("Cancelling stream task...")
+            logger.debug("Cancelling stream task...")
             self.stream_task.cancel()
             try:
                 await self.stream_task
@@ -103,7 +103,7 @@ class TradeStationStreamingClient:
             logger.debug("Closing aiohttp session...")
             await self.session.close()
 
-        logger.info("TradeStation client closed")
+        logger.debug("TradeStation client closed")
         logger.info("✅ Stream stopped")
 
     async def get_quote(self, symbol: str) -> Optional[Dict]:
@@ -378,9 +378,9 @@ async def main():
                 client.stream_options_chain('SPY', test_expiration, test_handler)
             )
 
-            # Let it run for 30 seconds
+            # Let it run for 10 seconds
             try:
-                await asyncio.wait_for(stream_task, timeout=30)
+                await asyncio.wait_for(stream_task, timeout=10)
             except asyncio.TimeoutError:
                 print("   Stream test timeout reached (30s)")
                 stream_task.cancel()
@@ -403,6 +403,12 @@ async def main():
                 print("   This may indicate market is closed or no activity")
         else:
             print("❌ Expirations test failed")
+
+    print("\n" + "="*60)
+    print("--- Stats ---\n")
+    stats = client.get_stats()
+    for stat,value in stats.items():
+        print(f"{stat}: {value}")
 
     print("\n" + "="*60)
     print("All tests complete!")
