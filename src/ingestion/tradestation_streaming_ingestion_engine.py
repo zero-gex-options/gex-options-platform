@@ -105,6 +105,8 @@ class StreamingIngestionEngine:
         self.options_stored = 0
         self.batch_count = 0
         self.error_count = 0
+        self.heartbeat_count = 0
+        self.last_heartbeat = None
 
         # Validation stats
         self.greeks_validated = 0
@@ -165,9 +167,14 @@ class StreamingIngestionEngine:
             # Parse the option data
             option = self._parse_option_update(data)
 
+            # If data is not a valid option
+            # check to see if it's just a heartbeat
             if not option:
-                logger.warning("Failed to parse option data")
-                logger.debug(f"Invalid data: {data}")
+                if 'Heartbeat' in data:
+                    self._handle_heartbeat(data)
+                else:
+                    logger.warning("Failed to parse option data")
+                    logger.debug(f"Invalid data: {data}")
                 return
 
             # Validate Greeks if enabled
@@ -227,6 +234,11 @@ class StreamingIngestionEngine:
             # Parse option type
             option_type = leg.get('OptionType', '').lower()
 
+            # Calculate DTE, OI and IV
+            dte = (expiration - date.today()).days
+            open_interest = int(data.get('DailyOpenInterest', 0))
+            implied_vol = float(data.get('ImpliedVolatility', 0))
+
             # Build option dict with TradeStation Greeks
             option = {
                 'symbol': symbol,
@@ -239,8 +251,8 @@ class StreamingIngestionEngine:
                 'mid': float(data.get('Mid', 0)),
                 'last': float(data.get('Last', 0)),
                 'volume': int(data.get('Volume', 0)),
-                'open_interest': int(data.get('DailyOpenInterest', 0)),
-                'implied_vol': float(data.get('ImpliedVolatility', 0)),
+                'open_interest': open_interest,
+                'implied_vol': implied_vol,
                 'delta': float(data.get('Delta', 0)),
                 'gamma': float(data.get('Gamma', 0)),
                 'theta': float(data.get('Theta', 0)),
@@ -248,7 +260,7 @@ class StreamingIngestionEngine:
                 'rho': float(data.get('Rho', 0)),
                 'timestamp': datetime.now(timezone.utc),
                 'underlying_price': self.underlying_price,
-                'dte': (expiration - date.today()).days,
+                'dte': dte,
                 'is_calculated': False
             }
 
@@ -272,6 +284,14 @@ class StreamingIngestionEngine:
         except Exception as e:
             logger.error(f"Error parsing option data: {e}", exc_info=True)
             return None
+
+    def _handle_heartbeat(self, data: Dict):
+        """Handle heartbeat returned during stream"""
+
+        self.heartbeat_count = data['Heartbeat']
+        self.last_heartbeat = datetime.fromisoformat(data['Timestamp'].replace('Z', '+00:00'))
+        timestamp_str = self.last_heartbeat.strftime('%Y-%m-%d %H:%M:%S %Z')
+        logger.debug(f"Received heartbeat 💓 #{self.heartbeat_count} at {timestamp_str}")
 
     def _validate_greeks(self, option: Dict):
         """Validate TradeStation Greeks against calculated Greeks"""
@@ -465,6 +485,7 @@ class StreamingIngestionEngine:
         """Store underlying price"""
 
         logger.debug(f"Storing underlying price: {symbol} = ${price:.2f}")
+        self.underlying_price = price
 
         cursor = self.db_conn.cursor()
 
@@ -500,12 +521,16 @@ class StreamingIngestionEngine:
 
         while True:
             try:
-                if not self.is_market_open():
-                    logger.info("Market closed, waiting 5 minutes...")
-                    await asyncio.sleep(300)
-                    continue
 
-                logger.info("Market is open, starting stream...")
+                # Only run if market is open unless explicitly
+                # specified otherwise
+                if (os.getenv('VALIDATE_MARKET_OPEN', 'true').lower() == 'true'):
+                    if not self.is_market_open():
+                        logger.info("Market closed, waiting 5 minutes...")
+                        await asyncio.sleep(300)
+                        continue
+
+                    logger.info("Market is open, starting stream...")
 
                 async with TradeStationStreamingClient(
                     self.ts_client_id,
