@@ -15,8 +15,6 @@ CREATE TABLE underlying_prices (
     timestamp TIMESTAMPTZ NOT NULL,
     symbol TEXT NOT NULL,
     price DOUBLE PRECISION NOT NULL,
-    bid DOUBLE PRECISION,
-    ask DOUBLE PRECISION,
     volume BIGINT,
     source TEXT,
     PRIMARY KEY (timestamp, symbol)
