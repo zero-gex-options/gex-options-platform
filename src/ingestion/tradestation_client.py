@@ -222,8 +222,7 @@ class TradeStationStreamingClient:
         # Set params for API GET
         # { 'expiration': expiration string ('YYYY-MM-DD') }
         params = {'expiration': exp_str}
-        logger.debug(f"Stream URL: {stream_url}")
-        logger.debug(f"Stream request params: {params}")
+        logger.debug(f"Attempting to establish stream connection to {stream_url} with {params}")
 
         try:
             async with self.session.get(stream_url, headers=headers, params=params) as response:

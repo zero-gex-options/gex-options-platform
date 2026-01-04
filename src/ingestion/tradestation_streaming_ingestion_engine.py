@@ -160,8 +160,6 @@ class StreamingIngestionEngine:
 
         if self.options_received % 50 == 0:
             logger.debug(f"Options received: {self.options_received}, Stored: {self.options_stored}")
-        else:
-            logger.debug(f"Option update #{self.options_received}")
 
         try:
             # Parse the option data
@@ -202,7 +200,7 @@ class StreamingIngestionEngine:
     def _parse_option_update(self, data: Dict) -> Optional[Dict]:
         """Parse raw option data from stream"""
 
-        logger.debug("Parsing option update...")
+        logger.debug("Parsing option update #{self.options_received}...")
 
         try:
 
