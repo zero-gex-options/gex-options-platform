@@ -1,0 +1,128 @@
+#!/bin/bash
+
+# ==============================================
+# Step 060: Automated Database Backups
+# ==============================================
+
+set -e
+
+echo "[$0]: Automated Database Backups"
+
+# Define paths
+APP_DIR="$HOME/gex-options-platform"
+BACKUP_SCRIPT_SOURCE="$APP_DIR/deployment/database/backup-gex-db.sh"
+BACKUP_SCRIPT_TARGET="/usr/local/bin/backup-gex-db.sh"
+BACKUP_DIR="$HOME/backups"
+PGPASS_FILE="$HOME/.pgpass"
+CREDS_FILE="$HOME/.zerogex_db_creds"
+
+# Load database credentials
+if [ ! -f "$CREDS_FILE" ]; then
+    echo "  ✗ Database credentials file not found: $CREDS_FILE"
+    echo "     Run step 020.database first"
+    exit 1
+fi
+
+echo "  → Loading database credentials..."
+source "$CREDS_FILE"
+
+# Create .pgpass file
+echo "  → Creating .pgpass file for passwordless backups..."
+cat > "$PGPASS_FILE" << EOF
+localhost:5432:gex_db:gex_user:${DB_PASSWORD}
+EOF
+
+# Set strict permissions (required by PostgreSQL)
+chmod 600 "$PGPASS_FILE"
+echo "     ✓ .pgpass file created with secure permissions"
+
+# Test .pgpass works
+echo "  → Testing PostgreSQL connection without password..."
+if pg_dump -U gex_user -h localhost gex_db | head -n 20 > /dev/null 2>&1; then
+    echo "     ✓ Passwordless connection works"
+else
+    echo "     ✗ Passwordless connection failed"
+    exit 1
+fi
+
+# Create backup directory
+echo "  → Creating backup directory..."
+mkdir -p "$BACKUP_DIR"
+echo "     ✓ Backup directory: $BACKUP_DIR"
+
+# Check if backup script exists in repo
+if [ -f "$BACKUP_SCRIPT_SOURCE" ]; then
+    echo "  → Installing backup script from repository..."
+    sudo cp "$BACKUP_SCRIPT_SOURCE" "$BACKUP_SCRIPT_TARGET"
+    sudo chmod +x "$BACKUP_SCRIPT_TARGET"
+    echo "     ✓ Backup script installed: $BACKUP_SCRIPT_TARGET"
+else
+    echo "     ✗ Backup script is not installed"
+    exit 1
+fi
+
+# Test the backup script
+echo "  → Testing backup script..."
+if sudo -u ubuntu "$BACKUP_SCRIPT_TARGET"; then
+    echo "     ✓ Backup test successful"
+else
+    echo "     ✗ Backup test failed"
+    exit 1
+fi
+
+# Check backup was created
+echo "  → Verifying backup files..."
+BACKUP_COUNT=$(find "$BACKUP_DIR" -name "gex_db_*.sql.gz" -type f | wc -l)
+if [ "$BACKUP_COUNT" -gt 0 ]; then
+    echo "     ✓ Found $BACKUP_COUNT backup file(s)"
+    ls -lh "$BACKUP_DIR"/gex_db_*.sql.gz | tail -n 3
+else
+    echo "     ✗ No backup files found"
+    exit 1
+fi
+
+# Setup automated backups via cron
+echo "  → Setting up automated backups (cron)..."
+
+# Create cron job entry
+CRON_JOB="0 2 * * * $BACKUP_SCRIPT_TARGET 2>&1"
+
+# Check if cron job already exists
+if crontab -l 2>/dev/null | grep -q "backup-gex-db.sh"; then
+    echo "     ℹ Cron job already exists, skipping..."
+else
+    # Add cron job
+    (crontab -l 2>/dev/null; echo "# ZeroGEX Database Backup - Daily at 2:00 AM") | crontab -
+    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+    echo "     ✓ Cron job added (daily at 2:00 AM)"
+fi
+
+# Display current crontab
+echo ""
+echo "  Current cron schedule:"
+crontab -l | grep -A1 "ZeroGEX" || echo "     (none found)"
+
+echo ""
+echo "[$0] Database backup configuration complete!"
+echo ""
+echo "Summary:"
+echo "  ✓ .pgpass file created for passwordless backups"
+echo "  ✓ Backup script installed: $BACKUP_SCRIPT_TARGET"
+echo "  ✓ Backup directory: $BACKUP_DIR"
+echo "  ✓ Test backup successful"
+echo "  ✓ Automated daily backups configured (2:00 AM)"
+echo "  ✓ Backup retention: 30 days"
+echo ""
+echo "Backup Configuration:"
+echo "  • Schedule: Daily at 2:00 AM"
+echo "  • Location: $BACKUP_DIR"
+echo "  • Format: Compressed SQL (.sql.gz)"
+echo "  • Retention: 30 days"
+echo "  • Logs: ~/logs/backup.log"
+echo ""
+echo "Manual Operations:"
+echo "  • Run backup now: sudo -u ubuntu $BACKUP_SCRIPT_TARGET"
+echo "  • View backup log: tail -f ~/logs/backup.log"
+echo "  • List backups: ls -lh $BACKUP_DIR"
+echo "  • Restore backup: gunzip -c <backup.sql.gz> | psql -U gex_user -h localhost gex_db"
+echo ""

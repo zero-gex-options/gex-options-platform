@@ -1,6 +1,7 @@
-# GEX Options Analytics Platform
+## GEX Options Analytics Platform
 
 Real-time gamma exposure (GEX) analysis for 0DTE SPY options.
+
 
 ## Features
 
@@ -10,8 +11,9 @@ Real-time gamma exposure (GEX) analysis for 0DTE SPY options.
 - TimescaleDB time-series storage
 - Production-ready error handling
 
+
 ## Architecture
-```
+
 Real-time Data → Ingestion Layer → Storage → Calculation Engine → Dashboard
      ↓              ↓                  ↓            ↓                  ↓
   Market APIs   Python/Lambda    TimescaleDB    Real-time GEX      React/
@@ -19,7 +21,7 @@ Real-time Data → Ingestion Layer → Storage → Calculation Engine → Dashbo
   CBOE/others   Kafka/Redis      S3 backup      Greeks calc        Cloud hosted
 
 ## Project Structure
-```
+
 gex-options-platform/
 ├── .gitignore
 ├── .env.example
@@ -70,48 +72,34 @@ gex-options-platform/
 - [ ] Dashboard
 - [ ] ML pattern detection
 
-## Quick Start
 
-### Prerequisites
+## Prerequisites
 
 - Python 3.9+
 - PostgreSQL 14+ with TimescaleDB
 - TradeStation API account
 
-### Installation
-```bash
-# Clone and setup
-git clone git@github.com:zero-gex-options/gex-options-platform.git
-cd gex-options-platform
 
-# Virtual environment
-python3 -m venv venv
-source venv/bin/activate
+## Initial Setup
 
-# Install dependencies
-pip install -r requirements.txt
+1. Setup SSH keypair
+   ssh-keygen -t ed25519 -C "zerogexoptions@gmail.com"
+   chmod 0600 .ssh/id_ed25519.pub
+   cat .ssh/id_ed25519.pub
+   # Add new SSH key in GitHub and copy/paste public key
 
-# Database setup
-psql -U postgres -f config/database_schema.sql
+2. Clone repo
+   git clone git@github.com:zero-gex-options/gex-options-platform.git
+   cd gex-options-platform
 
-# Configure
-cp .env.example .env
-# Edit .env with your credentials
-```
+3. Run deploy script
+   ./deploy/deploy.sh
 
-### Get TradeStation Tokens
-```bash
-python scripts/get_tradestation_tokens.py
-```
-
-### Run
-```bash
-python src/ingestion/tradestation_streaming_ingestion_engine.py
-```
 
 ## License
 
 MIT
+
 
 ## Disclaimer
 

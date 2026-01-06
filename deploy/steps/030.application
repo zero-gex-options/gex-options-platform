@@ -1,0 +1,189 @@
+#!/bin/bash
+
+# ==============================================
+# Step 030: Application Setup and Initialization
+# ==============================================
+
+set -e
+
+echo "[$0]: Application Setup and Initialization"
+
+# Define application directory
+APP_DIR="$HOME/gex-options-platform"
+
+# Check if application directory exists
+if [ ! -d "$APP_DIR" ]; then
+    echo "  ✗ Application directory not found: $APP_DIR"
+    echo "     Please clone the repository first:"
+    echo "     git clone <your-repo-url> $APP_DIR"
+    exit 1
+fi
+
+# Navigate to application directory
+echo "  → Navigating to application directory..."
+cd "$APP_DIR"
+
+# Create virtual environment
+echo "  → Creating Python virtual environment..."
+python3 -m venv venv
+
+# Activate virtual environment
+echo "  → Activating virtual environment..."
+source venv/bin/activate
+
+# Upgrade pip
+echo "  → Upgrading pip..."
+pip install --upgrade pip
+
+# Check if requirements.txt exists
+if [ ! -f "requirements.txt" ]; then
+    echo "  ✗ requirements.txt not found in $APP_DIR"
+    exit 1
+fi
+
+# Install dependencies
+echo "  → Installing Python dependencies..."
+pip install -r requirements.txt
+
+# Load database credentials
+CREDS_FILE="/home/ubuntu/.zerogex_db_creds"
+if [ ! -f "$CREDS_FILE" ]; then
+    echo "  ✗ Database credentials file not found: $CREDS_FILE"
+    echo "     Run step 020.database first"
+    exit 1
+fi
+
+echo "  → Loading database credentials..."
+source "$CREDS_FILE"
+
+# Check if database schema file exists
+SCHEMA_FILE="config/database_schema.sql"
+if [ ! -f "$SCHEMA_FILE" ]; then
+    echo "  ✗ Database schema file not found: $SCHEMA_FILE"
+    exit 1
+fi
+
+# Initialize database schema
+echo "  → Initializing database schema..."
+export PGPASSWORD="$DB_PASSWORD"
+psql -U gex_user -d gex_db -h localhost -f "$SCHEMA_FILE"
+unset PGPASSWORD
+
+# Create .env file if it doesn't exist
+ENV_FILE="$APP_DIR/.env"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "  → Configuring TradeStation API credentials..."
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  TradeStation API Setup"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "  Please provide your TradeStation API credentials."
+    echo "  You can find these in the API welcome packet you received from TradeStation."
+    echo ""
+
+    # Prompt for API client ID
+    read -p "  TradeStation Client ID (aka "API Key"): " TS_API_KEY
+    while [ -z "$TS_API_KEY" ]; do
+        echo "     ✗ Client ID cannot be empty"
+        read -p "  TradeStation Client ID: " TS_API_KEY
+    done
+
+    # Prompt for API secret
+    read -s -p "  TradeStation API Secret: " TS_API_SECRET
+    echo ""
+    while [ -z "$TS_API_SECRET" ]; do
+        echo "     ✗ API Secret cannot be empty"
+        read -s -p "  TradeStation API Secret: " TS_API_SECRET
+        echo ""
+    done
+
+    echo ""
+    echo "  → Creating .env file with credentials..."
+    cat > "$ENV_FILE" << EOF
+###########################################################################################################
+###########################################################################################################
+##
+## ZeroGEX Environment Configuration
+## Generated: $(date)
+##
+###########################################################################################################
+###########################################################################################################
+# TradeStation API Parameters
+# Documentation: https://api.tradestation.com/docs/fundamentals/authentication/auth-overview/
+#
+# TRADESTATION_CLIENT_ID     - "client ID" or "API key" provided by TradeStation
+# TRADESTATION_CLIENT_SECRET - secret for the API key provided by TradeStation - can be rotatated by
+#                              contacting Client Service
+# TRADESTATION_REFRESH_TOKEN - refresh token granted during the authorization code flow (see
+#                              https://api.tradestation.com/docs/fundamentals/authentication/refresh-tokens
+#                              for complete specifications
+#
+###########################################################################################################
+TRADESTATION_CLIENT_ID=${TS_API_KEY}
+TRADESTATION_CLIENT_SECRET=${TS_API_SECRET}
+TRADESTATION_REFRESH_TOKEN=None
+TRADESTATION_USE_SANDBOX=false
+
+###########################################################################################################
+# Database Parameters
+###########################################################################################################
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_NAME=${DB_NAME}
+DB_USER=${DB_USER}
+DB_PASSWORD=${DB_PASSWORD}
+DATABASE_URL=${DATABASE_URL}
+
+###########################################################################################################
+# Application Settings
+###########################################################################################################
+POLL_INTERVAL=5
+BATCH_SIZE=100
+LOG_LEVEL=INFO
+VALIDATE_GREEKS=false
+VALIDATE_MARKET_OPEN=true
+
+# Add other configuration variables as needed
+EOF
+    chmod 600 "$ENV_FILE"
+    echo "     ✓ .env file created at: $ENV_FILE"
+    echo "     ✓ TradeStation credentials securely stored"
+else
+    echo "     ℹ .env file already exists, skipping configuration..."
+    echo "     If you need to update TradeStation credentials, edit: $ENV_FILE"
+fi
+
+# Create necessary directories
+echo "  → Creating application directories..."
+mkdir -p logs
+mkdir -p data
+mkdir -p cache
+
+# Verify installation
+echo "  → Verifying Python packages..."
+python -c "import psycopg2; import pandas; import numpy; print('✓ Core packages verified')" 2>/dev/null || {
+    echo "  ⚠ Some packages may not have installed correctly"
+}
+
+# Deactivate virtual environment
+deactivate
+
+echo "[$0] Application setup complete!"
+echo ""
+echo "Summary:"
+echo "  ✓ Virtual environment created"
+echo "  ✓ Python dependencies installed"
+echo "  ✓ Database schema initialized"
+echo "  ✓ .env file created with database and TradeStation credentials"
+echo "  ✓ Application directories created"
+echo ""
+echo "Configuration:"
+echo "  • Environment file: $ENV_FILE"
+echo "  • Database connected: ${DB_NAME}@${DB_HOST}"
+echo "  • TradeStation API configured"
+echo ""
+echo "Next steps:"
+echo "  1. Activate environment: cd $APP_DIR && source venv/bin/activate"
+echo "  2. Or use the 'zerogex' alias from your shell"
+echo ""

@@ -1,24 +1,47 @@
 #!/bin/bash
-set -e
 
-echo "🚀 Deploying GEX Options Platform..."
+# ==============================================
+# ZeroGEX Platform Deployment Script
+# ==============================================
 
-# Pull latest code
-cd /home/ubuntu/gex-options-platform
-git pull origin main
+set -e  # Exit on any error
 
-# Activate virtual environment
-source venv/bin/activate
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STEPS_DIR="$SCRIPT_DIR/steps"
+LOG_FILE="/home/ubuntu/logs/deployment_$(date +%Y%m%d_%H%M%S).log"
 
-# Install/update dependencies
-pip install -r requirements.txt
+# Create logs directory if it doesn't exist
+LOG_DIR="/home/ubuntu/logs"
+[ ! -d "$LOG_DIR" ] && mkdir -p "$LOG_DIR"
 
-# Restart services
-sudo systemctl restart gex-ingestion
-sudo systemctl restart gex-scheduler
+# Logging function
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
 
-echo "✅ Deployment complete!"
+log "=========================================="
+log "🚀 Deploying GEX Options Platform..."
+log "=========================================="
+log ""
 
-# Show status
-sudo systemctl status gex-ingestion --no-pager
-sudo systemctl status gex-scheduler --no-pager
+# Execute each step in order
+for step_script in "$STEPS_DIR"/*.* ; do
+    if [ -x "$step_script" ]; then
+        step_name=$(basename "$step_script")
+        log "Executing: $step_name"
+
+        if bash "$step_script"; then
+            log "✓ $step_name completed successfully"
+        else
+            log "✗ $step_name failed"
+            exit 1
+        fi
+        log ""
+    fi
+done
+
+log ""
+log "=========================================="
+log "✅ Deployment Complete!"
+log "=========================================="
+log "Log file: $LOG_FILE"

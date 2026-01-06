@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# ==============================================
+# Step 010: System Setup and Basic Configuration
+# ==============================================
+
+set -e
+
+echo "[$0]: System Setup and Basic Configuration"
+
+# Update system
+echo "  → Updating system packages..."
+sudo apt update && sudo apt upgrade -y
+
+# Install essential tools
+echo "  → Installing essential tools..."
+sudo apt install -y git curl wget build-essential python3-pip python3-venv postgresql postgresql-contrib
+
+# Update timezone
+echo "  → Setting timezone to America/New_York..."
+sudo timedatectl set-timezone America/New_York
+
+# Verify timezone update
+echo "  → Verifying timezone..."
+echo "     Current time: $(date)"
+
+# Create logs directory
+echo "  → Creating logs directory..."
+mkdir -p /home/ubuntu/logs
+
+# Modify .bashrc
+echo "  → Configuring .bashrc with ZeroGEX environment..."
+cat >> ~/.bashrc << 'EOF'
+
+# ====================
+# ZeroGEX environment setup
+# ====================
+ZEROGEX_HOME="$HOME/gex-options-platform"
+if [ -d "$ZEROGEX_HOME" ]; then
+  export ZEROGEX_HOME
+  alias zerogex="cd $ZEROGEX_HOME && python3 -m venv venv && source venv/bin/activate"
+  echo "╔════════════════════════════════════════╗"
+  echo "║  ZeroGEX Environment Available         ║"
+  echo "║  Run 'zerogex' to activate             ║"
+  echo "╚════════════════════════════════════════╝"
+fi
+EOF
+
+# Source the updated .bashrc
+echo "  → Reloading .bashrc..."
+source ~/.bashrc
+
+echo "[$0] System setup complete!"
+echo ""
+echo "Summary:"
+echo "  ✓ System packages updated"
+echo "  ✓ Essential tools installed"
+echo "  ✓ PostgreSQL installed"
+echo "  ✓ Timezone set to America/New_York"
+echo "  ✓ Logs directory created"
+echo "  ✓ .bashrc configured"
+echo ""
