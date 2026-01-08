@@ -13,15 +13,18 @@ Real-time gamma exposure (GEX) analysis for 0DTE SPY options.
   
   
 ## Architecture  
-  
+
+```  
 Real-time Data → Ingestion Layer → Storage → Calculation Engine → Dashboard  
      ↓              ↓                  ↓            ↓                  ↓  
   Market APIs   Python/Lambda    TimescaleDB    Real-time GEX      React/  
   TradeStation  Event streams    PostgreSQL     Analytics          Plotly Dash  
   CBOE/others   Kafka/Redis      S3 backup      Greeks calc        Cloud hosted  
-  
+```  
+
 ## Project Structure  
-  
+
+```  
 gex-options-platform/  
 ├── .gitignore  
 ├── .env.example  
@@ -98,6 +101,7 @@ gex-options-platform/
 │  
 └── initialize/  
     └── get_tradestation_tokens.py  
+```
   
   
 ## Status  
@@ -121,17 +125,24 @@ gex-options-platform/
 ## Initial Setup  
   
 1. Setup SSH keypair  
-   ssh-keygen -t ed25519 -C "zerogexoptions@gmail.com"  
-   chmod 0600 .ssh/id_ed25519  
-   cat .ssh/id_ed25519.pub  
-   # Add new SSH key in GitHub and copy/paste public key  
+```
+ssh-keygen -t ed25519 -C "zerogexoptions@gmail.com"
+chmod 0600 .ssh/id_ed25519
+cat .ssh/id_ed25519.pub
+# Add new SSH key in GitHub and copy/paste public key
+```
   
-2. Clone repo  
-   git clone git@github.com:zero-gex-options/gex-options-platform.git  
-   cd gex-options-platform  
+2. Clone repo and update git config with author/email
+```
+git clone git@github.com:zero-gex-options/gex-options-platform.git  
+cd gex-options-platform  
+git config --global --edit
+```
   
 3. Run deploy script  
-   ./deploy/deploy.sh  
+```
+./deploy/deploy.sh  
+```
   
   
 ## License  
