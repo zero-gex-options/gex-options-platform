@@ -61,6 +61,7 @@ done
 # Start services
 echo "  → Starting services..."
 for service in "${SERVICES[@]}"; do
+    sleep 2
     if [ -f "$SYSTEMD_TARGET/${service}.service" ]; then
         echo "     • Starting ${service}..."
         if sudo systemctl start "${service}"; then
@@ -72,7 +73,7 @@ for service in "${SERVICES[@]}"; do
 done
 
 # Wait a moment for services to initialize
-sleep 2
+sleep 3
 
 # Check status of each service
 echo ""

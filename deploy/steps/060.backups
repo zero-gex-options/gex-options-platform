@@ -72,7 +72,7 @@ fi
 
 # Check backup was created
 echo "  → Verifying backup files..."
-BACKUP_COUNT=$(find "$BACKUP_DIR" -name "gex_db_*.sql.gz" -type f | wc -l)
+BACKUP_COUNT=$(find "$BACKUP_DIR" -name "gex_db_*.dump" -type f | wc -l)
 if [ "$BACKUP_COUNT" -gt 0 ]; then
     echo "     ✓ Found $BACKUP_COUNT backup file(s)"
     ls -lh "$BACKUP_DIR"/gex_db_*.sql.gz | tail -n 3

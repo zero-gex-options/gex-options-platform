@@ -83,7 +83,7 @@ if [ ! -f "$ENV_FILE" ]; then
     echo ""
 
     # Prompt for API client ID
-    read -p "  TradeStation Client ID (aka \"API Keyi\"): " TS_API_KEY
+    read -p "  TradeStation Client ID (aka API Key): " TS_API_KEY
     while [ -z "$TS_API_KEY" ]; do
         echo "     ✗ Client ID cannot be empty"
         read -p "  TradeStation Client ID: " TS_API_KEY
