@@ -6,7 +6,7 @@
 
 set -e
 
-echo "[$0]: System Setup and Basic Configuration"
+echo "System Setup and Basic Configuration"
 
 # Update system
 echo "  → Updating system packages..."
@@ -50,7 +50,7 @@ EOF
 echo "  → Reloading .bashrc..."
 source ~/.bashrc
 
-echo "[$0] System setup complete!"
+echo "System setup complete!"
 echo ""
 echo "Summary:"
 echo "  ✓ System packages updated"

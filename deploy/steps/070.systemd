@@ -6,7 +6,7 @@
 
 set -e
 
-echo "[$0]: Systemd Services Setup"
+echo "Systemd Services Setup"
 
 # Define paths
 APP_DIR="$HOME/gex-options-platform"
@@ -89,7 +89,7 @@ for service in "${SERVICES[@]}"; do
 done
 
 # Summary of running services
-echo "[$0] Systemd services setup complete!"
+echo "Systemd services setup complete!"
 echo ""
 echo "Summary:"
 echo "  ✓ Service files copied to $SYSTEMD_TARGET"

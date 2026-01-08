@@ -6,7 +6,7 @@
 
 set -e
 
-echo "[$0]: Security Hardening"
+echo "Security Hardening"
 
 # Install UFW if not already installed
 echo "  → Installing UFW (Uncomplicated Firewall)..."
@@ -150,7 +150,7 @@ sudo systemctl enable fail2ban
 sudo systemctl restart fail2ban
 echo "     ✓ fail2ban configured and started"
 
-echo "[$0] Security hardening complete!"
+echo "Security hardening complete!"
 echo ""
 echo "Summary:"
 echo "  ✓ Firewall (UFW) enabled and configured"

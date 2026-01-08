@@ -6,7 +6,7 @@
 
 set -e
 
-echo "[$0]: Automated Database Backups"
+echo "Automated Database Backups"
 
 # Define paths
 APP_DIR="$HOME/gex-options-platform"
@@ -103,7 +103,7 @@ echo "  Current cron schedule:"
 crontab -l | grep -A1 "ZeroGEX" || echo "     (none found)"
 
 echo ""
-echo "[$0] Database backup configuration complete!"
+echo "Database backup configuration complete!"
 echo ""
 echo "Summary:"
 echo "  ✓ .pgpass file created for passwordless backups"

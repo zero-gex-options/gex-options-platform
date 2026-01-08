@@ -6,7 +6,7 @@
 
 set -e
 
-echo "[$0]: Deployment Validation"
+echo "Deployment Validation"
 
 # Define paths
 CREDS_FILE="$HOME/.zerogex_db_creds"

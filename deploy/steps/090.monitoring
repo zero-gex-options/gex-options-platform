@@ -6,7 +6,7 @@
 
 set -e
 
-echo "[$0]: Monitoring System Setup"
+echo "Monitoring System Setup"
 
 # Define paths
 APP_DIR="$HOME/gex-options-platform"
@@ -132,7 +132,7 @@ fi
 SERVER_IP=$(hostname -I | awk '{print $1}')
 
 echo ""
-echo "[080.monitoring] Monitoring system setup complete!"
+echo "Monitoring system setup complete!"
 echo ""
 echo "Summary:"
 echo "  ✓ Monitoring daemon installed and running"

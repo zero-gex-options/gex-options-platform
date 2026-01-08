@@ -6,7 +6,7 @@
 
 set -e
 
-echo "[$0]: TradeStation Token Initialization"
+echo "TradeStation Token Initialization"
 
 # Define paths
 APP_DIR="$HOME/gex-options-platform"
@@ -104,7 +104,7 @@ fi
 deactivate
 
 echo ""
-echo "[065.tradestation] TradeStation token initialization complete!"
+echo "TradeStation token initialization complete!"
 echo ""
 echo "Summary:"
 echo "  ✓ Token initialization script executed"

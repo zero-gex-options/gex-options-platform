@@ -6,7 +6,7 @@
 
 set -e
 
-echo "[$0]: Database Setup (PostgreSQL + TimescaleDB)"
+echo "Database Setup (PostgreSQL + TimescaleDB)"
 
 # Detect PostgreSQL version
 echo "  → Detecting PostgreSQL version..."
@@ -56,6 +56,7 @@ fi
 
 # Create database and user
 echo "  → Creating database and user..."
+cd /tmp
 sudo -u postgres psql << EOF
 CREATE DATABASE gex_db;
 CREATE USER gex_user WITH PASSWORD '${DB_PASSWORD}';
@@ -115,7 +116,7 @@ else
     exit 1
 fi
 
-echo "[$0] Database setup complete!"
+echo "Database setup complete!"
 echo ""
 echo "Summary:"
 echo "  ✓ TimescaleDB installed for PostgreSQL ${PG_VERSION}"

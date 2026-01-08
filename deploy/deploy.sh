@@ -28,7 +28,8 @@ log ""
 for step_script in "$STEPS_DIR"/*.* ; do
     if [ -x "$step_script" ]; then
         step_name=$(basename "$step_script")
-        log "Executing: $step_name"
+	log "=========================================="
+        log "Executing: $step_name ..."
 
         if bash "$step_script"; then
             log "✓ $step_name completed successfully"
