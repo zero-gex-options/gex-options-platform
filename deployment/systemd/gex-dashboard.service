@@ -1,0 +1,17 @@
+[Unit]
+Description=ZeroGEX Monitoring Web Dashboard
+After=network.target gex-monitor.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/zerogex/monitoring
+ExecStart=/usr/bin/python3 /opt/zerogex/monitoring/dashboard.py
+Restart=always
+RestartSec=10
+MemoryLimit=128M
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

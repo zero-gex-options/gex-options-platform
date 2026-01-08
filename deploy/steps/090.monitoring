@@ -1,0 +1,156 @@
+#!/bin/bash
+
+# ==============================================
+# Step 090: Monitoring System Setup
+# ==============================================
+
+set -e
+
+echo "[$0]: Monitoring System Setup"
+
+# Define paths
+APP_DIR="$HOME/gex-options-platform"
+MONITOR_DIR="/opt/zerogex/monitoring"
+MONITOR_SCRIPT="$APP_DIR/monitoring/monitor.py"
+
+# Check if application directory exists
+if [ ! -d "$APP_DIR" ]; then
+    echo "  ✗ Application directory not found: $APP_DIR"
+    exit 1
+fi
+
+# Check if monitoring script exists
+if [ ! -f "$MONITOR_SCRIPT" ]; then
+    echo "  ✗ Monitoring script not found: $MONITOR_SCRIPT"
+    echo "     Expected at: monitoring/monitor.py in your repository"
+    exit 1
+fi
+
+# Create monitoring directory
+echo "  → Creating monitoring directory..."
+sudo mkdir -p "$MONITOR_DIR"
+
+# Copy monitoring script
+echo "  → Installing monitoring script..."
+sudo cp "$MONITOR_SCRIPT" "$MONITOR_DIR/monitor.py"
+sudo chmod +x "$MONITOR_DIR/monitor.py"
+
+# Install Python dependencies
+echo "  → Installing monitoring dependencies..."
+cd "$APP_DIR"
+source venv/bin/activate
+pip install -q psutil psycopg2-binary flask
+deactivate
+
+# Install system-wide Python dependencies (for systemd services)
+echo "  → Installing system-wide Python dependencies..."
+sudo pip3 install -q psutil psycopg2-binary flask
+
+# Copy systemd service files
+echo "  → Installing systemd service files..."
+SYSTEMD_SOURCE="$APP_DIR/deployment/systemd"
+
+if [ ! -f "$SYSTEMD_SOURCE/gex-monitor.service" ]; then
+    echo "  ✗ Service file not found: $SYSTEMD_SOURCE/gex-monitor.service"
+    exit 1
+fi
+
+if [ ! -f "$SYSTEMD_SOURCE/gex-dashboard.service" ]; then
+    echo "  ✗ Service file not found: $SYSTEMD_SOURCE/gex-dashboard.service"
+    exit 1
+fi
+
+sudo cp "$SYSTEMD_SOURCE/gex-monitor.service" /etc/systemd/system/
+sudo cp "$SYSTEMD_SOURCE/gex-dashboard.service" /etc/systemd/system/
+echo "     ✓ Service files installed"
+
+# Copy dashboard files
+echo "  → Installing dashboard files..."
+DASHBOARD_SOURCE="$APP_DIR/monitoring"
+
+if [ ! -f "$DASHBOARD_SOURCE/dashboard.py" ]; then
+    echo "  ✗ Dashboard not found: $DASHBOARD_SOURCE/dashboard.py"
+    exit 1
+fi
+
+if [ ! -f "$DASHBOARD_SOURCE/dashboard.html" ]; then
+    echo "  ✗ Dashboard HTML not found: $DASHBOARD_SOURCE/dashboard.html"
+    exit 1
+fi
+
+sudo cp "$DASHBOARD_SOURCE/dashboard.py" "$MONITOR_DIR/"
+sudo cp "$DASHBOARD_SOURCE/dashboard.html" "$MONITOR_DIR/"
+
+# Set proper ownership and permissions
+echo "  → Setting permissions..."
+sudo chown -R ubuntu:ubuntu "$MONITOR_DIR"
+sudo chmod 755 "$MONITOR_DIR"
+sudo chmod 755 "$MONITOR_DIR/monitor.py"
+sudo chmod 755 "$MONITOR_DIR/dashboard.py"
+sudo chmod 644 "$MONITOR_DIR/dashboard.html"
+echo "     ✓ Dashboard files installed"
+
+# Reload systemd
+echo "  → Reloading systemd daemon..."
+sudo systemctl daemon-reload
+
+# Enable and start services
+echo "  → Enabling monitoring services..."
+sudo systemctl enable gex-monitor
+sudo systemctl enable gex-dashboard
+
+echo "  → Starting monitoring services..."
+sudo systemctl start gex-monitor
+sudo systemctl start gex-dashboard
+
+# Add firewall rule for dashboard
+echo "  → Configuring firewall for dashboard (port 8080)..."
+sudo ufw allow 8080/tcp comment 'ZeroGEX Dashboard'
+
+# Wait for services to initialize
+sleep 3
+
+# Check service status
+echo ""
+echo "  → Verifying service status..."
+MONITOR_STATUS=$(systemctl is-active gex-monitor)
+DASHBOARD_STATUS=$(systemctl is-active gex-dashboard)
+
+if [ "$MONITOR_STATUS" = "active" ]; then
+    echo "     ✓ Monitoring daemon is running"
+else
+    echo "     ✗ Monitoring daemon failed to start"
+fi
+
+if [ "$DASHBOARD_STATUS" = "active" ]; then
+    echo "     ✓ Web dashboard is running"
+else
+    echo "     ✗ Web dashboard failed to start"
+fi
+
+# Get server IP
+SERVER_IP=$(hostname -I | awk '{print $1}')
+
+echo ""
+echo "[080.monitoring] Monitoring system setup complete!"
+echo ""
+echo "Summary:"
+echo "  ✓ Monitoring daemon installed and running"
+echo "  ✓ Web dashboard installed and running"
+echo "  ✓ Firewall configured (port 8080)"
+echo "  ✓ Metrics collection every 60 seconds"
+echo ""
+echo "Dashboard Access:"
+echo "  URL: http://${SERVER_IP}:8080"
+echo ""
+echo "Services:"
+echo "  • gex-monitor:    Collects system, service, and database metrics"
+echo "  • gex-dashboard:  Provides web-based monitoring interface"
+echo ""
+echo "Useful Commands:"
+echo "  • View monitoring logs:   sudo journalctl -u gex-monitor -f"
+echo "  • View dashboard logs:    sudo journalctl -u gex-dashboard -f"
+echo "  • Restart monitoring:     sudo systemctl restart gex-monitor"
+echo "  • Check service status:   sudo systemctl status gex-monitor"
+echo "  • View raw metrics:       cat /home/ubuntu/monitoring/current_metrics.json"
+echo ""

@@ -32,6 +32,19 @@ gex-options-platform/
 ├── config/
 │   └── database_schema.sql
 │
+├── deploy/
+│   ├── deploy.sh
+│   └── steps/
+│       ├── 010.setup
+│       ├── 020.database
+│       ├── 030.application
+│       ├── 040.tokens
+│       ├── 050.security
+│       ├── 060.backups
+│       ├── 070.systemd
+│       ├── 080.validation
+│       └── 090.monitoring
+│
 ├── src/
 │   ├── __init__.py
 │   │
@@ -50,16 +63,41 @@ gex-options-platform/
 │   └── dashboard/
 │       └── __init__.py
 │
-├── scripts/
-│   └── get_tradestation_tokens.py
-│
 ├── tests/
 │   ├── __init__.py
-│   └── test_full_pipeline.py
+│   ├── debug_market_hours.py
+│   ├── test_db_write.py
+│   ├── test_env.sh
+│   ├── test_full_pipeline.py
+│   ├── test_greeks_comparison.py
+│   ├── test_ingestion_debug.sh
+│   └── view_data.sh
 │
-└── deployment/
-    └── systemd/
-        └── gex-ingestion.service
+├── deployment/
+│   ├── database/
+│   │   ├── backup-gex-db.sh
+│   │   └── restore-gex-db.sh
+│   │
+│   ├── run/
+│   │   ├── ingestion.sh
+│   │   └── scheduler.sh
+│   │
+│   └── systemd/
+│       ├── gex-ingestion.service
+│       ├── gex-scheduler.service
+│       ├── gex-monitor.service
+│       └── gex-dashboard.service
+│
+├── monitoring/
+│   ├── monitor.py
+│   ├── dashboard.py
+│   └── dashboard.html
+│
+├── branding/
+│   └── ZeroGEX.png
+│
+└── initialize/
+    └── get_tradestation_tokens.py
 
 
 ## Status
@@ -84,7 +122,7 @@ gex-options-platform/
 
 1. Setup SSH keypair
    ssh-keygen -t ed25519 -C "zerogexoptions@gmail.com"
-   chmod 0600 .ssh/id_ed25519.pub
+   chmod 0600 .ssh/id_ed25519
    cat .ssh/id_ed25519.pub
    # Add new SSH key in GitHub and copy/paste public key
 

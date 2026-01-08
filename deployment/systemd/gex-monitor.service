@@ -1,0 +1,22 @@
+[Unit]
+Description=ZeroGEX Platform Monitoring Daemon
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/zerogex/monitoring
+ExecStart=/usr/bin/python3 /opt/zerogex/monitoring/monitor.py --daemon --export --interval 60
+Restart=always
+RestartSec=10
+
+# Resource limits
+MemoryLimit=256M
+CPUQuota=10%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
