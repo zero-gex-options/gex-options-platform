@@ -118,36 +118,139 @@
             50% { opacity: 0.5; }
         }
         .loading { animation: pulse 2s ease-in-out infinite; }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .data-table th {
+            background: #334155;
+            padding: 8px;
+            text-align: left;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+        .data-table td {
+            padding: 8px;
+            border-bottom: 1px solid #334155;
+        }
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+        .quote-detail {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .quote-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .quote-label {
+            color: #94a3b8;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .quote-value {
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 32px;
+        }
+        .quote-value.large {
+            font-size: 48px;
+            color: #60a5fa;
+        }
+        .timestamp {
+            color: #60a5fa;
+            font-size: 11px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #334155;
+        }
+        .market-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 16px;
+        }
+        .market-status.open {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .market-status.closed {
+            background: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+        }
+        .market-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+        .market-status.open .market-status-dot {
+            background: #10b981;
+        }
+        .market-status.closed .market-status-dot {
+            background: #94a3b8;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 ZeroGEX Platform Monitor</h1>
+            <h1>
+                🚀 ZeroGEX Platform Monitor
+                <span id="marketStatus" class="market-status closed">
+                    <span class="market-status-dot"></span>
+                    Market Closed
+                </span>
+            </h1>
             <div class="last-update" id="lastUpdate">Loading...</div>
         </div>
-        
+
         <div id="content" class="loading">
             <div class="grid">
                 <div class="card">
                     <h2>System Resources</h2>
                     <div id="systemMetrics">Loading...</div>
                 </div>
-                
+
                 <div class="card">
                     <h2>Service Status</h2>
                     <div id="serviceStatus">Loading...</div>
                 </div>
-                
+
                 <div class="card">
                     <h2>Database Metrics</h2>
                     <div id="databaseMetrics">Loading...</div>
                 </div>
             </div>
-            
+
             <div class="card">
                 <h2>Active Alerts</h2>
                 <div id="alerts">No alerts</div>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h2>SPY Quote</h2>
+                    <div id="spyQuote">Loading...</div>
+                </div>
+
+                <div class="card">
+                    <h2>Ingestion Metrics</h2>
+                    <div id="ingestionMetric">Loading...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Recent Option Quotes (Last 10)</h2>
+                <div id="recentOptions">Loading...</div>
             </div>
         </div>
     </div>
@@ -177,12 +280,22 @@
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('content').classList.remove('loading');
-                    
+
                     // Update timestamp
                     const timestamp = new Date(data.timestamp);
                     document.getElementById('lastUpdate').textContent = 
                         `Last updated: ${timestamp.toLocaleString()}`;
-                    
+
+                    // Update market status
+                    const marketStatus = document.getElementById('marketStatus');
+                    if (data.market_open) {
+                        marketStatus.className = 'market-status open';
+                        marketStatus.innerHTML = '<span class="market-status-dot"></span> Market Open';
+                    } else {
+                        marketStatus.className = 'market-status closed';
+                        marketStatus.innerHTML = '<span class="market-status-dot"></span> Market Closed';
+                    }
+
                     // System metrics
                     const sys = data.system;
                     document.getElementById('systemMetrics').innerHTML = `
@@ -204,7 +317,7 @@
                             ${renderProgressBar(sys.disk_percent)}
                         </div>
                     `;
-                    
+
                     // Service status
                     let servicesHtml = '';
                     for (const [service, status] of Object.entries(data.services)) {
@@ -219,7 +332,7 @@
                         `;
                     }
                     document.getElementById('serviceStatus').innerHTML = servicesHtml;
-                    
+
                     // Database metrics
                     if (data.database && !data.database.error) {
                         const db = data.database;
@@ -245,7 +358,7 @@
                         document.getElementById('databaseMetrics').innerHTML = 
                             '<div style="color: #ef4444;">Database metrics unavailable</div>';
                     }
-                    
+
                     // Alerts
                     const alerts = data.alerts || [];
                     if (alerts.length > 0) {
@@ -263,6 +376,129 @@
                     } else {
                         document.getElementById('alerts').innerHTML = 
                             '<div style="color: #10b981;">✓ All systems operational</div>';
+                    }
+
+                    // SPY Quote
+                    if (data.database && data.database.spy_quote) {
+                        const spy = data.database.spy_quote;
+                        const spyTime = new Date(spy.timestamp);
+                        document.getElementById('spyQuote').innerHTML = `
+                            <div class="quote-detail">
+                                <div class="quote-item">
+                                    <span class="quote-label">SPY Price</span>
+                                    <span class="quote-value large"><span style="color: #94a3b8; margin-right: 4px;">$</span>${spy.price ? spy.price.toFixed(2) : 'N/A'}</span>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                    <div class="quote-item">
+                                        <span class="quote-label">Volume</span>
+                                        <span class="quote-value">${formatNumber(spy.volume || 0)}</span>
+                                    </div>
+                                    <div class="quote-item">
+                                        <span class="quote-label">Last Updated</span>
+                                        <span class="quote-value" style="font-size: 14px;">${spyTime.toLocaleTimeString()}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        document.getElementById('spyQuote').innerHTML = 
+                            '<div style="color: #64748b;">No SPY quote available</div>';
+                    }
+
+                    // Ingestion Metrics
+                    if (data.database && data.database.ingestion_metric) {
+                        const im = data.database.ingestion_metric;
+                        const imTime = new Date(im.timestamp);
+                        document.getElementById('ingestionMetric').innerHTML = `
+                            <div class="quote-detail">
+                                <div class="quote-item">
+                                    <span class="quote-label">Source</span>
+                                    <span class="quote-value">${im.source || 'N/A'}</span>
+                                </div>
+                                <div class="quote-item">
+                                    <span class="quote-label">Symbol</span>
+                                    <span class="quote-value">${im.symbol || 'N/A'}</span>
+                                </div>
+                                <div class="quote-item">
+                                    <span class="quote-label">Records Ingested</span>
+                                    <span class="quote-value">${formatNumber(im.records_ingested || 0)}</span>
+                                </div>
+                                <div class="quote-item">
+                                    <span class="quote-label">Errors</span>
+                                    <span class="quote-value">${im.errors_count || 0}</span>
+                                </div>
+                                <div class="quote-item">
+                                    <span class="quote-label">Processing Time</span>
+                                    <span class="quote-value">${im.processing_time_ms || 0}ms</span>
+                                </div>
+                            </div>
+                            <div class="timestamp">${imTime.toLocaleString()}</div>
+                        `;
+                    } else {
+                        document.getElementById('ingestionMetric').innerHTML = 
+                            '<div style="color: #64748b;">No ingestion metrics available</div>';
+                    }
+
+                    // Recent Options
+                    if (data.database && data.database.recent_options && data.database.recent_options.length > 0) {
+                        const options = data.database.recent_options;
+                        let tableHtml = `
+                            <div style="overflow-x: auto;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Symbol</th>
+                                            <th>Strike</th>
+                                            <th>Exp</th>
+                                            <th>DTE</th>
+                                            <th>Type</th>
+                                            <th>Last</th>
+                                            <th>Bid</th>
+                                            <th>Ask</th>
+                                            <th>Mid</th>
+                                            <th>Vol</th>
+                                            <th>OI</th>
+                                            <th>IV</th>
+                                            <th>Delta</th>
+                                            <th>Gamma</th>
+                                            <th>Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                        `;
+
+                        options.forEach(opt => {
+                            const optTime = new Date(opt.timestamp);
+                            tableHtml += `
+                                <tr>
+                                    <td>${opt.symbol || 'N/A'}</td>
+                                    <td>$${opt.strike?.toFixed(0) || 'N/A'}</td>
+                                    <td>${opt.expiration ? new Date(opt.expiration).toLocaleDateString() : 'N/A'}</td>
+                                    <td>${opt.dte !== null && opt.dte !== undefined ? opt.dte : 'N/A'}</td>
+                                    <td>${opt.option_type || 'N/A'}</td>
+                                    <td>$${opt.last?.toFixed(2) || 'N/A'}</td>
+                                    <td>$${opt.bid?.toFixed(2) || 'N/A'}</td>
+                                    <td>$${opt.ask?.toFixed(2) || 'N/A'}</td>
+                                    <td>$${opt.mid?.toFixed(2) || 'N/A'}</td>
+                                    <td>${formatNumber(opt.volume || 0)}</td>
+                                    <td>${formatNumber(opt.open_interest || 0)}</td>
+                                    <td>${opt.implied_vol !== null && opt.implied_vol !== undefined ? (opt.implied_vol * 100).toFixed(1) + '%' : 'N/A'}</td>
+                                    <td>${opt.delta?.toFixed(3) || 'N/A'}</td>
+                                    <td>${opt.gamma?.toFixed(4) || 'N/A'}</td>
+                                    <td style="font-size: 11px;">${optTime.toLocaleTimeString()}</td>
+                                </tr>
+                            `;
+                        });
+
+                        tableHtml += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                        document.getElementById('recentOptions').innerHTML = tableHtml;
+                    } else {
+                        document.getElementById('recentOptions').innerHTML = 
+                            '<div style="color: #64748b;">No recent option quotes available</div>';
                     }
                 })
                 .catch(error => {

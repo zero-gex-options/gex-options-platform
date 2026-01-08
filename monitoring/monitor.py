@@ -109,6 +109,37 @@ class MonitoringCollector:
             """)
             conn_data = cursor.fetchone()
             
+            # Get most recent SPY quote
+            cursor.execute("""
+                SELECT symbol, price, volume, timestamp
+                FROM underlying_prices
+                WHERE symbol = 'SPY'
+                ORDER BY timestamp DESC
+                LIMIT 1;
+            """)
+            spy_quote = cursor.fetchone()
+            
+            # Get 10 most recent option quotes
+            cursor.execute("""
+                SELECT symbol, strike, expiration, dte, option_type, last, 
+                       bid, ask, mid, volume, open_interest, implied_vol, 
+                       delta, gamma, theta, vega, timestamp
+                FROM options_quotes
+                ORDER BY timestamp DESC
+                LIMIT 10;
+            """)
+            recent_options = cursor.fetchall()
+            
+            # Get most recent ingestion metrics
+            cursor.execute("""
+                SELECT timestamp, source, symbol, records_ingested, 
+                       errors_count, processing_time_ms
+                FROM ingestion_metrics
+                ORDER BY timestamp DESC
+                LIMIT 1;
+            """)
+            ingestion_metric = cursor.fetchone()
+            
             cursor.close()
             conn.close()
             
@@ -121,6 +152,9 @@ class MonitoringCollector:
                 'latest_gex': gex_data['latest_gex'].isoformat() if gex_data and gex_data['latest_gex'] else None,
                 'db_size': size_data['db_size'] if size_data else 'unknown',
                 'active_connections': conn_data['active_connections'] if conn_data else 0,
+                'spy_quote': dict(spy_quote) if spy_quote else None,
+                'recent_options': [dict(row) for row in recent_options] if recent_options else [],
+                'ingestion_metric': dict(ingestion_metric) if ingestion_metric else None,
             }
         except Exception as e:
             return {'error': str(e)}
@@ -143,6 +177,17 @@ class MonitoringCollector:
         """Check for alert conditions"""
         alerts = []
         timestamp = datetime.now().isoformat()
+        
+        # Check if market is open (9:30 AM - 4:00 PM ET, Mon-Fri)
+        now = datetime.now()
+        is_market_open = False
+        if now.weekday() < 5:  # Monday = 0, Friday = 4
+            market_open = now.replace(hour=9, minute=30, second=0)
+            market_close = now.replace(hour=16, minute=0, second=0)
+            is_market_open = market_open <= now <= market_close
+        
+        # Store market status in metrics
+        metrics['market_open'] = is_market_open
         
         # CPU alert
         if metrics['system']['cpu_percent'] > 90:
@@ -206,20 +251,14 @@ class MonitoringCollector:
         if metrics.get('database') and not metrics['database'].get('error'):
             db = metrics['database']
             
-            # No recent data
-            if db.get('quotes_recent_10min', 0) == 0:
-                # Only alert during market hours (9:30 AM - 4:00 PM ET, Mon-Fri)
-                now = datetime.now()
-                if now.weekday() < 5:  # Monday = 0, Friday = 4
-                    market_open = now.replace(hour=9, minute=30, second=0)
-                    market_close = now.replace(hour=16, minute=0, second=0)
-                    if market_open <= now <= market_close:
-                        alerts.append({
-                            'timestamp': timestamp,
-                            'level': 'warning',
-                            'category': 'data',
-                            'message': 'No data ingested in last 10 minutes (during market hours)'
-                        })
+            # No recent data - only alert during market hours
+            if db.get('quotes_recent_10min', 0) == 0 and is_market_open:
+                alerts.append({
+                    'timestamp': timestamp,
+                    'level': 'warning',
+                    'category': 'data',
+                    'message': 'No data ingested in last 10 minutes (during market hours)'
+                })
         
         return alerts
     
