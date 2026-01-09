@@ -256,7 +256,7 @@ log "${CHECKS}"
 log ""
 
 if [ "$FAILED_CHECKS" -eq 0 ]; then
-    PASSED=`echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n${GREEN}✓ Deployment validation PASSED!${NC}\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    PASSED=`echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n${GREEN}✓ Deployment validation PASSED!${NC}\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"`
     log "${PASSED}"
     log ""
     log "ZeroGEX platform is ready for production!"

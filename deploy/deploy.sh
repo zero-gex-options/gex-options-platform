@@ -87,7 +87,6 @@ if [ -n "$START_FROM" ]; then
     log "Starting from step: $START_FROM"
 fi
 log "=========================================="
-log ""
 
 # Flag to track if we should start executing
 SHOULD_EXECUTE=false
