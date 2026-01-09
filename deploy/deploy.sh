@@ -33,14 +33,17 @@ Examples:
   ./deploy.sh --start-from database  # Start from database step
   ./deploy.sh --start-from monitoring # Start from monitoring step
 
+010.setup     030.application  050.security  070.systemd     090.monitoring
+020.database  040.tokens       060.backups   080.validation
+
 Available Steps:
   010.setup          - System setup and configuration
   020.database       - PostgreSQL + TimescaleDB setup
   030.application    - Application setup and dependencies
-  040.systemd        - Systemd services configuration
+  040.tokens         - TradeStation token initialization
   050.security       - Security hardening
   060.backups        - Automated database backups
-  070.tradestation   - TradeStation token initialization
+  070.systemd        - Systemd services configuration
   080.validation     - Deployment validation
   090.monitoring     - Monitoring system setup
 
