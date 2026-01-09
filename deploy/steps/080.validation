@@ -19,12 +19,6 @@ else
     exit 1
 fi
 
-# Color codes for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
 # Validation results tracking
 TOTAL_CHECKS=0
 PASSED_CHECKS=0
@@ -38,13 +32,11 @@ check_service() {
     local display_name=$2
 
     if systemctl is-active --quiet "$service_name"; then
-        SYS_ACTIVE=`echo -e "  ${GREEN}✓${NC} $display_name: $(systemctl is-active "$service_name")"`
-	log "${SYS_ACTIVE}"
+	log "  ✓ $display_name: $(systemctl is-active "$service_name")"
         PASSED_CHECKS=$((PASSED_CHECKS + 1))
         return 0
     else
-        SYS_ACTIVE=`echo -e "  ${RED}✗${NC} $display_name: $(systemctl is-active "$service_name")"`
-	log "${SYS_ACTIVE}"
+	log "  ✗ $display_name: $(systemctl is-active "$service_name")"
         FAILED_CHECKS=$((FAILED_CHECKS + 1))
         return 1
     fi
@@ -67,13 +59,11 @@ log "━━━━━━━━━━━━━━━━━━━━━━━━━
 TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -c "SELECT NOW();" > /dev/null 2>&1; then
     DB_TIME=$(PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "SELECT NOW();")
-    DB_CONN_OUT=`echo -e "  ${GREEN}✓${NC} Database connection successful"`
-    log "${DB_CONN_OUT}"
+    log "  ✓ Database connection successful"
     log "     Database time: $DB_TIME"
     PASSED_CHECKS=$((PASSED_CHECKS + 1))
 else
-    DB_FAIL_OUT=`echo -e "  ${RED}✗${NC} Database connection failed"`
-    log "${DB_FAIL_OUT}"
+    log "  ✗ Database connection failed"
     FAILED_CHECKS=$((FAILED_CHECKS + 1))
 fi
 log ""
@@ -89,13 +79,12 @@ for table in "${TABLES[@]}"; do
     TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
     TABLE_OUT=""
     if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dt $table" 2>/dev/null | grep -q "$table"; then
-        TABLE_OUT=`echo -e "  ${GREEN}✓${NC} Table exists: $table"`
+	log "  ✓ Table exists: $table"
         PASSED_CHECKS=$((PASSED_CHECKS + 1))
     else
-        TABLE_OUT=`echo -e "  ${YELLOW}⚠${NC} Table not found: $table (may not be created yet)"`
+	log "  ⚠ Table not found: $table (may not be created yet)"
         WARNING_CHECKS=$((WARNING_CHECKS + 1))
     fi
-    log "${TABLE_OUT}"
 done
 log ""
 
@@ -124,18 +113,15 @@ if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dt 
     DATA_CHECK=$(PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "SELECT COUNT(*) FROM options_quotes WHERE timestamp > NOW() - INTERVAL '10 minutes';" 2>/dev/null | xargs)
 
     if [ -n "$DATA_CHECK" ] && [ "$DATA_CHECK" -gt 0 ]; then
-        DATA_FOUND=`echo -e "  ${GREEN}✓${NC} Recent data found: $DATA_CHECK rows in last 10 minutes"`
-	log "${DATA_FOUND}"
+	log "  ✓ Recent data found: $DATA_CHECK rows in last 10 minutes"
         PASSED_CHECKS=$((PASSED_CHECKS + 1))
     else
-        NO_DATA=`echo -e "  ${YELLOW}⚠${NC} No recent data (0 rows in last 10 minutes)"`
-	log "${NO_DATA}"
+	log "  ⚠ No recent data (0 rows in last 10 minutes)"
         log "     This is normal if services just started or markets are closed"
         WARNING_CHECKS=$((WARNING_CHECKS + 1))
     fi
 else
-    NOT_CREATED=`echo -e "  ${YELLOW}⚠${NC} options_quotes table not yet created"`
-    log "${NOT_CREATED}"
+    log "  ⚠ options_quotes table not yet created"
     WARNING_CHECKS=$((WARNING_CHECKS + 1))
 fi
 log ""
@@ -150,19 +136,18 @@ if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dt 
     GEX_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "SELECT COUNT(*) FROM latest_gex;" 2>/dev/null | xargs)
 
     if [ -n "$GEX_COUNT" ] && [ "$GEX_COUNT" -gt 0 ]; then
-        echo -e "  ${GREEN}✓${NC} GEX calculations found: $GEX_COUNT rows"
+	log "  ✓ GEX calculations found: $GEX_COUNT rows"
         PASSED_CHECKS=$((PASSED_CHECKS + 1))
         log ""
         log "  Sample GEX data:"
         PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -c "SELECT * FROM latest_gex LIMIT 5;" 2>/dev/null || echo "     (no data yet)"
     else
-        NO_GEX=`echo -e "  ${YELLOW}⚠${NC} No GEX calculations yet"`
-	log "${NO_GEX}"
+	log "  ⚠ No GEX calculations yet"
         log "     This is normal if services just started"
         WARNING_CHECKS=$((WARNING_CHECKS + 1))
     fi
 else
-    echo -e "  ${YELLOW}⚠${NC} latest_gex table not yet created"
+    log "  ⚠ latest_gex table not yet created"
     WARNING_CHECKS=$((WARNING_CHECKS + 1))
 fi
 log ""
@@ -177,15 +162,13 @@ DISK_USAGE=$(df -h / | tail -1 | awk '{print $5}' | sed 's/%//')
 DISK_INFO=$(df -h / | tail -1)
 log "  Disk Usage:"
 log "     $DISK_INFO"
-DU_OUT=""
 if [ "$DISK_USAGE" -lt 80 ]; then
-    DU_OUT=`echo -e "     ${GREEN}✓${NC} Disk usage OK (${DISK_USAGE}%)"`
+    log "     ✓ Disk usage OK (${DISK_USAGE}%)"
 elif [ "$DISK_USAGE" -lt 90 ]; then
-    DU_OUT=`echo -e "     ${YELLOW}⚠${NC} Disk usage warning (${DISK_USAGE}%)"`
+    log "    ⚠ Disk usage warning (${DISK_USAGE}%)"
 else
-    DU_OUT=`echo -e "     ${RED}✗${NC} Disk usage critical (${DISK_USAGE}%)"`
+    log "   ✗ Disk usage critical (${DISK_USAGE}%)"
 fi
-log "${DU_OUT}"
 log ""
 
 # Memory usage
@@ -193,15 +176,13 @@ MEM_INFO=$(free -h | grep Mem)
 MEM_PERCENT=$(free | grep Mem | awk '{printf("%.0f", $3/$2 * 100)}')
 log "  Memory Usage:"
 log "     $MEM_INFO"
-MEM_OUT=""
 if [ "$MEM_PERCENT" -lt 80 ]; then
-    MEM_OUT=`echo -e "     ${GREEN}✓${NC} Memory usage OK (${MEM_PERCENT}%)"`
+    log "     ✓ Memory usage OK (${MEM_PERCENT}%)"
 elif [ "$MEM_PERCENT" -lt 90 ]; then
-    MEM_OUT=`echo -e "     ${YELLOW}⚠${NC} Memory usage warning (${MEM_PERCENT}%)"`
+    log "     ⚠ Memory usage warning (${MEM_PERCENT}%)"
 else
-    MEM_OUT=`echo -e "     ${RED}✗${NC} Memory usage high (${MEM_PERCENT}%)"`
+    log "     ✗ Memory usage high (${MEM_PERCENT}%)"
 fi
-log "${MEM_OUT}"
 log ""
 
 # Section 9: Security Status
@@ -211,35 +192,31 @@ log "━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # UFW status
 TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
-FW_OUT=""
 if sudo ufw status | grep -q "Status: active"; then
-    FW_OUT=`echo -e "  ${GREEN}✓${NC} Firewall (UFW) is active"`
+    log "  ✓ Firewall (UFW) is active"
     PASSED_CHECKS=$((PASSED_CHECKS + 1))
 else
-    FW_OUT=`echo -e "  ${RED}✗${NC} Firewall (UFW) is not active"`
+    log "  ✗ Firewall (UFW) is not active"
     FAILED_CHECKS=$((FAILED_CHECKS + 1))
 fi
-log "${FW_OUT}"
 
 # SSH configuration
 TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
-SSH_OUT=""
 if grep -q "^PermitRootLogin no" /etc/ssh/sshd_config && grep -q "^PasswordAuthentication no" /etc/ssh/sshd_config; then
-    SSH_OUT=`echo -e "  ${GREEN}✓${NC} SSH hardening configured"`
+    log "  ✓ SSH hardening configured"
     PASSED_CHECKS=$((PASSED_CHECKS + 1))
 else
-    SSH_OUT=`echo -e "  ${YELLOW}⚠${NC} SSH hardening may not be fully configured"`
+    log "  ⚠ SSH hardening may not be fully configured"
     WARNING_CHECKS=$((WARNING_CHECKS + 1))
 fi
 
 # Backup configuration
 TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
-BKUP_OUT=""
 if crontab -l 2>/dev/null | grep -q "backup-gex-db.sh"; then
-    BKUP_OUT=`echo -e "  ${GREEN}✓${NC} Automated backups configured"`
+    log "  ✓ Automated backups configured"
     PASSED_CHECKS=$((PASSED_CHECKS + 1))
 else
-    BKUP_OUT=`echo -e "  ${YELLOW}⚠${NC} Automated backups not configured"`
+    log "  ⚠ Automated backups not configured"
     WARNING_CHECKS=$((WARNING_CHECKS + 1))
 fi
 log "${BKUP_OUT}"
@@ -251,24 +228,27 @@ log "VALIDATION SUMMARY"
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 log ""
 log "Total Checks: $TOTAL_CHECKS"
-CHECKS=`echo -e "${GREEN}Passed: $PASSED_CHECKS${NC}\n${YELLOW}Warnings: $WARNING_CHECKS${NC}\n${RED}Failed: $FAILED_CHECKS${NC}"`
-log "${CHECKS}"
+log "Passed: $PASSED_CHECKS"
+log "Warnings: $WARNING_CHECKS"
+log "Failed: $FAILED_CHECKS"
 log ""
 
 if [ "$FAILED_CHECKS" -eq 0 ]; then
-    PASSED=`echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n${GREEN}✓ Deployment validation PASSED!${NC}\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"`
-    log "${PASSED}"
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log "✓ Deployment validation PASSED!"
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     log ""
     log "ZeroGEX platform is ready for production!"
 
     if [ "$WARNING_CHECKS" -gt 0 ]; then
         log ""
-        WARNINGS=`echo -e "${YELLOW}Note: Some warnings were detected. These are typically normal\nfor a fresh deployment or when markets are closed.${NC}"`
-        log "${WARNINGS}"
+        log "Note: Some warnings were detected. These are typically normal"
+	log "for a fresh deployment or when markets are closed."
     fi
 else
-    FAILED=`echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n${RED}✗ Deployment validation FAILED!${NC}\n${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"`
-    log "${FAILED}"
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log "✗ Deployment validation FAILED!"
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     log ""
     log "Please review the failed checks above and resolve issues."
     log "Check service logs for more details:"

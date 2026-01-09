@@ -154,12 +154,6 @@ else
     log "     If you need to update TradeStation credentials, edit: $ENV_FILE"
 fi
 
-# Create necessary directories
-log "  → Creating application directories..."
-mkdir -p logs
-mkdir -p data
-mkdir -p cache
-
 # Verify installation
 log "  → Verifying Python packages..."
 python -c "import psycopg2; import pandas; import numpy; print('✓ Core packages verified')" 2>/dev/null || {

@@ -409,6 +409,7 @@
                     if (data.database && data.database.ingestion_metric) {
                         const im = data.database.ingestion_metric;
                         const imTime = new Date(im.timestamp);
+                        const lastHeartbeat = im.last_heartbeat ? new Date(im.last_heartbeat) : null;
                         document.getElementById('ingestionMetric').innerHTML = `
                             <div class="quote-detail">
                                 <div class="quote-item">
@@ -425,11 +426,19 @@
                                 </div>
                                 <div class="quote-item">
                                     <span class="quote-label">Errors</span>
-                                    <span class="quote-value">${im.errors_count || 0}</span>
+                                    <span class="quote-value">${im.error_count || 0}</span>
                                 </div>
                                 <div class="quote-item">
                                     <span class="quote-label">Processing Time</span>
                                     <span class="quote-value">${im.processing_time_ms || 0}ms</span>
+                                </div>
+                                <div class="quote-item">
+                                    <span class="quote-label">Heartbeat Count</span>
+                                    <span class="quote-value">${formatNumber(im.heartbeat_count || 0)}</span>
+                                </div>
+                                <div class="quote-item" style="grid-column: 1 / -1;">
+                                    <span class="quote-label">Last Heartbeat</span>
+                                    <span class="quote-value" style="font-size: 14px;">${lastHeartbeat ? lastHeartbeat.toLocaleString() : 'N/A'}</span>
                                 </div>
                             </div>
                             <div class="timestamp">${imTime.toLocaleString()}</div>
