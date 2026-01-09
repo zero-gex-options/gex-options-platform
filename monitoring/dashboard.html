@@ -482,7 +482,7 @@
                                 <tr>
                                     <td>${opt.symbol || 'N/A'}</td>
                                     <td>$${opt.strike?.toFixed(0) || 'N/A'}</td>
-                                    <td>${opt.expiration ? new Date(opt.expiration).toLocaleDateString() : 'N/A'}</td>
+                                    <td>${opt.expiration || 'N/A'}</td>
                                     <td>${opt.dte !== null && opt.dte !== undefined ? opt.dte : 'N/A'}</td>
                                     <td>${opt.option_type || 'N/A'}</td>
                                     <td>$${opt.last?.toFixed(2) || 'N/A'}</td>
