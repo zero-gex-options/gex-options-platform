@@ -86,7 +86,10 @@ CREATE TABLE ingestion_metrics (
     source TEXT NOT NULL,
     symbol TEXT NOT NULL,
     records_ingested BIGINT,
-    errors_count BIGINT,
+    records_stored, BIGINT,
+    error_count BIGINT,
+    heartbeat_count BIGINT,
+    last_heartbeat TIMESTAMPTZ,
     processing_time_ms BIGINT,
     PRIMARY KEY (timestamp, source, symbol)
 );

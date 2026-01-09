@@ -8,6 +8,7 @@ import asyncio
 import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime, time as dt_time, date, timezone
+import time
 import pytz
 from typing import Dict, Optional
 import logging
@@ -200,7 +201,7 @@ class StreamingIngestionEngine:
     def _parse_option_update(self, data: Dict) -> Optional[Dict]:
         """Parse raw option data from stream"""
 
-        logger.debug("Parsing option update #{self.options_received}...")
+        logger.debug(f"Parsing option update #{self.options_received}...")
 
         try:
 
@@ -391,14 +392,26 @@ class StreamingIngestionEngine:
             logger.debug("Batch buffer empty, nothing to flush")
             return
 
+        start_time = time.time() # Start timing
         batch_size = len(self.batch_buffer)
         logger.debug(f"Flushing batch of {batch_size} options to database...")
 
         try:
+
+            # Store the batch in database
             self._store_options_batch(self.batch_buffer)
 
+            # Calculate processing time
+            processing_time_ms = int((time.time() - start_time) * 1000)
+
+            # Log metrics to database
+            self._log_ingestion_metrics(processing_time_ms)
+
+            # Update stats
             self.options_stored += batch_size
             self.batch_count += 1
+
+            # Clear the buffer
             self.batch_buffer.clear()
 
             logger.info(f"✅ Batch #{self.batch_count} stored successfully ({self.options_stored} total options)")
@@ -507,6 +520,42 @@ class StreamingIngestionEngine:
             self.db_conn.rollback()
         finally:
             cursor.close()
+
+    def _log_ingestion_metrics(self, processing_time_ms: int):
+        """Log ingestion metrics to database using streaming stats"""
+        try:
+            # Get current streaming statistics
+            stats = {
+                'records_ingested': self.options_received,
+                'records_stored': self.options_stored,
+                'error_count': self.error_count,
+                'heartbeat_count': self.heartbeat_count,
+                'last_heartbeat': self.last_heartbeat
+            }
+
+            cursor = self.db_conn.cursor()
+            insert_query = """
+                INSERT INTO ingestion_metrics 
+                (timestamp, source, symbol, records_ingested, records_stored, error_count, heartbeat_count, last_heartbeat, processing_time_ms)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(insert_query, (
+                datetime.now(timezone.utc),
+                'tradestation_stream',
+                'SPY',
+                stats['records_ingested'],
+                stats['records_stored'],
+                stats['error_count'],
+                stats['heartbeat_count'],
+                stats['last_heartbeat'],
+                processing_time_ms
+            ))
+            self.db_conn.commit()
+            cursor.close()
+            logger.debug(f"📊 Logged ingestion metrics: {stats['records_ingested']} records ingested, {stats['records_stored']} records stored, {stats['error_count']} errors, {stats['heartbeat_count']} heartbeats (last: {stats['last_heartbeat']}), ms")
+        except Exception as e:
+            logger.error(f"❌ Failed to log ingestion metrics: {e}")
+            self.db_conn.rollback()
 
     async def run(self, symbol: str = 'SPY'):
         """Main ingestion loop"""
