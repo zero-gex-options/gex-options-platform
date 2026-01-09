@@ -6,55 +6,55 @@
 
 set -e
 
-echo "Security Hardening"
+log "Security Hardening"
 
 # Install UFW if not already installed
-echo "  → Installing UFW (Uncomplicated Firewall)..."
+log "  → Installing UFW (Uncomplicated Firewall)..."
 sudo apt install -y ufw
 
 # Configure firewall rules
-echo "  → Configuring firewall rules..."
+log "  → Configuring firewall rules..."
 
 # Allow SSH (critical - do this first!)
-echo "     • Allowing SSH (port 22)..."
+log "     • Allowing SSH (port 22)..."
 sudo ufw allow 22/tcp comment 'SSH access'
 
 # Set default policies
-echo "     • Setting default policies..."
+log "     • Setting default policies..."
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 
 # Enable firewall
-echo "  → Enabling firewall..."
+log "  → Enabling firewall..."
 echo "y" | sudo ufw enable
 
 # Show firewall status
-echo "  → Firewall status:"
+log "  → Firewall status:"
 sudo ufw status verbose
-echo ""
+log ""
 
 # Configure SSH hardening
-echo "  → Hardening SSH configuration..."
+log "  → Hardening SSH configuration..."
 
 # Backup original sshd_config
 if [ ! -f /etc/ssh/sshd_config.backup ]; then
     sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
-    echo "     ✓ Backed up original sshd_config"
+    log "     ✓ Backed up original sshd_config"
 fi
 
 # Create temporary config changes
 SSHD_CONFIG="/etc/ssh/sshd_config"
 
 # Disable root login
-echo "     • Disabling root login..."
+log "     • Disabling root login..."
 sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' "$SSHD_CONFIG"
 
 # Disable password authentication (force key-based auth)
-echo "     • Disabling password authentication..."
+log "     • Disabling password authentication..."
 sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' "$SSHD_CONFIG"
 
 # Additional SSH hardening
-echo "     • Applying additional SSH hardening..."
+log "     • Applying additional SSH hardening..."
 
 # Disable empty passwords
 if ! grep -q "^PermitEmptyPasswords no" "$SSHD_CONFIG"; then
@@ -70,23 +70,23 @@ fi
 sudo sed -i 's/^#*X11Forwarding.*/X11Forwarding no/' "$SSHD_CONFIG"
 
 # Test SSH configuration
-echo "  → Testing SSH configuration..."
+log "  → Testing SSH configuration..."
 if sudo sshd -t; then
-    echo "     ✓ SSH configuration is valid"
+    log "     ✓ SSH configuration is valid"
 else
-    echo "     ✗ SSH configuration has errors!"
-    echo "     Restoring backup..."
+    log "     ✗ SSH configuration has errors!"
+    log "     Restoring backup..."
     sudo cp /etc/ssh/sshd_config.backup "$SSHD_CONFIG"
     exit 1
 fi
 
 # Restart SSH service
-echo "  → Restarting SSH service..."
+log "  → Restarting SSH service..."
 sudo systemctl restart sshd
-echo "     ✓ SSH service restarted"
+log "     ✓ SSH service restarted"
 
 # Set up automatic security updates
-echo "  → Setting up automatic security updates..."
+log "  → Setting up automatic security updates..."
 sudo apt install -y unattended-upgrades
 
 # Configure unattended-upgrades non-interactively
@@ -94,7 +94,7 @@ sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure -plow unattended-upgrades
 
 # Ensure it's enabled
 if [ -f /etc/apt/apt.conf.d/20auto-upgrades ]; then
-    echo "     ✓ Automatic security updates enabled"
+    log "     ✓ Automatic security updates enabled"
 else
     # Create the config file manually
     sudo bash -c 'cat > /etc/apt/apt.conf.d/20auto-upgrades' << 'EOF'
@@ -102,7 +102,7 @@ APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 APT::Periodic::AutocleanInterval "7";
 EOF
-    echo "     ✓ Automatic security updates configured manually"
+    log "     ✓ Automatic security updates configured manually"
 fi
 
 # Configure unattended-upgrades to auto-reboot if needed
@@ -113,22 +113,22 @@ if [ -f "$UNATTENDED_CONFIG" ]; then
 fi
 
 # Set secure file permissions on sensitive files
-echo "  → Setting secure file permissions..."
+log "  → Setting secure file permissions..."
 
 # Secure database credentials
 if [ -f /home/ubuntu/.zerogex_db_creds ]; then
     chmod 600 /home/ubuntu/.zerogex_db_creds
-    echo "     ✓ Secured database credentials file"
+    log "     ✓ Secured database credentials file"
 fi
 
 # Secure .env file
 if [ -f "$HOME/gex-options-platform/.env" ]; then
     chmod 600 "$HOME/gex-options-platform/.env"
-    echo "     ✓ Secured .env file"
+    log "     ✓ Secured .env file"
 fi
 
 # Configure fail2ban (optional but recommended)
-echo "  → Installing fail2ban for brute-force protection..."
+log "  → Installing fail2ban for brute-force protection..."
 sudo apt install -y fail2ban
 
 # Create fail2ban local config
@@ -148,27 +148,27 @@ EOF
 # Start and enable fail2ban
 sudo systemctl enable fail2ban
 sudo systemctl restart fail2ban
-echo "     ✓ fail2ban configured and started"
+log "     ✓ fail2ban configured and started"
 
-echo "Security hardening complete!"
-echo ""
-echo "Summary:"
-echo "  ✓ Firewall (UFW) enabled and configured"
-echo "  ✓ SSH hardened (root login disabled, key-only auth)"
-echo "  ✓ Automatic security updates enabled"
-echo "  ✓ fail2ban installed for brute-force protection"
-echo "  ✓ Sensitive files secured"
-echo ""
-echo "Security Configuration:"
-echo "  • SSH: Key-based authentication only"
-echo "  • Root login: Disabled"
-echo "  • Max SSH auth attempts: 3"
-echo "  • Firewall: Only SSH (port 22) allowed"
-echo "  • Auto-updates: Enabled (reboot at 3:00 AM if needed)"
-echo "  • fail2ban: Enabled (ban after 3 failed attempts)"
-echo ""
-echo "⚠ IMPORTANT:"
-echo "  Make sure you have SSH key authentication set up!"
-echo "  Password authentication is now disabled."
-echo "  Keep your current SSH session open and test login in a new window."
-echo ""
+log "Security hardening complete!"
+log ""
+log "Summary:"
+log "  ✓ Firewall (UFW) enabled and configured"
+log "  ✓ SSH hardened (root login disabled, key-only auth)"
+log "  ✓ Automatic security updates enabled"
+log "  ✓ fail2ban installed for brute-force protection"
+log "  ✓ Sensitive files secured"
+log ""
+log "Security Configuration:"
+log "  • SSH: Key-based authentication only"
+log "  • Root login: Disabled"
+log "  • Max SSH auth attempts: 3"
+log "  • Firewall: Only SSH (port 22) allowed"
+log "  • Auto-updates: Enabled (reboot at 3:00 AM if needed)"
+log "  • fail2ban: Enabled (ban after 3 failed attempts)"
+log ""
+log "⚠ IMPORTANT:"
+log "  Make sure you have SSH key authentication set up!"
+log "  Password authentication is now disabled."
+log "  Keep your current SSH session open and test login in a new window."
+log ""

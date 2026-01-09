@@ -6,7 +6,7 @@
 
 set -e
 
-echo "TradeStation Token Initialization"
+log "TradeStation Token Initialization"
 
 # Define paths
 APP_DIR="$HOME/gex-options-platform"
@@ -15,26 +15,26 @@ ENV_FILE="$APP_DIR/.env"
 
 # Check if application directory exists
 if [ ! -d "$APP_DIR" ]; then
-    echo "  ✗ Application directory not found: $APP_DIR"
+    log "  ✗ Application directory not found: $APP_DIR"
     exit 1
 fi
 
 # Check if token script exists
 if [ ! -f "$TOKEN_SCRIPT" ]; then
-    echo "  ✗ TradeStation token script not found: $TOKEN_SCRIPT"
-    echo "     Expected: initialize/get_tradestation_tokens.py"
+    log "  ✗ TradeStation token script not found: $TOKEN_SCRIPT"
+    log "     Expected: initialize/get_tradestation_tokens.py"
     exit 1
 fi
 
 # Check if .env file exists
 if [ ! -f "$ENV_FILE" ]; then
-    echo "  ✗ .env file not found: $ENV_FILE"
-    echo "     Run step 030.application first"
+    log "  ✗ .env file not found: $ENV_FILE"
+    log "     Run step 030.application first"
     exit 1
 fi
 
 # Check if TradeStation credentials are configured
-echo "  → Checking TradeStation API configuration..."
+log "  → Checking TradeStation API configuration..."
 if grep -q "your_api_key_here" "$ENV_FILE" || grep -q "your_api_secret_here" "$ENV_FILE"; then
     echo ""
     echo "  ⚠ TradeStation API credentials not configured!"
@@ -50,18 +50,18 @@ if grep -q "your_api_key_here" "$ENV_FILE" || grep -q "your_api_secret_here" "$E
 fi
 
 # Activate virtual environment
-echo "  → Activating virtual environment..."
+log "  → Activating virtual environment..."
 cd "$APP_DIR"
 if [ ! -d "venv" ]; then
-    echo "  ✗ Virtual environment not found"
-    echo "     Run step 030.application first"
+    log "  ✗ Virtual environment not found"
+    log "     Run step 030.application first"
     exit 1
 fi
 source venv/bin/activate
 
 # Run the token initialization script
-echo "  → Running TradeStation token initialization..."
-echo ""
+log "  → Running TradeStation token initialization..."
+log ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  INTERACTIVE MODE"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -77,41 +77,41 @@ echo ""
 
 # Run the Python script
 if python "$TOKEN_SCRIPT"; then
-    echo ""
-    echo "  ✓ TradeStation tokens obtained successfully!"
+    log ""
+    log "  ✓ TradeStation tokens obtained successfully!"
 else
-    echo ""
-    echo "  ✗ Failed to obtain TradeStation tokens"
-    echo ""
-    echo "  Common issues:"
-    echo "    • API credentials not configured correctly in .env"
-    echo "    • Authorization code expired (try again quickly)"
-    echo "    • Network connectivity issues"
-    echo "    • TradeStation API service issues"
-    echo ""
-    echo "  You can retry this step later by running:"
-    echo "    cd $APP_DIR && source venv/bin/activate"
-    echo "    python initialize/get_tradestation_tokens.py"
-    echo ""
+    log ""
+    log "  ✗ Failed to obtain TradeStation tokens"
+    log ""
+    log "  Common issues:"
+    log "    • API credentials not configured correctly in .env"
+    log "    • Authorization code expired (try again quickly)"
+    log "    • Network connectivity issues"
+    log "    • TradeStation API service issues"
+    log ""
+    log "  You can retry this step later by running:"
+    log "    cd $APP_DIR && source venv/bin/activate"
+    log "    python initialize/get_tradestation_tokens.py"
+    log ""
     read -p "  Continue with deployment anyway? (y/N): " continue_choice
     if [[ ! "$continue_choice" =~ ^[Yy]$ ]]; then
         exit 1
     fi
-    echo "  ⚠ Continuing without TradeStation tokens..."
+    log "  ⚠ Continuing without TradeStation tokens..."
 fi
 
 # Deactivate virtual environment
 deactivate
 
-echo ""
-echo "TradeStation token initialization complete!"
-echo ""
-echo "Summary:"
-echo "  ✓ Token initialization script executed"
-echo "  ✓ Tokens stored (if successful)"
-echo ""
-echo "Note:"
-echo "  • Tokens are typically stored in a secure location"
-echo "  • Refresh tokens allow automatic token renewal"
-echo "  • If tokens expire, re-run: python initialize/get_tradestation_tokens.py"
-echo ""
+log ""
+log "TradeStation token initialization complete!"
+log ""
+log "Summary:"
+log "  ✓ Token initialization script executed"
+log "  ✓ Tokens stored (if successful)"
+log ""
+log "Note:"
+log "  • Tokens are typically stored in a secure location"
+log "  • Refresh tokens allow automatic token renewal"
+log "  • If tokens expire, re-run: python initialize/get_tradestation_tokens.py"
+log ""

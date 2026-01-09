@@ -6,35 +6,36 @@
 
 set -e
 
-echo "System Setup and Basic Configuration"
+log "System Setup and Basic Configuration"
 
 # Update system
-echo "  → Updating system packages..."
+log "  → Updating system packages..."
 sudo apt update && sudo apt upgrade -y
 
 # Install essential tools
-echo "  → Installing essential tools..."
+log "  → Installing essential tools..."
 sudo apt install -y git curl wget build-essential python3-pip python3-venv postgresql postgresql-contrib
 
 # Update timezone
-echo "  → Setting timezone to America/New_York..."
+log "  → Setting timezone to America/New_York..."
 sudo timedatectl set-timezone America/New_York
 
 # Verify timezone update
-echo "  → Verifying timezone..."
-echo "     Current time: $(date)"
-
-# Create logs directory
-echo "  → Creating logs directory..."
-mkdir -p /home/ubuntu/logs
+log "  → Verifying timezone..."
+log "     Current time: $(date)"
 
 # Modify .bashrc
-echo "  → Configuring .bashrc with ZeroGEX environment..."
-cat >> ~/.bashrc << 'EOF'
+log "  → Configuring .bashrc with ZeroGEX environment..."
 
-# ====================
+# Check if ZeroGEX section already exists
+if grep -q "ZeroGEX environment setup" ~/.bashrc; then
+    log "     ℹ ZeroGEX section already exists in .bashrc, skipping..."
+else
+    cat >> ~/.bashrc << 'EOF'
+
+# ==========================================
 # ZeroGEX environment setup
-# ====================
+# ==========================================
 ZEROGEX_HOME="$HOME/gex-options-platform"
 if [ -d "$ZEROGEX_HOME" ]; then
   export ZEROGEX_HOME
@@ -45,18 +46,20 @@ if [ -d "$ZEROGEX_HOME" ]; then
   echo "╚════════════════════════════════════════╝"
 fi
 EOF
+    log "     ✓ ZeroGEX section added to .bashrc"
+fi
 
 # Source the updated .bashrc
-echo "  → Reloading .bashrc..."
+log "  → Reloading .bashrc..."
 source ~/.bashrc
 
-echo "System setup complete!"
-echo ""
-echo "Summary:"
-echo "  ✓ System packages updated"
-echo "  ✓ Essential tools installed"
-echo "  ✓ PostgreSQL installed"
-echo "  ✓ Timezone set to America/New_York"
-echo "  ✓ Logs directory created"
-echo "  ✓ .bashrc configured"
-echo ""
+log "System setup complete!"
+log ""
+log "Summary:"
+log "  ✓ System packages updated"
+log "  ✓ Essential tools installed"
+log "  ✓ PostgreSQL installed"
+log "  ✓ Timezone set to America/New_York"
+log "  ✓ Logs directory created"
+log "  ✓ .bashrc configured"
+log ""

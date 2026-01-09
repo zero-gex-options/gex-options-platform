@@ -6,18 +6,26 @@
 
 set -e  # Exit on any error
 
+# Export HOME
+[ -z "$HOME" ] && export $HOME="/home/ubuntu"
+
+# Variables
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STEPS_DIR="$SCRIPT_DIR/steps"
-LOG_FILE="/home/ubuntu/logs/deployment_$(date +%Y%m%d_%H%M%S).log"
+LOG_DIR="${HOME}/logs"
+LOG_FILE="${LOG_DIR}/deployment_$(date +%Y%m%d_%H%M%S).log"
 
 # Create logs directory if it doesn't exist
-LOG_DIR="/home/ubuntu/logs"
 [ ! -d "$LOG_DIR" ] && mkdir -p "$LOG_DIR"
 
 # Logging function
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
+
+# Export log function for sub-steps
+export -f log
+export LOG_FILE
 
 log "=========================================="
 log "🚀 Deploying GEX Options Platform..."

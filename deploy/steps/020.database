@@ -6,33 +6,33 @@
 
 set -e
 
-echo "Database Setup (PostgreSQL + TimescaleDB)"
+log "Database Setup (PostgreSQL + TimescaleDB)"
 
 # Detect PostgreSQL version
-echo "  → Detecting PostgreSQL version..."
+log "  → Detecting PostgreSQL version..."
 PG_VERSION=$(psql --version | grep -oP '\d+' | head -1)
-echo "     PostgreSQL version: $PG_VERSION"
+log "     PostgreSQL version: $PG_VERSION"
 
 # Add TimescaleDB repository
-echo "  → Adding TimescaleDB repository..."
+log "  → Adding TimescaleDB repository..."
 sudo apt install -y gnupg postgresql-common apt-transport-https lsb-release wget
 
 # Add TimescaleDB PGP key and repository
-echo "  → Configuring TimescaleDB repository..."
+log "  → Configuring TimescaleDB repository..."
 echo "deb https://packagecloud.io/timescale/timescaledb/ubuntu/ $(lsb_release -c -s) main" | sudo tee /etc/apt/sources.list.d/timescaledb.list
 wget --quiet -O - https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/timescaledb.gpg > /dev/null
 
 # Update and install TimescaleDB
-echo "  → Installing TimescaleDB for PostgreSQL ${PG_VERSION}..."
+log "  → Installing TimescaleDB for PostgreSQL ${PG_VERSION}..."
 sudo apt update
 sudo apt install -y timescaledb-2-postgresql-${PG_VERSION}
 
 # Tune PostgreSQL for TimescaleDB
-echo "  → Tuning PostgreSQL for TimescaleDB..."
+log "  → Tuning PostgreSQL for TimescaleDB..."
 sudo timescaledb-tune --quiet --yes
 
 # Restart PostgreSQL
-echo "  → Restarting PostgreSQL..."
+log "  → Restarting PostgreSQL..."
 sudo systemctl restart postgresql
 
 # Prompt for database password
@@ -55,7 +55,7 @@ if [ -z "$DB_PASSWORD" ]; then
 fi
 
 # Create database and user
-echo "  → Creating database and user..."
+log "  → Creating database and user..."
 cd /tmp
 sudo -u postgres psql << EOF
 CREATE DATABASE gex_db;
@@ -69,7 +69,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO gex_user;
 EOF
 
 # Configure PostgreSQL to allow connections
-echo "  → Configuring PostgreSQL authentication..."
+log "  → Configuring PostgreSQL authentication..."
 
 # Backup original pg_hba.conf
 sudo cp /etc/postgresql/${PG_VERSION}/main/pg_hba.conf /etc/postgresql/${PG_VERSION}/main/pg_hba.conf.backup
@@ -87,12 +87,12 @@ EOF
 sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = 'localhost'/" /etc/postgresql/${PG_VERSION}/main/postgresql.conf
 
 # Restart PostgreSQL to apply changes
-echo "  → Restarting PostgreSQL to apply configuration..."
+log "  → Restarting PostgreSQL to apply configuration..."
 sudo systemctl restart postgresql
 
 # Save credentials to a secure file
 CREDS_FILE="/home/ubuntu/.zerogex_db_creds"
-echo "  → Saving database credentials to ${CREDS_FILE}..."
+log "  → Saving database credentials to ${CREDS_FILE}..."
 cat > "$CREDS_FILE" << EOF
 # ZeroGEX Database Credentials
 # Generated: $(date)
@@ -108,28 +108,28 @@ EOF
 chmod 600 "$CREDS_FILE"
 
 # Test connection
-echo "  → Testing database connection..."
+log "  → Testing database connection..."
 if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -c '\q' 2>/dev/null; then
-    echo "     ✓ Database connection successful!"
+    log "     ✓ Database connection successful!"
 else
-    echo "     ✗ Database connection failed!"
+    log "     ✗ Database connection failed!"
     exit 1
 fi
 
-echo "Database setup complete!"
-echo ""
-echo "Summary:"
-echo "  ✓ TimescaleDB installed for PostgreSQL ${PG_VERSION}"
-echo "  ✓ PostgreSQL tuned for TimescaleDB"
-echo "  ✓ Database 'gex_db' created"
-echo "  ✓ User 'gex_user' created with secure password"
-echo "  ✓ TimescaleDB extension enabled"
-echo "  ✓ Authentication configured"
-echo "  ✓ Credentials saved to: ${CREDS_FILE}"
-echo ""
-echo "Connection details:"
-echo "  Database: gex_db"
-echo "  User: gex_user"
-echo "  Host: localhost"
-echo "  Port: 5432"
-echo ""
+log "Database setup complete!"
+log ""
+log "Summary:"
+log "  ✓ TimescaleDB installed for PostgreSQL ${PG_VERSION}"
+log "  ✓ PostgreSQL tuned for TimescaleDB"
+log "  ✓ Database 'gex_db' created"
+log "  ✓ User 'gex_user' created with secure password"
+log "  ✓ TimescaleDB extension enabled"
+log "  ✓ Authentication configured"
+log "  ✓ Credentials saved to: ${CREDS_FILE}"
+log ""
+log "Connection details:"
+log "  Database: gex_db"
+log "  User: gex_user"
+log "  Host: localhost"
+log "  Port: 5432"
+log ""

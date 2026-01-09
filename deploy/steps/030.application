@@ -6,65 +6,65 @@
 
 set -e
 
-echo "Application Setup and Initialization"
+log "Application Setup and Initialization"
 
 # Define application directory
 APP_DIR="$HOME/gex-options-platform"
 
 # Check if application directory exists
 if [ ! -d "$APP_DIR" ]; then
-    echo "  ✗ Application directory not found: $APP_DIR"
-    echo "     Please clone the repository first:"
-    echo "     git clone <your-repo-url> $APP_DIR"
+    log "  ✗ Application directory not found: $APP_DIR"
+    log "     Please clone the repository first:"
+    log "     git clone <your-repo-url> $APP_DIR"
     exit 1
 fi
 
 # Navigate to application directory
-echo "  → Navigating to application directory..."
+log "  → Navigating to application directory..."
 cd "$APP_DIR"
 
 # Create virtual environment
-echo "  → Creating Python virtual environment..."
+log "  → Creating Python virtual environment..."
 python3 -m venv venv
 
 # Activate virtual environment
-echo "  → Activating virtual environment..."
+log "  → Activating virtual environment..."
 source venv/bin/activate
 
 # Upgrade pip
-echo "  → Upgrading pip..."
+log "  → Upgrading pip..."
 pip install --upgrade pip
 
 # Check if requirements.txt exists
 if [ ! -f "requirements.txt" ]; then
-    echo "  ✗ requirements.txt not found in $APP_DIR"
+    log "  ✗ requirements.txt not found in $APP_DIR"
     exit 1
 fi
 
 # Install dependencies
-echo "  → Installing Python dependencies..."
+log "  → Installing Python dependencies..."
 pip install -r requirements.txt
 
 # Load database credentials
 CREDS_FILE="/home/ubuntu/.zerogex_db_creds"
 if [ ! -f "$CREDS_FILE" ]; then
-    echo "  ✗ Database credentials file not found: $CREDS_FILE"
-    echo "     Run step 020.database first"
+    log "  ✗ Database credentials file not found: $CREDS_FILE"
+    log "     Run step 020.database first"
     exit 1
 fi
 
-echo "  → Loading database credentials..."
+log "  → Loading database credentials..."
 source "$CREDS_FILE"
 
 # Check if database schema file exists
 SCHEMA_FILE="config/database_schema.sql"
 if [ ! -f "$SCHEMA_FILE" ]; then
-    echo "  ✗ Database schema file not found: $SCHEMA_FILE"
+    log "  ✗ Database schema file not found: $SCHEMA_FILE"
     exit 1
 fi
 
 # Initialize database schema
-echo "  → Initializing database schema..."
+log "  → Initializing database schema..."
 export PGPASSWORD="$DB_PASSWORD"
 psql -U gex_user -d gex_db -h localhost -f "$SCHEMA_FILE"
 unset PGPASSWORD
@@ -72,7 +72,7 @@ unset PGPASSWORD
 # Create .env file if it doesn't exist
 ENV_FILE="$APP_DIR/.env"
 if [ ! -f "$ENV_FILE" ]; then
-    echo "  → Configuring TradeStation API credentials..."
+    log "  → Configuring TradeStation API credentials..."
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  TradeStation API Setup"
@@ -98,8 +98,8 @@ if [ ! -f "$ENV_FILE" ]; then
         echo ""
     done
 
-    echo ""
-    echo "  → Creating .env file with credentials..."
+    log ""
+    log "  → Creating .env file with credentials..."
     cat > "$ENV_FILE" << EOF
 ###########################################################################################################
 ###########################################################################################################
@@ -147,43 +147,43 @@ VALIDATE_MARKET_OPEN=true
 # Add other configuration variables as needed
 EOF
     chmod 600 "$ENV_FILE"
-    echo "     ✓ .env file created at: $ENV_FILE"
-    echo "     ✓ TradeStation credentials securely stored"
+    log "     ✓ .env file created at: $ENV_FILE"
+    log "     ✓ TradeStation credentials securely stored"
 else
-    echo "     ℹ .env file already exists, skipping configuration..."
-    echo "     If you need to update TradeStation credentials, edit: $ENV_FILE"
+    log "     ℹ .env file already exists, skipping configuration..."
+    log "     If you need to update TradeStation credentials, edit: $ENV_FILE"
 fi
 
 # Create necessary directories
-echo "  → Creating application directories..."
+log "  → Creating application directories..."
 mkdir -p logs
 mkdir -p data
 mkdir -p cache
 
 # Verify installation
-echo "  → Verifying Python packages..."
+log "  → Verifying Python packages..."
 python -c "import psycopg2; import pandas; import numpy; print('✓ Core packages verified')" 2>/dev/null || {
-    echo "  ⚠ Some packages may not have installed correctly"
+    log "  ⚠ Some packages may not have installed correctly"
 }
 
 # Deactivate virtual environment
 deactivate
 
-echo "Application setup complete!"
-echo ""
-echo "Summary:"
-echo "  ✓ Virtual environment created"
-echo "  ✓ Python dependencies installed"
-echo "  ✓ Database schema initialized"
-echo "  ✓ .env file created with database and TradeStation credentials"
-echo "  ✓ Application directories created"
-echo ""
-echo "Configuration:"
-echo "  • Environment file: $ENV_FILE"
-echo "  • Database connected: ${DB_NAME}@${DB_HOST}"
-echo "  • TradeStation API configured"
-echo ""
-echo "Next steps:"
-echo "  1. Activate environment: cd $APP_DIR && source venv/bin/activate"
-echo "  2. Or use the 'zerogex' alias from your shell"
-echo ""
+log "Application setup complete!"
+log ""
+log "Summary:"
+log "  ✓ Virtual environment created"
+log "  ✓ Python dependencies installed"
+log "  ✓ Database schema initialized"
+log "  ✓ .env file created with database and TradeStation credentials"
+log "  ✓ Application directories created"
+log ""
+log "Configuration:"
+log "  • Environment file: $ENV_FILE"
+log "  • Database connected: ${DB_NAME}@${DB_HOST}"
+log "  • TradeStation API configured"
+log ""
+log "Next steps:"
+log "  1. Activate environment: cd $APP_DIR && source venv/bin/activate"
+log "  2. Or use the 'zerogex' alias from your shell"
+log ""
