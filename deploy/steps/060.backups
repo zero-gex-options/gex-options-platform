@@ -98,7 +98,7 @@ else
 fi
 
 # Display current crontab
-CRON_SCHED=`crontab -l 2&>1 | grep -A1 "ZeroGEX" || echo "     (none found)"`
+CRON_SCHED=`crontab -l 2>/dev/null | grep -A1 "ZeroGEX" || echo "     (none found)"`
 log ""
 log "  Current cron schedule:"
 log "  ${CRON_SCHED}"
