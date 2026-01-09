@@ -88,7 +88,7 @@ class StreamingIngestionEngine:
 
         # Greeks validation
         self.validate_greeks = os.getenv('VALIDATE_GREEKS', 'false').lower() == 'true'
-        self.greeks_calc = GreeksCalculator() if self.validate_greeks else None
+        self.greeks_calc = GreeksCalculator(risk_free_rate=0.045, dividend_yield=0.013) if self.validate_greeks else None
 
         # Validation tolerances (percentage)
         # Note: 0DTE options have larger expected mismatches due to:
@@ -268,6 +268,18 @@ class StreamingIngestionEngine:
                 option['spread_pct'] = (option['ask'] - option['bid']) / option['mid'] if option['mid'] > 0 else 0
             else:
                 option['spread_pct'] = None
+
+            # Calculate Greeks
+            greeks = self.greeks_calc.calculate_greeks(
+                underlying_price=option['underlying_price'],
+                strike=option['strike'],
+                expiration=option['expiration'],
+                option_type=option['option_type'],
+                implied_vol=option.get('implied_vol', 0.20)  # Use 20% default if not provided
+            )
+
+            # Update option with Greeks
+            option.update(greeks)
 
             # Log results
             logger.info(f"✅ Parsed: {underlying} {strike}{option_type[0].upper()} (DTE={dte}, IV={implied_vol:.2f})")
