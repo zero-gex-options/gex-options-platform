@@ -116,13 +116,24 @@ class TradeStationStreamingClient:
         Returns:
             Quote data or None
         """
-        logger.debug(f"Requesting quote for {symbol}...")
 
-        url = f"{self.base_url}/marketdata/quotes/{symbol}"
+        url = f"{self.base_url}/marketdata/barcharts/{symbol}"
+        logger.info(f"Requesting quote for {symbol}...")
+
+        # Get fresh token
         headers = self.auth.get_headers()
+        headers['Content-Type'] = 'application/json'
+
+        # Set params for API GET
+        params = {
+            'unit': 'Minute', # Unit of time for each bar interval.
+            'barsback': '1',  # Number of bars back to fetch (or retrieve).
+            'sessiontemplate': 'USEQ24Hour' # United States (US) stock market session templates.
+        }
+        logger.debug(f"Attempting to fetch data from {url} with {params}")
 
         try:
-            async with self.session.get(url, headers=headers, timeout=10) as response:
+            async with self.session.get(url, headers=headers, params=params, timeout=10) as response:
                 logger.debug(f"Quote request status: {response.status}")
 
                 if response.status != 200:
@@ -131,24 +142,37 @@ class TradeStationStreamingClient:
                     return None
 
                 data = await response.json()
+                pretty_data = json.dumps(data, indent=4)
+                logger.debug("Full JSON response:")
+                logger.debug(pretty_data)
 
-                if 'Quotes' not in data or len(data['Quotes']) == 0:
+                if 'Bars' not in data or len(data['Bars']) == 0:
                     logger.warning(f"No quote data returned for {symbol}")
                     return None
 
-                quote = data['Quotes'][0]
-                price = float(quote.get('Last', 0))
+                quote = data['Bars'][0]
+                pretty_quote = json.dumps(quote, indent=4)
+                price = float(quote.get('Close', 0))
 
-                logger.info(f"✅ {symbol}: ${price:.2f}")
-                logger.debug(f"Full quote data: Bid=${quote.get('Bid')}, Ask=${quote.get('Ask')}, Volume={quote.get('Volume')}")
+                logger.info(f"✅ {symbol}: ${price}")
+                logger.debug("Full quote data:")
+                logger.debug(pretty_quote)
+
+                realtime = False
+                if str(quote.get('IsRealtime')).lower() == 'true':
+                    realtime = True
 
                 return {
                     'symbol': symbol,
-                    'price': price,
-                    'bid': float(quote.get('Bid', 0)),
-                    'ask': float(quote.get('Ask', 0)),
-                    'volume': int(quote.get('Volume', 0)),
-                    'timestamp': quote.get('TradeTime')
+                    'high': quote.get('High', 0),
+                    'low': quote.get('Low', 0),
+                    'open': quote.get('Open', 0),
+                    'close': price,
+                    'timestamp': quote.get('TimeStamp', 0),
+                    'realtime': realtime,
+                    'total_vol': quote.get('TotalVolume', 0),
+                    'down_vol': quote.get('DownVolume', 0),
+                    'up_vol': quote.get('UpVolume', 0),
                 }
 
         except asyncio.TimeoutError:
@@ -320,8 +344,16 @@ async def main():
         print("--- Test 1: Getting Quote ---\n")
         quote = await client.get_quote('SPY')
         if quote:
-            print(f"✅ Quote test successful: SPY @ ${quote['price']:.2f}")
-            print(f"   Bid: ${quote['bid']:.2f}, Ask: ${quote['ask']:.2f}, Volume: {quote['volume']:,}")
+            print(f"✅ Quote test successful: SPY @ ${quote['close']}")
+            print(f"   Time: {quote['timestamp']}")
+            print(f"     * Realtime" if str({quote['realtime']}).lower() == 'true' else "     * Not realtime")
+            print(f"   High: ${quote['high']}")
+            print(f"   Low: ${quote['low']}")
+            print(f"   Open: ${quote['open']}")
+            print(f"   Close: ${quote['close']}")
+            print(f"   Volume: {quote['total_vol']}")
+            print(f"     ↑: {quote['up_vol']}")
+            print(f"     ↓: {quote['down_vol']}")
         else:
             print("❌ Quote test failed")
 
