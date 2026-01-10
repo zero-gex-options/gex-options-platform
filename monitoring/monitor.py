@@ -119,16 +119,37 @@ class MonitoringCollector:
             """)
             spy_quote = cursor.fetchone()
 
-            # Get 10 most recent option quotes
+            # Get 50 most recent option quotes
             cursor.execute("""
                 SELECT symbol, strike, expiration, dte, option_type, last, 
                        bid, ask, mid, volume, open_interest, implied_vol, 
                        delta, gamma, theta, vega, timestamp
                 FROM options_quotes
                 ORDER BY timestamp DESC
-                LIMIT 10;
+                LIMIT 50;
             """)
             recent_options = cursor.fetchall()
+
+            # Get SPY price history (last 100 data points)
+            cursor.execute("""
+                SELECT timestamp, price, volume
+                FROM underlying_prices
+                WHERE symbol = 'SPY'
+                ORDER BY timestamp DESC
+                LIMIT 100;
+            """)
+            spy_history_raw = cursor.fetchall()
+            spy_history = [dict(row) for row in reversed(spy_history_raw)] if spy_history_raw else []
+
+            # Get ingestion metrics history (last 20)
+            cursor.execute("""
+                SELECT timestamp, records_ingested, error_count
+                FROM ingestion_metrics
+                ORDER BY timestamp DESC
+                LIMIT 20;
+            """)
+            ingestion_history_raw = cursor.fetchall()
+            ingestion_history = [dict(row) for row in reversed(ingestion_history_raw)] if ingestion_history_raw else []
 
             # Get most recent ingestion metrics
             cursor.execute("""
@@ -153,8 +174,10 @@ class MonitoringCollector:
                 'db_size': size_data['db_size'] if size_data else 'unknown',
                 'active_connections': conn_data['active_connections'] if conn_data else 0,
                 'spy_quote': dict(spy_quote) if spy_quote else None,
+                'spy_history': spy_history,
                 'recent_options': [dict(row) for row in recent_options] if recent_options else [],
                 'ingestion_metric': dict(ingestion_metric) if ingestion_metric else None,
+                'ingestion_history': ingestion_history,
             }
         except Exception as e:
             return {'error': str(e)}
