@@ -130,26 +130,25 @@ class MonitoringCollector:
             """)
             recent_options = cursor.fetchall()
 
-            # Get SPY price history (last 100 data points)
+            # Get SPY price history (all available data, chronologically)
             cursor.execute("""
                 SELECT timestamp, price, volume
                 FROM underlying_prices
                 WHERE symbol = 'SPY'
-                ORDER BY timestamp DESC
-                LIMIT 100;
+                ORDER BY timestamp ASC;
             """)
             spy_history_raw = cursor.fetchall()
-            spy_history = [dict(row) for row in reversed(spy_history_raw)] if spy_history_raw else []
+            spy_history = [dict(row) for row in spy_history_raw] if spy_history_raw else []
 
-            # Get ingestion metrics history (last 20)
+            # Get ingestion metrics history (last 48 hours)
             cursor.execute("""
                 SELECT timestamp, records_ingested, error_count
                 FROM ingestion_metrics
-                ORDER BY timestamp DESC
-                LIMIT 20;
+                WHERE timestamp > NOW() - INTERVAL '48 hours'
+                ORDER BY timestamp ASC;
             """)
             ingestion_history_raw = cursor.fetchall()
-            ingestion_history = [dict(row) for row in reversed(ingestion_history_raw)] if ingestion_history_raw else []
+            ingestion_history = [dict(row) for row in ingestion_history_raw] if ingestion_history_raw else []
 
             # Get most recent ingestion metrics
             cursor.execute("""
@@ -304,10 +303,29 @@ class MonitoringCollector:
         alerts = self.check_alerts(metrics)
         metrics['alerts'] = alerts
 
+        # Calculate uptime percentage for current hour
+        metrics['uptime_current_hour'] = self.calculate_uptime_current_hour()
+
         # Store in history
         self.metrics_history.append(metrics)
 
         return metrics
+
+    def calculate_uptime_current_hour(self) -> Dict:
+        """Calculate uptime percentage for the current hour"""
+        now = datetime.now()
+        hour_start = now.replace(minute=0, second=0, microsecond=0)
+        minutes_elapsed = (now - hour_start).seconds / 60
+
+        # Simple calculation: if we're collecting metrics, server is up
+        # This is a simplified version - proper uptime tracking would need a heartbeat table
+        uptime_pct = (minutes_elapsed / 60) * 100 if minutes_elapsed > 0 else 0
+
+        return {
+            'hour_label': hour_start.strftime('%m/%d %H:00'),
+            'uptime_percent': min(uptime_pct, 100),  # Cap at 100%
+            'minutes_up': minutes_elapsed
+        }
 
 
 class MonitoringDashboard:

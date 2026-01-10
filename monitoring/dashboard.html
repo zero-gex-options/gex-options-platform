@@ -347,7 +347,7 @@
                 <div class="subtitle">Status of all system services</div>
             </div>
             <div class="card">
-                <div id="servicesContent">Loading...</div>
+                <div id="servicesContent" style="max-width: 600px; margin: 0 auto;">Loading...</div>
             </div>
         </div>
 
@@ -365,6 +365,36 @@
                 <div class="card">
                     <h3>Database Info</h3>
                     <div id="dbInfo">Loading...</div>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 20px;">
+                <h3>Database Tables <span style="color: #94a3b8; font-size: 12px; font-weight: normal;">(Click to view recent records)</span></h3>
+                <div style="display: flex; gap: 16px; margin-top: 16px; flex-wrap: wrap;">
+                    <div onclick="showTableData('options_quotes')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">📊</div>
+                        <div style="font-size: 14px; color: #e2e8f0;">Options Quotes</div>
+                    </div>
+                    <div onclick="showTableData('underlying_prices')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">💰</div>
+                        <div style="font-size: 14px; color: #e2e8f0;">Underlying Prices</div>
+                    </div>
+                    <div onclick="showTableData('latest_gex')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">⚡</div>
+                        <div style="font-size: 14px; color: #e2e8f0;">Latest GEX</div>
+                    </div>
+                    <div onclick="showTableData('ingestion_metrics')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">📥</div>
+                        <div style="font-size: 14px; color: #e2e8f0;">Ingestion Metrics</div>
+                    </div>
+                </div>
+                <div id="tableDataDisplay" style="margin-top: 20px; display: none;">
+                    <h4 id="tableDataTitle" style="color: #60a5fa; margin-bottom: 12px;"></h4>
+                    <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
+                        <table class="data-table" id="tableDataTable">
+                            <thead id="tableDataHead"></thead>
+                            <tbody id="tableDataBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -407,18 +437,10 @@
                 <h3>Latest Metrics</h3>
                 <div id="ingestionLatest">Loading...</div>
             </div>
-            <div class="grid">
-                <div class="card">
-                    <h3>Records Ingested</h3>
-                    <div class="chart-container">
-                        <canvas id="ingestionRecordsChart"></canvas>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3>Errors</h3>
-                    <div class="chart-container">
-                        <canvas id="ingestionErrorsChart"></canvas>
-                    </div>
+            <div class="card">
+                <h3>48-Hour History</h3>
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="ingestionCombinedChart"></canvas>
                 </div>
             </div>
         </div>
@@ -463,11 +485,10 @@
         <div id="uptime" class="page">
             <div class="page-header">
                 <h2>System Uptime</h2>
-                <div class="subtitle">Service availability timeline</div>
+                <div class="subtitle">Service availability timeline (Last 48 Hours)</div>
             </div>
             <div class="card">
-                <h3>Uptime Timeline (Last 24 Hours)</h3>
-                <div class="chart-container">
+                <div class="chart-container" style="height: 400px;">
                     <canvas id="uptimeChart"></canvas>
                 </div>
             </div>
@@ -477,8 +498,62 @@
     <script>
         let globalData = {};
         let charts = {};
-        let spyHistoryData = [];
-        let ingestionHistoryData = [];
+
+        // Make showTableData globally accessible
+        window.showTableData = async function(tableName) {
+            try {
+                const response = await fetch(`/api/table/${tableName}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                    return;
+                }
+
+                // Create modal or display area for table data
+                const modal = document.createElement('div');
+                modal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1e293b; padding: 24px; border-radius: 8px; max-width: 90vw; max-height: 80vh; overflow: auto; z-index: 1000; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);';
+
+                let html = `<h3 style="margin-top: 0; color: #e2e8f0;">${tableName} (Last 100 rows)</h3>`;
+                html += `<button onclick="this.parentElement.remove(); document.getElementById('modalOverlay').remove();" style="position: absolute; top: 12px; right: 12px; background: #334155; border: none; color: #e2e8f0; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Close</button>`;
+                html += '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+
+                // Headers
+                if (data.length > 0) {
+                    html += '<thead><tr>';
+                    Object.keys(data[0]).forEach(key => {
+                        html += `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">${key}</th>`;
+                    });
+                    html += '</tr></thead>';
+
+                    // Rows
+                    html += '<tbody>';
+                    data.forEach(row => {
+                        html += '<tr style="border-bottom: 1px solid #334155;">';
+                        Object.values(row).forEach(val => {
+                            html += `<td style="padding: 8px; color: #e2e8f0;">${val !== null ? val : 'NULL'}</td>`;
+                        });
+                        html += '</tr>';
+                    });
+                    html += '</tbody>';
+                }
+
+                html += '</table></div>';
+                modal.innerHTML = html;
+
+                const overlay = document.createElement('div');
+                overlay.id = 'modalOverlay';
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999;';
+                overlay.onclick = () => { modal.remove(); overlay.remove(); };
+
+                document.body.appendChild(overlay);
+                document.body.appendChild(modal);
+
+            } catch (error) {
+                console.error('Error fetching table data:', error);
+                alert('Failed to fetch table data');
+            }
+        }
 
         // Navigation
         function showPage(pageId) {
