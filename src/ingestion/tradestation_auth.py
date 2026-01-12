@@ -4,37 +4,15 @@ TradeStation Authentication Manager
 Handles OAuth2 authentication with TradeStation API.
 """
 
+import os
 import requests
 import time
 import logging
 from datetime import datetime, timedelta
-import os
-from dotenv import load_dotenv
+from src.utils import get_logger
 
-load_dotenv()
-
-# Get and validate logging level from environment
-log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
-valid_levels = {
-    'DEBUG': logging.DEBUG,
-    'INFO': logging.INFO,
-    'WARNING': logging.WARNING,
-    'ERROR': logging.ERROR,
-    'CRITICAL': logging.CRITICAL
-}
-
-if log_level_str in valid_levels:
-    log_level = valid_levels[log_level_str]
-else:
-    log_level = logging.INFO
-    print(f"Warning: Invalid LOG_LEVEL '{log_level_str}', defaulting to INFO. Valid options: {', '.join(valid_levels.keys())}")
-
-logging.basicConfig(
-    level=log_level,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
+# Initialize logger
+logger = get_logger(__name__)
 
 class TradeStationAuth:
     """Manage TradeStation API authentication"""
@@ -176,12 +154,11 @@ class TradeStationAuth:
         return headers
 
 
-# Test
-if __name__ == '__main__':
+def main():
 
     print("\n" + "="*60)
-    print("Testing TradeStation authentication...")
-    print("="*60 + "\n\n")
+    print("TradeStation API Authentication...")
+    print("="*60 + "\n")
 
     auth = TradeStationAuth(
         os.getenv('TRADESTATION_CLIENT_ID'),
@@ -192,23 +169,19 @@ if __name__ == '__main__':
 
     try:
 
-        # Test 1: Get access token
-        print("\n" + "="*60)
-        print("--- Test 1: Getting Access Token ---\n")
         token = auth.get_access_token()
-        print(f"✅ Access token obtained")
-        print(f"   Token: {token[:50]}...")
-
-        # Test 2: Get headers
-        print("\n" + "="*60)
-        print("--- Test 2: Getting Headers ---\n")
         headers = auth.get_headers()
-        print(f"✅ Headers generated")
+
+        print(f"\n✅ Access token obtained")
+        print(f"   Token: {token[:50]}...")
+        print(f"\n✅ Headers generated")
         print(f"   Authorization: Bearer {headers['Authorization'][7:50]}...")
 
     except Exception as e:
-        print(f"❌ Authentication test failed: {e}")
+        print(f"❌ Authentication failed: {e}")
 
     print("\n" + "="*60)
-    print("All tests complete!")
-    print("="*60 + "\n")
+
+
+if __name__ == "__main__":
+    main()

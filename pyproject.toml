@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gex-options-platform"
+version = "0.1.0"
+description = "Options trading platform with gamma exposure analytics"
+requires-python = ">=3.8"
+dependencies = [
+    "python-dotenv",
+    # Add your other dependencies here
+    # "pandas",
+    # "requests",
+    # "psycopg2-binary",
+    # etc.
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[project.scripts]
+# Optional: Create command-line scripts
+# tradestation-auth = "src.ingestion.tradestation_auth:main"

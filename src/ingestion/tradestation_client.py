@@ -9,35 +9,13 @@ import aiohttp
 import json
 from datetime import datetime, date
 from typing import Dict, List, Optional, Callable, Any
-import logging
 import os
-from dotenv import load_dotenv
+import argparse
 from tradestation_auth import TradeStationAuth
+from src.utils import get_logger
 
-load_dotenv()
-
-# Get and validate logging level from environment
-log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
-valid_levels = {
-    'DEBUG': logging.DEBUG,
-    'INFO': logging.INFO,
-    'WARNING': logging.WARNING,
-    'ERROR': logging.ERROR,
-    'CRITICAL': logging.CRITICAL
-}
-
-if log_level_str in valid_levels:
-    log_level = valid_levels[log_level_str]
-else:
-    log_level = logging.INFO
-    print(f"Warning: Invalid LOG_LEVEL '{log_level_str}', defaulting to INFO. Valid options: {', '.join(valid_levels.keys())}")
-
-logging.basicConfig(
-    level=log_level,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
+# Initialize logger
+logger = get_logger(__name__)
 
 class TradeStationStreamingClient:
     """Async client for TradeStation streaming API"""
@@ -106,12 +84,65 @@ class TradeStationStreamingClient:
         logger.debug("TradeStation client closed")
         logger.info("✅ Stream stopped")
 
-    async def get_quote(self, symbol: str) -> Optional[Dict]:
+
+    async def fetch_tradestation_data(self, api_endpoint: str, params: Optional[dict] = None) -> Optional[dict]:
+        """
+        GET call to TradeStation API to fetch data
+
+        Args:
+            api_endpoint: i.e. /marketdata/barcharts/{symbol}
+            params: JSON parameters to pass to the API call
+
+        Returns:
+            Raw JSON response returned by the API
+        """
+
+        # Construct full URL
+        url = f"{self.base_url}{api_endpoint}"
+        logger.debug(f"Making API GET call to TradeStation {url} with params {params}...")
+
+        # Get fresh token
+        headers = self.auth.get_headers()
+        headers['Content-Type'] = 'application/json'
+
+        # Make API GET call and handle response
+        try:
+            async with self.session.get(url, headers=headers, params=params, timeout=10) as response:
+
+                logger.debug(f"API GET call status: {response.status}")
+
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"API GET call failed with status {response.status}: {error_text}")
+                    return None
+
+                data = await response.json()
+                pretty_data = json.dumps(data, indent=4)
+                logger.debug("Full JSON response:")
+                logger.debug(pretty_data)
+
+                return data
+
+        except asyncio.TimeoutError:
+            logger.error(f"Quote request timed out for {symbol}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting quote for {symbol}: {e}", exc_info=True)
+            return None
+
+    async def get_quote(self,
+                        symbol: str = "SPY",
+                        unit: Optional[str] = "Minute",
+                        bars_back: Optional[str] = "1",
+                        last_date: Optional[str] = None) -> Optional[Dict]:
         """
         Get current quote for symbol
 
         Args:
             symbol: Symbol to quote
+            unit: Minute, Daily, Weekly, Monthly
+            bars_back: number of units to get quotes for
+            last_date (optional): uses current timestamp if not specified
 
         Returns:
             Quote data or None
@@ -126,11 +157,16 @@ class TradeStationStreamingClient:
 
         # Set params for API GET
         params = {
-            'unit': 'Minute', # Unit of time for each bar interval.
-            'barsback': '1',  # Number of bars back to fetch (or retrieve).
+            'unit': unit, # Unit of time for each bar interval.
+            'barsback': bars_back,  # Number of bars back to fetch (or retrieve).
             'sessiontemplate': 'USEQ24Hour' # United States (US) stock market session templates.
         }
-        logger.debug(f"Attempting to fetch data from {url} with {params}")
+
+        # Add lastdate if specified
+        if last_date:
+            params['lastdate'] = last_date
+
+        logger.debug(f"Attempting to fetch data from {url} with {params}...")
 
         try:
             async with self.session.get(url, headers=headers, params=params, timeout=10) as response:
@@ -150,7 +186,7 @@ class TradeStationStreamingClient:
                     logger.warning(f"No quote data returned for {symbol}")
                     return None
 
-                quote = data['Bars'][0]
+                quote = data['Bars'][-1]
                 pretty_quote = json.dumps(quote, indent=4)
                 price = float(quote.get('Close', 0))
 
@@ -182,23 +218,36 @@ class TradeStationStreamingClient:
             logger.error(f"Error getting quote for {symbol}: {e}", exc_info=True)
             return None
 
-    async def get_option_expirations(self, underlying: str) -> List[date]:
+    async def get_option_expirations(self,
+                                     underlying: str = "SPY",
+                                     strike: Optional[str] = None) -> Optional[List]:
         """
         Get available option expiration dates
 
         Args:
             underlying: Underlying symbol
+            strike: Option strike price
 
         Returns:
             List of expiration dates
         """
-        logger.debug(f"Requesting option expirations for {underlying}...")
 
         url = f"{self.base_url}/marketdata/options/expirations/{underlying}"
+        logger.info(f"Requesting option expirations for {underlying}...")
+
+        # Get fresh token
         headers = self.auth.get_headers()
+        headers['Content-Type'] = 'application/json'
+
+        # Set params for API GET
+        params = {}
+        if strike:
+            params['strikePrice']: strike
+
+        logger.debug(f"Attempting to fetch data from {url} with {params}...")
 
         try:
-            async with self.session.get(url, headers=headers, timeout=10) as response:
+            async with self.session.get(url, headers=headers, params=params, timeout=10) as response:
                 logger.debug(f"Expirations request status: {response.status}")
 
                 if response.status != 200:
@@ -207,6 +256,9 @@ class TradeStationStreamingClient:
                     return []
 
                 data = await response.json()
+                pretty_data = json.dumps(data, indent=4)
+                logger.debug("Full JSON response:")
+                logger.debug(pretty_data)
 
                 expirations = []
                 if 'Expirations' in data:
@@ -223,6 +275,65 @@ class TradeStationStreamingClient:
             return []
         except Exception as e:
             logger.error(f"Error getting expirations for {underlying}: {e}", exc_info=True)
+            return []
+
+    async def get_option_strikes (self,
+                                  underlying: str = "SPY",
+                                  expiration: Optional[date] = None) -> Optional[List]:
+        """
+        Get available option strikes
+
+        Args:
+            underlying: Underlying symbol
+            expiration: Option expiration date
+
+        Returns:
+            List of strikes
+        """
+
+        url = f"{self.base_url}/marketdata/options/strikes/{underlying}"
+        logger.info(f"Requesting option strikes for {underlying}...")
+
+        # Get fresh token
+        headers = self.auth.get_headers()
+        headers['Content-Type'] = 'application/json'
+
+        # Set params for API GET
+        params = {}
+        if expiration:
+            params['expiration']: expiration
+
+        logger.debug(f"Attempting to fetch data from {url} with {params}...")
+
+        try:
+            async with self.session.get(url, headers=headers, params=params, timeout=10) as response:
+                logger.debug(f"Strikes request status: {response.status}")
+
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"Strikes request failed: {error_text}")
+                    return []
+
+                data = await response.json()
+                pretty_data = json.dumps(data, indent=4)
+                logger.debug("Full JSON response:")
+                logger.debug(pretty_data)
+
+                strikes = []
+                if 'Strikes' in data:
+                    for strike in data['Strikes']:
+                        strike_price = strike[0]
+                        strikes.append(strike_price)
+                    logger.info(f"✅ Found {len(strikes)} strikes for {underlying}")
+                    logger.debug(f"Strikes: {strikes[:5]}..." if len(strikes) > 5 else f"Strikes: {strikes}")
+
+                return strikes
+
+        except asyncio.TimeoutError:
+            logger.error(f"Strikes request timed out for {underlying}")
+            return []
+        except Exception as e:
+            logger.error(f"Error getting strikes for {underlying}: {e}", exc_info=True)
             return []
 
     async def stream_options_chain(self, underlying: str, expiration: date, handler: Callable):
@@ -325,12 +436,130 @@ class TradeStationStreamingClient:
         }
 
 
-# Test
+def parse_arguments():
+    """
+    Parse command-line arguments for TradeStation client operations.
+
+    Returns:
+        argparse.Namespace: Parsed arguments with normalized values
+    """
+    parser = argparse.ArgumentParser(
+        prog='tradestation_client.py',
+        description='TradeStation API Client - Query quotes, options data, and stream market data',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Examples:
+  %(prog)s --quote
+  %(prog)s --quote --symbol AAPL --unit daily --bars-back 10
+  %(prog)s --quote --symbol SPY --last-date 2024-01-15T10:00:00Z
+  %(prog)s --option-expirations --underlying SPY
+  %(prog)s --option-expirations --underlying SPY --strike 450
+  %(prog)s --option-strikes --underlying AAPL --expiration 2024-12-20
+  %(prog)s --stream-options --underlying SPY --proximity 10 --range ITM --type Call
+  %(prog)s --stream-options --expiration 2024-12-20 --type Put
+
+For more help, use -h or --help
+        '''
+    )
+
+    # Create mutually exclusive group for main operations
+    group = parser.add_mutually_exclusive_group()
+
+    # Main command flags
+    group.add_argument('--quote', action='store_true', help='Get quote data')
+    group.add_argument('--option-expirations', action='store_true', help='Get option expirations')
+    group.add_argument('--option-strikes', action='store_true', help='Get option strikes')
+    group.add_argument('--stream-options', action='store_true', help='Stream options data')
+    
+    # Quote arguments
+    parser.add_argument('--symbol', type=str, help='Stock symbol (default: SPY)')
+    parser.add_argument('--unit', type=str, help='Time unit: minute, daily, etc. (default: minute)')
+    parser.add_argument('--bars-back', type=int, help='Number of bars to retrieve (default: 1)')
+    parser.add_argument('--last-date', type=str, help='End date in ISO format, e.g. 2026-01-01 or 2026-01-01T00:00:00Z (default: current)')
+    
+    # Option arguments (shared across option commands)
+    parser.add_argument('--underlying', type=str, help='Underlying symbol (default: SPY)')
+    parser.add_argument('--strike', type=float, help='Strike price filter (optional)')
+    parser.add_argument('--expiration', type=str, help='Expiration date (optional)')
+    
+    # Stream-specific arguments
+    parser.add_argument('--proximity', type=int, help='Strike proximity (default: 5)')
+    parser.add_argument('--range', type=str, choices=['ALL', 'ITM', 'OTM'],
+                       help='Option range: All, ITM, or OTM (default: All)')
+    parser.add_argument('--type', type=str, choices=['All', 'Call', 'Put'],
+                       help='Option type: All, Call, or Put (default: All)')
+
+    args = parser.parse_args()
+
+    # Default to --quote if no command specified
+    if not any([args.quote, args.option_expirations, args.option_strikes, args.stream_options]):
+        args.quote = True
+
+    # Build parameter dicts based on command
+    if args.quote:
+        args.params = build_quote_params(args)
+    elif args.option_expirations:
+        args.params = build_option_expirations_params(args)
+    elif args.option_strikes:
+        args.params = build_option_strikes_params(args)
+    elif args.stream_options:
+        args.params = build_stream_options_params(args)
+
+    return args
+
+def build_quote_params(args):
+    """Build parameters for quote command with defaults."""
+    return {
+        'symbol': (args.symbol or 'SPY').upper(),
+        'unit': (args.unit or 'Minute').lower(),
+        'bars_back': args.bars_back or 1,
+        'last_date': args.last_date or datetime.now().isoformat()
+    }
+
+
+def build_option_expirations_params(args):
+    """Build parameters for option-expirations command with defaults."""
+    return {
+        'underlying': (args.underlying or 'SPY').upper(),
+        'strike': args.strike
+    }
+
+
+def build_option_strikes_params(args):
+    """Build parameters for option-strikes command with defaults."""
+    return {
+        'underlying': (args.underlying or 'SPY').upper(),
+        'expiration': args.expiration
+    }
+
+
+def build_stream_options_params(args):
+    """Build parameters for stream-options command with defaults."""
+    # Normalize range value
+    range_value = 'ALL'
+    if args.range:
+        range_value = args.range.upper()
+    
+    # Normalize type value
+    type_value = 'All'
+    if args.type:
+        type_value = args.type.capitalize()
+    
+    return {
+        'underlying': (args.underlying or 'SPY').upper(),
+        'expiration': args.expiration,
+        'proximity': args.proximity or 5,
+        'range': range_value,
+        'type': type_value
+    }
+
 async def main():
 
     print("\n" + "="*60)
-    print("Testing TradeStation streaming client...")
-    print("="*60 + "\n\n")
+    print("TradeStation API Client...")
+    print("="*60 + "\n")
+
+    args = parse_arguments()
 
     async with TradeStationStreamingClient(
         os.getenv('TRADESTATION_CLIENT_ID'),
@@ -339,112 +568,71 @@ async def main():
         sandbox=os.getenv('TRADESTATION_USE_SANDBOX', 'false').lower() == 'true'
     ) as client:
 
-        # Test 1: Get quote
-        print("\n" + "="*60)
-        print("--- Test 1: Getting Quote ---\n")
-        quote = await client.get_quote('SPY')
-        if quote:
-            print(f"✅ Quote test successful: SPY @ ${quote['close']}")
-            print(f"   Time: {quote['timestamp']}")
-            print(f"     * Realtime" if str({quote['realtime']}).lower() == 'true' else "     * Not realtime")
-            print(f"   High: ${quote['high']}")
-            print(f"   Low: ${quote['low']}")
-            print(f"   Open: ${quote['open']}")
-            print(f"   Close: ${quote['close']}")
-            print(f"   Volume: {quote['total_vol']}")
-            print(f"     ↑: {quote['up_vol']}")
-            print(f"     ↓: {quote['down_vol']}")
-        else:
-            print("❌ Quote test failed")
-
-        # Test 2: Get expirations
-        print("\n" + "="*60)
-        print("--- Test 2: Getting Expirations ---\n")
-        exps = await client.get_option_expirations('SPY')
-        if exps:
-            print(f"✅ Expirations test successful: {len(exps)} expirations found")
-
-            print("   ", end="")
-            for exp in exps[:5]:
-                exp_str = exp.strftime('%Y-%m-%d')
-                print(f"{exp_str}, ", end="")
-            print("...")
-
-            # Find today's expiration (0DTE)
-            today = date.today()
-            if today in exps:
-                print(f"   ✅ 0DTE expiration available: {today}")
-                test_expiration = today
+        #######################################################################
+        # Quote
+        #######################################################################
+        if args.quote:
+            logger.info(f"Executing quote command: {args.params}")
+            quote = await client.get_quote(**args.params)
+            print("\n" + "="*60 + "\n")
+            if quote:
+                print(f"✅ Quote fetched successfully for {args.params['symbol']}:")
+                print(f"   Time: {quote['timestamp']}")
+                print(f"     * Realtime" if str({quote['realtime']}).lower() == 'true' else "     * Not realtime")
+                print(f"   High: ${quote['high']}")
+                print(f"   Low: ${quote['low']}")
+                print(f"   Open: ${quote['open']}")
+                print(f"   Close: ${quote['close']}")
+                print(f"   Volume: {quote['total_vol']}")
+                print(f"     ↑: {quote['up_vol']}")
+                print(f"     ↓: {quote['down_vol']}")
             else:
-                print(f"   No 0DTE today, using nearest: {exps[0]}")
-                test_expiration = exps[0]
+                print("❌ Quote fetch failed")
+            print("\n" + "="*60 + "\n")
 
-            # Test 3: Stream options for 30 seconds
-            print("\n" + "="*60)
-            print(f"--- Test 3: Streaming Options for {test_expiration} ---\n")
-            print("*** will stream for 30 seconds and show sample quotes ***")
-
-            options_received = 0
-            sample_quotes = []
-
-            async def test_handler(data: Dict):
-                """Handler to collect sample quotes"""
-                nonlocal options_received, sample_quotes
-                options_received += 1
-
-                # Collect first 5 unique quotes
-                if len(sample_quotes) < 5:
-                    symbol = data.get('Symbol', '')
-                    if symbol and symbol not in [q.get('Symbol') for q in sample_quotes]:
-                        sample_quotes.append(data)
-                        print(f"   Sample quote #{len(sample_quotes)}: {symbol}")
-                        print(f"      Bid: ${data.get('Bid', 0):.2f}, Ask: ${data.get('Ask', 0):.2f}")
-                        print(f"      Strike: ${data.get('Strike', 0):.2f}, OI: {data.get('OpenInterest', 0):,}")
-
-                if options_received % 50 == 0:
-                    print(f"   Received {options_received} option quotes so far...")
-
-            # Create stream task
-            stream_task = asyncio.create_task(
-                client.stream_options_chain('SPY', test_expiration, test_handler)
-            )
-
-            # Let it run for 10 seconds
-            try:
-                await asyncio.wait_for(stream_task, timeout=10)
-            except asyncio.TimeoutError:
-                print("   Stream test timeout reached (30s)")
-                stream_task.cancel()
-                try:
-                    await stream_task
-                except asyncio.CancelledError:
-                    pass
-
-            print(f"\n✅ Stream test complete!")
-            print(f"   Total quotes received: {options_received}")
-            print(f"   Sample quotes collected: {len(sample_quotes)}")
-
-            if options_received > 0:
-                print("\n📊 Stream Performance:")
-                print(f"   Quotes/second: {options_received / 30:.1f}")
-                print(f"   Connection: Successful")
-                print(f"   Data flow: Active")
+        #######################################################################
+        # Option Expirations
+        #######################################################################
+        elif args.option_expirations:
+            logger.info(f"Executing option-expirations command: {args.params}")
+            exps = await client.get_option_expirations(**args.params)
+            print("\n" + "="*60 + "\n")
+            if exps:
+                print(f"✅ Expirations fetched successfully for {args.params['underlying']} ({len(exps)} expirations found):")
+                for exp in exps:
+                    print("   " + exp.strftime('%Y-%m-%d'))
             else:
-                print("⚠️  No quotes received during test period")
-                print("   This may indicate market is closed or no activity")
-        else:
-            print("❌ Expirations test failed")
+                print("❌ Expirations fetch failed")
+            print("\n" + "="*60 + "\n")
 
-    print("\n" + "="*60)
-    print("--- Stats ---\n")
+        #######################################################################
+        # Option Strikes
+        #######################################################################
+        elif args.option_strikes:
+            logger.info(f"Executing option-strikes command: {args.params}")
+            strikes = await client.get_option_strikes(**args.params)
+            print("\n" + "="*60 + "\n")
+            if strikes:
+                print(f"✅ Strikes fetched successfully for {args.params['underlying']} ({len(strikes)} strikes found):")
+                for strike in strikes:
+                    print("   $" + strike)
+            else:
+                print("❌ Strikes fetch failed")
+            print("\n" + "="*60 + "\n")
+
+
+        #######################################################################
+        # Options Stream
+        #######################################################################
+        elif args.stream_options is not None:
+            logger.info(f"Executing stream-options command: {args.params}")
+
+    print("\n" + "="*60 + "\n")
+    print("--- Stats ---")
     stats = client.get_stats()
     for stat,value in stats.items():
         print(f"{stat}: {value}")
-
-    print("\n" + "="*60)
-    print("All tests complete!")
-    print("="*60 + "\n")
-
+    print()
 
 if __name__ == '__main__':
     asyncio.run(main())
