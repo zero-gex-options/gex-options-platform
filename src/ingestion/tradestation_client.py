@@ -85,7 +85,7 @@ class TradeStationStreamingClient:
         logger.info("✅ Stream stopped")
 
 
-    async def fetch_tradestation_data(self, api_endpoint: str, params: Optional[dict] = None) -> Optional[dict]:
+    async def _fetch_tradestation_data(self, api_endpoint: str, params: Optional[dict] = None) -> Optional[dict]:
         """
         GET call to TradeStation API to fetch data
 
@@ -98,7 +98,7 @@ class TradeStationStreamingClient:
         """
 
         # Construct full URL
-        url = f"{self.base_url}{api_endpoint}"
+        url = f"{self.base_url}/{api_endpoint}"
         logger.debug(f"Making API GET call to TradeStation {url} with params {params}...")
 
         # Get fresh token
@@ -124,10 +124,10 @@ class TradeStationStreamingClient:
                 return data
 
         except asyncio.TimeoutError:
-            logger.error(f"Quote request timed out for {symbol}")
+            logger.error(f"API GET call timed out for {symbol}")
             return None
         except Exception as e:
-            logger.error(f"Error getting quote for {symbol}: {e}", exc_info=True)
+            logger.error(f"Error fetching data for {symbol}: {e}", exc_info=True)
             return None
 
     async def get_quote(self,
@@ -150,12 +150,8 @@ class TradeStationStreamingClient:
             Quote data or None
         """
 
-        url = f"{self.base_url}/marketdata/barcharts/{symbol}"
+        endpoint = f"marketdata/barcharts/{symbol}"
         logger.info(f"Requesting quote for {symbol}...")
-
-        # Get fresh token
-        headers = self.auth.get_headers()
-        headers['Content-Type'] = 'application/json'
 
         # Set params for API GET
         params = {
@@ -171,57 +167,36 @@ class TradeStationStreamingClient:
         if mkt_session:
             params['sessiontemplate'] = mkt_session
 
-        logger.debug(f"Attempting to fetch data from {url} with {params}...")
+        mkt_data = await self._fetch_tradestation_data(endpoint, params)
 
-        try:
-            async with self.session.get(url, headers=headers, params=params, timeout=10) as response:
-                logger.debug(f"Quote request status: {response.status}")
-
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Quote request failed with status {response.status}: {error_text}")
-                    return None
-
-                data = await response.json()
-                pretty_data = json.dumps(data, indent=4)
-                logger.debug("Full JSON response:")
-                logger.debug(pretty_data)
-
-                if 'Bars' not in data or len(data['Bars']) == 0:
-                    logger.warning(f"No quote data returned for {symbol}")
-                    return None
-
-                quote = data['Bars'][-1]
-                pretty_quote = json.dumps(quote, indent=4)
-                price = float(quote.get('Close', 0))
-
-                logger.info(f"✅ {symbol}: ${price}")
-                logger.debug("Full quote data:")
-                logger.debug(pretty_quote)
-
-                realtime = False
-                if str(quote.get('IsRealtime')).lower() == 'true':
-                    realtime = True
-
-                return {
-                    'symbol': symbol,
-                    'high': quote.get('High', 0),
-                    'low': quote.get('Low', 0),
-                    'open': quote.get('Open', 0),
-                    'close': price,
-                    'timestamp': quote.get('TimeStamp', 0),
-                    'realtime': realtime,
-                    'total_vol': quote.get('TotalVolume', 0),
-                    'down_vol': quote.get('DownVolume', 0),
-                    'up_vol': quote.get('UpVolume', 0),
-                }
-
-        except asyncio.TimeoutError:
-            logger.error(f"Quote request timed out for {symbol}")
+        if 'Bars' not in mkt_data or len(mkt_data['Bars']) == 0:
+            logger.warning(f"No quote data returned for {symbol}")
             return None
-        except Exception as e:
-            logger.error(f"Error getting quote for {symbol}: {e}", exc_info=True)
-            return None
+
+        quote = mkt_data['Bars'][-1]
+        pretty_quote = json.dumps(quote, indent=4)
+        price = float(quote.get('Close', 0))
+
+        logger.info(f"✅ {symbol}: ${price}")
+        logger.debug("Full quote data:")
+        logger.debug(pretty_quote)
+
+        realtime = False
+        if str(quote.get('IsRealtime')).lower() == 'true':
+            realtime = True
+
+        return {
+            'symbol': symbol,
+            'high': quote.get('High', 0),
+            'low': quote.get('Low', 0),
+            'open': quote.get('Open', 0),
+            'close': price,
+            'timestamp': quote.get('TimeStamp', 0),
+            'realtime': realtime,
+            'total_vol': quote.get('TotalVolume', 0),
+            'down_vol': quote.get('DownVolume', 0),
+            'up_vol': quote.get('UpVolume', 0),
+        }
 
     async def get_option_expirations(self,
                                      underlying: str = "SPY",
@@ -237,50 +212,25 @@ class TradeStationStreamingClient:
             List of expiration dates
         """
 
-        url = f"{self.base_url}/marketdata/options/expirations/{underlying}"
+        endpoint = f"marketdata/options/expirations/{underlying}"
         logger.info(f"Requesting option expirations for {underlying}...")
-
-        # Get fresh token
-        headers = self.auth.get_headers()
-        headers['Content-Type'] = 'application/json'
 
         # Set params for API GET
         params = {}
         if strike:
             params['strikePrice']: strike
 
-        logger.debug(f"Attempting to fetch data from {url} with {params}...")
+        mkt_data = await self._fetch_tradestation_data(endpoint, params)
 
-        try:
-            async with self.session.get(url, headers=headers, params=params, timeout=10) as response:
-                logger.debug(f"Expirations request status: {response.status}")
+        expirations = []
+        if 'Expirations' in mkt_data:
+            for exp in mkt_data['Expirations']:
+                exp_date = datetime.strptime(exp['Date'], '%Y-%m-%dT%H:%M:%SZ').date()
+                expirations.append(exp_date)
+            logger.info(f"✅ Found {len(expirations)} expirations for {underlying}")
+            logger.debug(f"Expirations: {expirations[:5]}..." if len(expirations) > 5 else f"Expirations: {expirations}")
 
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Expirations request failed: {error_text}")
-                    return []
-
-                data = await response.json()
-                pretty_data = json.dumps(data, indent=4)
-                logger.debug("Full JSON response:")
-                logger.debug(pretty_data)
-
-                expirations = []
-                if 'Expirations' in data:
-                    for exp in data['Expirations']:
-                        exp_date = datetime.strptime(exp['Date'], '%Y-%m-%dT%H:%M:%SZ').date()
-                        expirations.append(exp_date)
-                    logger.info(f"✅ Found {len(expirations)} expirations for {underlying}")
-                    logger.debug(f"Expirations: {expirations[:5]}..." if len(expirations) > 5 else f"Expirations: {expirations}")
-
-                return sorted(expirations)
-
-        except asyncio.TimeoutError:
-            logger.error(f"Expirations request timed out for {underlying}")
-            return []
-        except Exception as e:
-            logger.error(f"Error getting expirations for {underlying}: {e}", exc_info=True)
-            return []
+        return sorted(expirations)
 
     async def get_option_strikes (self,
                                   underlying: str = "SPY",
@@ -296,50 +246,25 @@ class TradeStationStreamingClient:
             List of strikes
         """
 
-        url = f"{self.base_url}/marketdata/options/strikes/{underlying}"
+        endpoint = f"marketdata/options/strikes/{underlying}"
         logger.info(f"Requesting option strikes for {underlying}...")
-
-        # Get fresh token
-        headers = self.auth.get_headers()
-        headers['Content-Type'] = 'application/json'
 
         # Set params for API GET
         params = {}
         if expiration:
             params['expiration']: expiration
 
-        logger.debug(f"Attempting to fetch data from {url} with {params}...")
+        mkt_data = await self._fetch_tradestation_data(endpoint, params)
 
-        try:
-            async with self.session.get(url, headers=headers, params=params, timeout=10) as response:
-                logger.debug(f"Strikes request status: {response.status}")
+        strikes = []
+        if 'Strikes' in mkt_data:
+            for strike in mkt_data['Strikes']:
+                strike_price = strike[0]
+                strikes.append(strike_price)
+            logger.info(f"✅ Found {len(strikes)} strikes for {underlying}")
+            logger.debug(f"Strikes: {strikes[:5]}..." if len(strikes) > 5 else f"Strikes: {strikes}")
 
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Strikes request failed: {error_text}")
-                    return []
-
-                data = await response.json()
-                pretty_data = json.dumps(data, indent=4)
-                logger.debug("Full JSON response:")
-                logger.debug(pretty_data)
-
-                strikes = []
-                if 'Strikes' in data:
-                    for strike in data['Strikes']:
-                        strike_price = strike[0]
-                        strikes.append(strike_price)
-                    logger.info(f"✅ Found {len(strikes)} strikes for {underlying}")
-                    logger.debug(f"Strikes: {strikes[:5]}..." if len(strikes) > 5 else f"Strikes: {strikes}")
-
-                return strikes
-
-        except asyncio.TimeoutError:
-            logger.error(f"Strikes request timed out for {underlying}")
-            return []
-        except Exception as e:
-            logger.error(f"Error getting strikes for {underlying}: {e}", exc_info=True)
-            return []
+        return strikes
 
     async def stream_options_chain(self, underlying: str, expiration: date, handler: Callable):
         """
@@ -516,10 +441,10 @@ For more help, use -h or --help
 def build_quote_params(args):
     """Build parameters for quote command with defaults."""
     return {
-        'symbol': (args.symbol or 'SPY').upper(),
-        'unit': (args.unit or 'Minute').lower(),
+        'symbol': (args.symbol or "SPY").upper(),
+        'unit': (args.unit or "Minute").lower().capitalize(),
         'bars_back': args.bars_back or 1,
-        'last_date': args.last_date or datetime.now().isoformat(),
+        'last_date': args.last_date,
         'mkt_session': args.mkt_session
     }
 
