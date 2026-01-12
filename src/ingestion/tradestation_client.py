@@ -134,7 +134,8 @@ class TradeStationStreamingClient:
                         symbol: str = "SPY",
                         unit: Optional[str] = "Minute",
                         bars_back: Optional[str] = "1",
-                        last_date: Optional[str] = None) -> Optional[Dict]:
+                        last_date: Optional[str] = None,
+                        mkt_session: Optional[str] = None) -> Optional[Dict]:
         """
         Get current quote for symbol
 
@@ -143,6 +144,7 @@ class TradeStationStreamingClient:
             unit: Minute, Daily, Weekly, Monthly
             bars_back: number of units to get quotes for
             last_date (optional): uses current timestamp if not specified
+            mkt_session (optional): USEQPre, USEQPost, USEQPreAndPost, USEQ24Hour, Default
 
         Returns:
             Quote data or None
@@ -162,9 +164,12 @@ class TradeStationStreamingClient:
             'sessiontemplate': 'USEQ24Hour' # United States (US) stock market session templates.
         }
 
-        # Add lastdate if specified
+        # Add lastdate and sessiontemplate
+        # if specified
         if last_date:
             params['lastdate'] = last_date
+        if mkt_session:
+            params['sessiontemplate'] = mkt_session
 
         logger.debug(f"Attempting to fetch data from {url} with {params}...")
 
@@ -451,7 +456,7 @@ def parse_arguments():
 Examples:
   %(prog)s --quote
   %(prog)s --quote --symbol AAPL --unit daily --bars-back 10
-  %(prog)s --quote --symbol SPY --last-date 2024-01-15T10:00:00Z
+  %(prog)s --quote --symbol SPY --last-date 2024-01-15T10:00:00Z --mkt-session USEQ24Hour
   %(prog)s --option-expirations --underlying SPY
   %(prog)s --option-expirations --underlying SPY --strike 450
   %(prog)s --option-strikes --underlying AAPL --expiration 2024-12-20
@@ -476,6 +481,7 @@ For more help, use -h or --help
     parser.add_argument('--unit', type=str, help='Time unit: minute, daily, etc. (default: minute)')
     parser.add_argument('--bars-back', type=int, help='Number of bars to retrieve (default: 1)')
     parser.add_argument('--last-date', type=str, help='End date in ISO format, e.g. 2026-01-01 or 2026-01-01T00:00:00Z (default: current)')
+    parser.add_argument('--mkt-session', type=str, help='US stock market session templates (default: Default)')
     
     # Option arguments (shared across option commands)
     parser.add_argument('--underlying', type=str, help='Underlying symbol (default: SPY)')
@@ -513,7 +519,8 @@ def build_quote_params(args):
         'symbol': (args.symbol or 'SPY').upper(),
         'unit': (args.unit or 'Minute').lower(),
         'bars_back': args.bars_back or 1,
-        'last_date': args.last_date or datetime.now().isoformat()
+        'last_date': args.last_date or datetime.now().isoformat(),
+        'mkt_session': args.mkt_session
     }
 
 
