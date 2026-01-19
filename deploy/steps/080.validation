@@ -1,0 +1,262 @@
+#!/bin/bash
+
+# ==============================================
+# Step 080: Deployment Validation
+# ==============================================
+
+set -e
+
+log "Deployment Validation"
+
+# Define paths
+CREDS_FILE="$HOME/.zerogex_db_creds"
+
+# Load database credentials
+if [ -f "$CREDS_FILE" ]; then
+    source "$CREDS_FILE"
+else
+    log "  ✗ Database credentials not found"
+    exit 1
+fi
+
+# Validation results tracking
+TOTAL_CHECKS=0
+PASSED_CHECKS=0
+FAILED_CHECKS=0
+WARNING_CHECKS=0
+
+# Check function
+check_service() {
+    TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+    local service_name=$1
+    local display_name=$2
+
+    if systemctl is-active --quiet "$service_name"; then
+	log "  ✓ $display_name: $(systemctl is-active "$service_name")"
+        PASSED_CHECKS=$((PASSED_CHECKS + 1))
+        return 0
+    else
+	log "  ✗ $display_name: $(systemctl is-active "$service_name")"
+        FAILED_CHECKS=$((FAILED_CHECKS + 1))
+        return 1
+    fi
+}
+
+# Section 1: Service Status
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "1. Service Status Checks"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+check_service "gex-ingestion" "Ingestion Service"
+check_service "gex-scheduler" "Scheduler Service"
+check_service "postgresql" "PostgreSQL Database"
+check_service "fail2ban" "fail2ban"
+log ""
+
+# Section 2: Database Connection
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "2. Database Connection Test"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -c "SELECT NOW();" > /dev/null 2>&1; then
+    DB_TIME=$(PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "SELECT NOW();")
+    log "  ✓ Database connection successful"
+    log "     Database time: $DB_TIME"
+    PASSED_CHECKS=$((PASSED_CHECKS + 1))
+else
+    log "  ✗ Database connection failed"
+    FAILED_CHECKS=$((FAILED_CHECKS + 1))
+fi
+log ""
+
+# Section 3: Database Schema
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "3. Database Schema Validation"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Check for critical tables
+TABLES=("options_quotes" "latest_gex")
+for table in "${TABLES[@]}"; do
+    TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+    TABLE_OUT=""
+    if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dt $table" 2>/dev/null | grep -q "$table"; then
+	log "  ✓ Table exists: $table"
+        PASSED_CHECKS=$((PASSED_CHECKS + 1))
+    else
+	log "  ⚠ Table not found: $table (may not be created yet)"
+        WARNING_CHECKS=$((WARNING_CHECKS + 1))
+    fi
+done
+log ""
+
+# Section 4: Recent Ingestion Logs
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "4. Ingestion Service Logs (last 10 lines)"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+sudo journalctl -u gex-ingestion -n 10 --no-pager
+log ""
+
+# Section 5: Recent Scheduler Logs
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "5. Scheduler Service Logs (last 10 lines)"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+sudo journalctl -u gex-scheduler -n 10 --no-pager
+log ""
+
+# Section 6: Data Flow Check
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "6. Recent Data Flow Check (last 10 minutes)"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+
+# Check if options_quotes table exists first
+if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dt options_quotes" 2>/dev/null | grep -q "options_quotes"; then
+    DATA_CHECK=$(PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "SELECT COUNT(*) FROM options_quotes WHERE timestamp > NOW() - INTERVAL '10 minutes';" 2>/dev/null | xargs)
+
+    if [ -n "$DATA_CHECK" ] && [ "$DATA_CHECK" -gt 0 ]; then
+	log "  ✓ Recent data found: $DATA_CHECK rows in last 10 minutes"
+        PASSED_CHECKS=$((PASSED_CHECKS + 1))
+    else
+	log "  ⚠ No recent data (0 rows in last 10 minutes)"
+        log "     This is normal if services just started or markets are closed"
+        WARNING_CHECKS=$((WARNING_CHECKS + 1))
+    fi
+else
+    log "  ⚠ options_quotes table not yet created"
+    WARNING_CHECKS=$((WARNING_CHECKS + 1))
+fi
+log ""
+
+# Section 7: GEX Calculations
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "7. Latest GEX Calculations"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+
+if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dt latest_gex" 2>/dev/null | grep -q "latest_gex"; then
+    GEX_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "SELECT COUNT(*) FROM latest_gex;" 2>/dev/null | xargs)
+
+    if [ -n "$GEX_COUNT" ] && [ "$GEX_COUNT" -gt 0 ]; then
+	log "  ✓ GEX calculations found: $GEX_COUNT rows"
+        PASSED_CHECKS=$((PASSED_CHECKS + 1))
+        log ""
+        log "  Sample GEX data:"
+        PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -c "SELECT * FROM latest_gex LIMIT 5;" 2>/dev/null || echo "     (no data yet)"
+    else
+	log "  ⚠ No GEX calculations yet"
+        log "     This is normal if services just started"
+        WARNING_CHECKS=$((WARNING_CHECKS + 1))
+    fi
+else
+    log "  ⚠ latest_gex table not yet created"
+    WARNING_CHECKS=$((WARNING_CHECKS + 1))
+fi
+log ""
+
+# Section 8: System Resources
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "8. System Resource Usage"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Disk usage
+DISK_USAGE=$(df -h / | tail -1 | awk '{print $5}' | sed 's/%//')
+DISK_INFO=$(df -h / | tail -1)
+log "  Disk Usage:"
+log "     $DISK_INFO"
+if [ "$DISK_USAGE" -lt 80 ]; then
+    log "     ✓ Disk usage OK (${DISK_USAGE}%)"
+elif [ "$DISK_USAGE" -lt 90 ]; then
+    log "    ⚠ Disk usage warning (${DISK_USAGE}%)"
+else
+    log "   ✗ Disk usage critical (${DISK_USAGE}%)"
+fi
+log ""
+
+# Memory usage
+MEM_INFO=$(free -h | grep Mem)
+MEM_PERCENT=$(free | grep Mem | awk '{printf("%.0f", $3/$2 * 100)}')
+log "  Memory Usage:"
+log "     $MEM_INFO"
+if [ "$MEM_PERCENT" -lt 80 ]; then
+    log "     ✓ Memory usage OK (${MEM_PERCENT}%)"
+elif [ "$MEM_PERCENT" -lt 90 ]; then
+    log "     ⚠ Memory usage warning (${MEM_PERCENT}%)"
+else
+    log "     ✗ Memory usage high (${MEM_PERCENT}%)"
+fi
+log ""
+
+# Section 9: Security Status
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "9. Security Configuration"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# UFW status
+TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+if sudo ufw status | grep -q "Status: active"; then
+    log "  ✓ Firewall (UFW) is active"
+    PASSED_CHECKS=$((PASSED_CHECKS + 1))
+else
+    log "  ✗ Firewall (UFW) is not active"
+    FAILED_CHECKS=$((FAILED_CHECKS + 1))
+fi
+
+# SSH configuration
+TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+if grep -q "^PermitRootLogin no" /etc/ssh/sshd_config && grep -q "^PasswordAuthentication no" /etc/ssh/sshd_config; then
+    log "  ✓ SSH hardening configured"
+    PASSED_CHECKS=$((PASSED_CHECKS + 1))
+else
+    log "  ⚠ SSH hardening may not be fully configured"
+    WARNING_CHECKS=$((WARNING_CHECKS + 1))
+fi
+
+# Backup configuration
+TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+if crontab -l 2>/dev/null | grep -q "backup-gex-db.sh"; then
+    log "  ✓ Automated backups configured"
+    PASSED_CHECKS=$((PASSED_CHECKS + 1))
+else
+    log "  ⚠ Automated backups not configured"
+    WARNING_CHECKS=$((WARNING_CHECKS + 1))
+fi
+log "${BKUP_OUT}"
+log ""
+
+# Final Summary
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "VALIDATION SUMMARY"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log ""
+log "Total Checks: $TOTAL_CHECKS"
+log "Passed: $PASSED_CHECKS"
+log "Warnings: $WARNING_CHECKS"
+log "Failed: $FAILED_CHECKS"
+log ""
+
+if [ "$FAILED_CHECKS" -eq 0 ]; then
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log "✓ Deployment validation PASSED!"
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log ""
+    log "ZeroGEX platform is ready for production!"
+
+    if [ "$WARNING_CHECKS" -gt 0 ]; then
+        log ""
+        log "Note: Some warnings were detected. These are typically normal"
+	log "for a fresh deployment or when markets are closed."
+    fi
+else
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log "✗ Deployment validation FAILED!"
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log ""
+    log "Please review the failed checks above and resolve issues."
+    log "Check service logs for more details:"
+    log "  sudo journalctl -u gex-ingestion -f"
+    log "  sudo journalctl -u gex-scheduler -f"
+    exit 1
+fi
+
+log ""
+log "Deployment validation complete!"
+log ""

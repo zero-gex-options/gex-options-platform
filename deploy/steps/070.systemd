@@ -1,0 +1,126 @@
+#!/bin/bash
+
+# ==============================================
+# Step 070: Systemd Services Setup
+# ==============================================
+
+set -e
+
+log "Systemd Services Setup"
+
+# Define paths
+APP_DIR="$HOME/gex-options-platform"
+SYSTEMD_SOURCE="$APP_DIR/deployment/systemd"
+SYSTEMD_TARGET="/etc/systemd/system"
+
+# Check if application directory exists
+if [ ! -d "$APP_DIR" ]; then
+    log "  ✗ Application directory not found: $APP_DIR"
+    exit 1
+fi
+
+# Check if systemd service files exist
+if [ ! -d "$SYSTEMD_SOURCE" ]; then
+    log "  ✗ Systemd configuration directory not found: $SYSTEMD_SOURCE"
+    log "     Expected service files in: $SYSTEMD_SOURCE/*.service"
+    exit 1
+fi
+
+# Count service files
+SERVICE_COUNT=$(find "$SYSTEMD_SOURCE" -name "*.service" -type f | wc -l)
+
+if [ "$SERVICE_COUNT" -eq 0 ]; then
+    log "  ✗ No .service files found in $SYSTEMD_SOURCE"
+    exit 1
+fi
+
+log "  → Found $SERVICE_COUNT service file(s)"
+
+# Copy systemd service files
+log "  → Copying systemd service files..."
+sudo cp -v "$SYSTEMD_SOURCE"/*.service "$SYSTEMD_TARGET/"
+
+# Reload systemd daemon
+log "  → Reloading systemd daemon..."
+sudo systemctl daemon-reload
+
+# Define expected services
+SERVICES=("gex-ingestion" "gex-scheduler")
+
+# Enable services
+log "  → Enabling services to start on boot..."
+for service in "${SERVICES[@]}"; do
+    if [ -f "$SYSTEMD_TARGET/${service}.service" ]; then
+        log "     • Enabling ${service}..."
+        sudo systemctl enable "${service}"
+    else
+        log "     ⚠ Warning: ${service}.service not found, skipping..."
+    fi
+done
+
+# Start services
+log "  → Starting services..."
+for service in "${SERVICES[@]}"; do
+    sleep 2
+    if [ -f "$SYSTEMD_TARGET/${service}.service" ]; then
+        log "     • Starting ${service}..."
+        if sudo systemctl start "${service}"; then
+            log "       ✓ ${service} started successfully"
+        else
+            log "       ✗ Failed to start ${service}"
+        fi
+    fi
+done
+
+# Wait a moment for services to initialize
+sleep 3
+
+# Check status of each service
+log ""
+log "  → Service Status Check:"
+log ""
+for service in "${SERVICES[@]}"; do
+    if [ -f "$SYSTEMD_TARGET/${service}.service" ]; then
+        log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        log "  Service: ${service}"
+        log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        sudo systemctl status "${service}" --no-pager -l || true
+        log ""
+    fi
+done
+
+# Summary of running services
+log "Systemd services setup complete!"
+log ""
+log "Summary:"
+log "  ✓ Service files copied to $SYSTEMD_TARGET"
+log "  ✓ Systemd daemon reloaded"
+
+# Check which services are actually running
+RUNNING_COUNT=0
+for service in "${SERVICES[@]}"; do
+    if sudo systemctl is-active --quiet "${service}"; then
+        log "  ✓ ${service} is running"
+        ((RUNNING_COUNT++))
+    else
+        log "  ✗ ${service} is not running"
+    fi
+done
+
+log ""
+log "Useful commands:"
+log "  • View logs: sudo journalctl -u <service-name> -f"
+log "  • Restart service: sudo systemctl restart <service-name>"
+log "  • Stop service: sudo systemctl stop <service-name>"
+log "  • Service status: sudo systemctl status <service-name>"
+log ""
+
+if [ "$RUNNING_COUNT" -lt "${#SERVICES[@]}" ]; then
+    log "⚠ Warning: Not all services are running. Check logs for details:"
+    for service in "${SERVICES[@]}"; do
+        if ! sudo systemctl is-active --quiet "${service}"; then
+            log "   sudo journalctl -u ${service} -n 50"
+        fi
+    done
+    log ""
+fi

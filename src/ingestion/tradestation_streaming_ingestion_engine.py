@@ -1,47 +1,85 @@
 """
 TradeStation Streaming Ingestion Engine
 
-Streams 0DTE options data and stores to database.
-Optionally validates TradeStation Greeks against calculated values.
+Real-time ingestion of SPY 0DTE options data with batch processing.
 """
 
 import asyncio
 import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime, time as dt_time, date, timezone
+import time
 import pytz
+from typing import Dict, Optional
 import logging
-from typing import Dict, List, Optional
 import os
+import sys
 from dotenv import load_dotenv
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(__file__))
 
 from tradestation_client import TradeStationStreamingClient
 from greeks_calculator import GreeksCalculator
 
 load_dotenv()
 
-# Set logging level from environment
+# Get and validate logging level from environment
+log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
+valid_levels = {
+    'DEBUG': logging.DEBUG,
+    'INFO': logging.INFO,
+    'WARNING': logging.WARNING,
+    'ERROR': logging.ERROR,
+    'CRITICAL': logging.CRITICAL
+}
+
+if log_level_str in valid_levels:
+    log_level = valid_levels[log_level_str]
+else:
+    log_level = logging.INFO
+    print(f"Warning: Invalid LOG_LEVEL '{log_level_str}', defaulting to INFO. Valid options: {', '.join(valid_levels.keys())}")
+
 logging.basicConfig(
-    level=os.getenv('LOG_LEVEL', 'WARNING').upper(),
+    level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
 
 class StreamingIngestionEngine:
-    """Ingestion engine for TradeStation streaming options data with Greeks validation"""
+    """Ingest real-time options data from TradeStation"""
 
     def __init__(self):
-        logger.setLevel(logging.DEBUG)
-        logger.info("Initializing Streaming Ingestion Engine")
+        logger.info("🔄 Initializing Streaming Ingestion Engine...")
+        logger.debug(f"Batch size: {os.getenv('BATCH_SIZE', 100)}")
 
-        self.db_conn = self._connect_db()
+        # Database connection
+        logger.debug("Connecting to database...")
+        try:
+            self.db_conn = psycopg2.connect(
+                host=os.getenv('DB_HOST'),
+                database=os.getenv('DB_NAME'),
+                user=os.getenv('DB_USER'),
+                password=os.getenv('DB_PASSWORD'),
+                port=os.getenv('DB_PORT')
+            )
+            logger.info("✅ Database connection established")
+        except Exception as e:
+            logger.critical(f"Failed to connect to database: {e}", exc_info=True)
+            raise
 
         # TradeStation credentials
         self.ts_client_id = os.getenv('TRADESTATION_CLIENT_ID')
         self.ts_client_secret = os.getenv('TRADESTATION_CLIENT_SECRET')
         self.ts_refresh_token = os.getenv('TRADESTATION_REFRESH_TOKEN')
         self.ts_sandbox = os.getenv('TRADESTATION_USE_SANDBOX', 'false').lower() == 'true'
+
+        if not all([self.ts_client_id, self.ts_client_secret, self.ts_refresh_token]):
+            logger.critical("Missing TradeStation credentials in environment variables")
+            raise ValueError("Missing required TradeStation credentials")
+
+        logger.debug("TradeStation credentials loaded")
 
         # Batch processing
         self.batch_size = int(os.getenv('BATCH_SIZE', 100))
@@ -50,7 +88,7 @@ class StreamingIngestionEngine:
 
         # Greeks validation
         self.validate_greeks = os.getenv('VALIDATE_GREEKS', 'false').lower() == 'true'
-        self.greeks_calc = GreeksCalculator() if self.validate_greeks else None
+        self.greeks_calc = GreeksCalculator(risk_free_rate=0.045, dividend_yield=0.013) if self.validate_greeks else None
 
         # Validation tolerances (percentage)
         # Note: 0DTE options have larger expected mismatches due to:
@@ -58,15 +96,18 @@ class StreamingIngestionEngine:
         # - Model differences (Black-Scholes vs proprietary)
         # - Time-to-expiration precision
         # - Dividend timing
-        self.delta_tolerance = 0.10  # 10% (was 5%)
-        self.gamma_tolerance = 0.25  # 25% (was 10%)
-        self.vega_tolerance = 0.20   # 20% (was 10%)
-        self.theta_tolerance = 0.25  # 25% (new)
+        self.delta_tolerance = 0.10  # 10%
+        self.gamma_tolerance = 0.25  # 25%
+        self.vega_tolerance = 0.20   # 20%
+        self.theta_tolerance = 0.25  # 25%
 
-        # Stats
+        # Statistics
         self.options_received = 0
         self.options_stored = 0
-        self.errors = 0
+        self.batch_count = 0
+        self.error_count = 0
+        self.heartbeat_count = 0
+        self.last_heartbeat = None
 
         # Validation stats
         self.greeks_validated = 0
@@ -80,49 +121,36 @@ class StreamingIngestionEngine:
         # Track underlying price
         self.underlying_price = None
 
-        logger.info(f"Batch size: {self.batch_size}")
-        logger.info(f"Sandbox mode: {self.ts_sandbox}")
-        logger.info(f"Greeks validation: {'ENABLED' if self.validate_greeks else 'DISABLED'}")
-
-    def _connect_db(self):
-        """Connect to PostgreSQL/TimescaleDB"""
-        logger.info("Connecting to database...")
-
-        conn = psycopg2.connect(
-            host=os.getenv('DB_HOST'),
-            database=os.getenv('DB_NAME'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            port=os.getenv('DB_PORT')
-        )
-
-        logger.info("✅ Database connected")
-        return conn
+        logger.info("✅ Streaming Ingestion Engine initialized")
+        logger.debug(f"   Batch size: {self.batch_size}")
+        logger.debug(f"   Sandbox mode: {self.ts_sandbox}")
+        logger.debug(f"   Greeks validation: {'ENABLED' if self.validate_greeks else 'DISABLED'}")
+        if self.validate_greeks:
+            logger.debug(f"   Delta tolerance: {self.delta_tolerance}")
+            logger.debug(f"   Gamma tolerance: {self.gamma_tolerance}")
+            logger.debug(f"   Vega tolerance: {self.vega_tolerance}")
+            logger.debug(f"   Theta tolerance: {self.theta_tolerance}")
 
     def is_market_open(self) -> bool:
         """Check if market is currently open"""
-        # Always use ET timezone
-        et_tz = pytz.timezone('America/New_York')
-        now = datetime.now(et_tz)
+        now = datetime.now(pytz.timezone('America/New_York'))
 
-        # Log current time for debugging
-        logger.debug(f"Current ET time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        logger.debug(f"Day of week: {now.weekday()} (0=Mon, 6=Sun)")
+        logger.debug(f"Market hours check: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        logger.debug(f"Day: {now.strftime('%A')} (weekday: {now.weekday()})")
 
-        # Weekend check
-        if now.weekday() >= 5:  # Saturday=5, Sunday=6
+        # Check if weekend
+        if now.weekday() >= 5:
             logger.debug("Market closed: Weekend")
             return False
 
-        # Market hours: 9:30 AM - 4:15 PM ET
+        # Market hours: 9:30 AM to 4:15 PM ET
         market_open = dt_time(9, 30)
-        market_close = dt_time(16, 15)
+        market_close = dt_time(16, 0)
         current_time = now.time()
 
         is_open = market_open <= current_time <= market_close
 
-        logger.debug(f"Market open: {market_open}, Close: {market_close}, Current: {current_time}")
-        logger.debug(f"Is market open: {is_open}")
+        logger.debug(f"Market hours: {market_open} - {market_close}, Current: {current_time}, Open: {is_open}")
 
         return is_open
 
@@ -131,15 +159,21 @@ class StreamingIngestionEngine:
 
         self.options_received += 1
 
-        if self.options_received % 10 == 0:
-            logger.info(f"DEBUG: Received {self.options_received} options so far")
+        if self.options_received % 50 == 0:
+            logger.debug(f"Options received: {self.options_received}, Stored: {self.options_stored}")
 
         try:
             # Parse the option data
             option = self._parse_option_update(data)
 
+            # If data is not a valid option
+            # check to see if it's just a heartbeat
             if not option:
-                logger.warning("DEBUG: Failed to parse option data")
+                if 'Heartbeat' in data:
+                    self._handle_heartbeat(data)
+                else:
+                    logger.warning("Failed to parse option data")
+                    logger.debug(f"Invalid data: {data}")
                 return
 
             # Validate Greeks if enabled
@@ -149,20 +183,28 @@ class StreamingIngestionEngine:
             # Add to batch buffer
             async with self.batch_lock:
                 self.batch_buffer.append(option)
+                buffer_size = len(self.batch_buffer)
 
-                # Flush batch if full
-                if len(self.batch_buffer) >= self.batch_size:
-                    logger.info(f"Batch full ({len(self.batch_buffer)} records), flushing...")
+                logger.debug(f"Added to batch buffer (size: {buffer_size}/{self.batch_size})")
+
+                # Flush if batch is full
+                if buffer_size >= self.batch_size:
+                    logger.info(f"Batch full ({buffer_size} records), flushing...")
                     await self._flush_batch()
 
         except Exception as e:
-            logger.error(f"Error in option handler: {e}", exc_info=True)
-            self.errors += 1
+            self.error_count += 1
+            logger.error(f"Error handling option update: {e}", exc_info=True)
+            if self.error_count % 10 == 0:
+                logger.warning(f"Error count reached {self.error_count}")
 
     def _parse_option_update(self, data: Dict) -> Optional[Dict]:
-        """Parse TradeStation option update into standardized format"""
+        """Parse raw option data from stream"""
+
+        logger.debug(f"Parsing option update #{self.options_received}...")
 
         try:
+
             # Extract leg info
             if not data.get('Legs') or len(data['Legs']) == 0:
                 return None
@@ -174,6 +216,7 @@ class StreamingIngestionEngine:
             if not symbol:
                 return None
 
+            # Parse underlying
             parts = symbol.split()
             if len(parts) < 2:
                 return None
@@ -190,6 +233,11 @@ class StreamingIngestionEngine:
             # Parse option type
             option_type = leg.get('OptionType', '').lower()
 
+            # Calculate DTE, OI and IV
+            dte = (expiration - date.today()).days
+            open_interest = int(data.get('DailyOpenInterest', 0))
+            implied_vol = float(data.get('ImpliedVolatility', 0))
+
             # Build option dict with TradeStation Greeks
             option = {
                 'symbol': symbol,
@@ -202,8 +250,8 @@ class StreamingIngestionEngine:
                 'mid': float(data.get('Mid', 0)),
                 'last': float(data.get('Last', 0)),
                 'volume': int(data.get('Volume', 0)),
-                'open_interest': int(data.get('DailyOpenInterest', 0)),
-                'implied_vol': float(data.get('ImpliedVolatility', 0)),
+                'open_interest': open_interest,
+                'implied_vol': implied_vol,
                 'delta': float(data.get('Delta', 0)),
                 'gamma': float(data.get('Gamma', 0)),
                 'theta': float(data.get('Theta', 0)),
@@ -211,7 +259,7 @@ class StreamingIngestionEngine:
                 'rho': float(data.get('Rho', 0)),
                 'timestamp': datetime.now(timezone.utc),
                 'underlying_price': self.underlying_price,
-                'dte': (expiration - date.today()).days,
+                'dte': dte,
                 'is_calculated': False
             }
 
@@ -221,11 +269,40 @@ class StreamingIngestionEngine:
             else:
                 option['spread_pct'] = None
 
+            # Calculate Greeks
+            greeks = self.greeks_calc.calculate_greeks(
+                underlying_price=option['underlying_price'],
+                strike=option['strike'],
+                expiration=option['expiration'],
+                option_type=option['option_type'],
+                implied_vol=option.get('implied_vol', 0.20)  # Use 20% default if not provided
+            )
+
+            # Update option with Greeks
+            option.update(greeks)
+
+            # Log results
+            logger.info(f"✅ Parsed: {underlying} {strike}{option_type[0].upper()} (DTE={dte}, IV={implied_vol:.2f})")
+            option_dump = ', '.join(f"{key}: {value}" for key, value in option.items())
+            logger.debug(option_dump)
+
             return option
 
-        except Exception as e:
-            logger.error(f"Failed to parse option: {e}")
+        except KeyError as e:
+            logger.error(f"Missing key in option data: {e}")
+            logger.debug(f"Data keys: {data.keys()}")
             return None
+        except Exception as e:
+            logger.error(f"Error parsing option data: {e}", exc_info=True)
+            return None
+
+    def _handle_heartbeat(self, data: Dict):
+        """Handle heartbeat returned during stream"""
+
+        self.heartbeat_count = data['Heartbeat']
+        self.last_heartbeat = datetime.fromisoformat(data['Timestamp'].replace('Z', '+00:00'))
+        timestamp_str = self.last_heartbeat.strftime('%Y-%m-%d %H:%M:%S %Z')
+        logger.debug(f"Received heartbeat 💓 #{self.heartbeat_count} at {timestamp_str}")
 
     def _validate_greeks(self, option: Dict):
         """Validate TradeStation Greeks against calculated Greeks"""
@@ -324,31 +401,46 @@ class StreamingIngestionEngine:
         """Flush batch buffer to database"""
 
         if not self.batch_buffer:
+            logger.debug("Batch buffer empty, nothing to flush")
             return
 
-        logger.info(f"Flushing {len(self.batch_buffer)} options to database")
+        start_time = time.time() # Start timing
+        batch_size = len(self.batch_buffer)
+        logger.debug(f"Flushing batch of {batch_size} options to database...")
 
         try:
+
+            # Store the batch in database
             self._store_options_batch(self.batch_buffer)
 
-            self.options_stored += len(self.batch_buffer)
-            logger.info(f"✅ Stored {len(self.batch_buffer)} options (total: {self.options_stored})")
+            # Calculate processing time
+            processing_time_ms = int((time.time() - start_time) * 1000)
 
+            # Log metrics to database
+            self._log_ingestion_metrics(processing_time_ms)
+
+            # Update stats
+            self.options_stored += batch_size
+            self.batch_count += 1
+
+            # Clear the buffer
             self.batch_buffer.clear()
+
+            logger.info(f"✅ Batch #{self.batch_count} stored successfully ({self.options_stored} total options)")
+
+            if self.batch_count % 10 == 0:
+                logger.debug(f"📊 Stats - Received: {self.options_received}, Stored: {self.options_stored}, "
+                           f"Batches: {self.batch_count}, Errors: {self.error_count}")
 
         except Exception as e:
-            logger.error(f"Error flushing batch: {e}", exc_info=True)
-            self.errors += 1
-            self.batch_buffer.clear()
+            logger.error(f"Failed to flush batch: {e}", exc_info=True)
+            self.error_count += 1
+            raise
 
-    def _store_options_batch(self, batch: List[Dict]):
+    def _store_options_batch(self, batch: list):
         """Store batch of options to database"""
 
-        logger.info(f"=== STORING BATCH ===")
-        logger.info(f"Batch size: {len(batch)}")
-
-        if len(batch) > 0:
-            logger.info(f"Sample option: {batch[0]['symbol']} {batch[0]['strike']} {batch[0]['option_type']}")
+        logger.debug(f"Preparing to insert {len(batch)} records")
 
         cursor = self.db_conn.cursor()
 
@@ -356,7 +448,7 @@ class StreamingIngestionEngine:
         for opt in batch:
             values.append((
                 opt['timestamp'],
-                opt['underlying'],
+                opt['symbol'],
                 opt['underlying_price'],
                 opt['strike'],
                 opt['expiration'],
@@ -378,8 +470,6 @@ class StreamingIngestionEngine:
                 opt['spread_pct'],
                 'tradestation_stream'
             ))
-
-        logger.info(f"Prepared {len(values)} rows for insertion")
 
         insert_query = """
             INSERT INTO options_quotes 
@@ -406,54 +496,94 @@ class StreamingIngestionEngine:
         try:
             execute_values(cursor, insert_query, values)
             self.db_conn.commit()
-            logger.info(f"✅ Database commit successful")
-            cursor.close()
+            logger.debug("Database commit successful")
         except Exception as e:
-            logger.error(f"❌ Database error: {e}")
-            logger.error(f"Query: {insert_query[:200]}")
+            logger.error(f"❌ Database error: {e}", exc_info=True)
+            self.db_conn.rollback()
             raise
+        finally:
+            cursor.close()
 
-    def _store_underlying_price(self, symbol: str, price: float):
-        """Store underlying price update"""
+    def _store_underlying_price(self, symbol: str, price: float, volume: int):
+        """Store underlying price"""
+
+        logger.debug(f"Storing underlying price: {symbol} = ${price:.2f}")
+        self.underlying_price = price
 
         cursor = self.db_conn.cursor()
 
         insert_query = """
-            INSERT INTO underlying_prices 
-            (timestamp, symbol, price, bid, ask, volume, source)
-            VALUES (%s, %s, %s, %s, %s, %s, 'tradestation_stream')
-            ON CONFLICT (timestamp, symbol) DO NOTHING
-        """
+            INSERT INTO underlying_prices (timestamp, symbol, price, volume, source)
+            VALUES (%s, %s, %s, %s, %s)
+       """
 
-        cursor.execute(insert_query, (
-            datetime.now(timezone.utc),
-            symbol,
-            price,
-            price,
-            price,
-            0
-        ))
-        self.db_conn.commit()
-        cursor.close()
+        try:
+            cursor.execute(insert_query, (
+                datetime.now(timezone.utc),
+                symbol,
+                price,
+                volume,
+                'tradestation_api'
+            ))
+            self.db_conn.commit()
+            logger.debug("Underlying price stored")
+        except Exception as e:
+            logger.error(f"Error storing underlying price: {e}")
+            self.db_conn.rollback()
+        finally:
+            cursor.close()
+
+    def _log_ingestion_metrics(self, processing_time_ms: int):
+        """Log ingestion metrics to database using streaming stats"""
+        try:
+            # Get current streaming statistics
+            stats = {
+                'records_ingested': self.options_received,
+                'records_stored': self.options_stored,
+                'error_count': self.error_count,
+                'heartbeat_count': self.heartbeat_count,
+                'last_heartbeat': self.last_heartbeat
+            }
+
+            cursor = self.db_conn.cursor()
+            insert_query = """
+                INSERT INTO ingestion_metrics 
+                (timestamp, source, symbol, records_ingested, records_stored, error_count, heartbeat_count, last_heartbeat, processing_time_ms)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(insert_query, (
+                datetime.now(timezone.utc),
+                'tradestation_stream',
+                'SPY',
+                stats['records_ingested'],
+                stats['records_stored'],
+                stats['error_count'],
+                stats['heartbeat_count'],
+                stats['last_heartbeat'],
+                processing_time_ms
+            ))
+            self.db_conn.commit()
+            cursor.close()
+            logger.debug(f"📊 Logged ingestion metrics: {stats['records_ingested']} records ingested, {stats['records_stored']} records stored, {stats['error_count']} errors, {stats['heartbeat_count']} heartbeats (last: {stats['last_heartbeat']}), ms")
+        except Exception as e:
+            logger.error(f"❌ Failed to log ingestion metrics: {e}")
+            self.db_conn.rollback()
 
     async def run(self, symbol: str = 'SPY'):
         """Main ingestion loop"""
 
-        logger.info("="*80)
-        logger.info(f"Starting Streaming Ingestion Engine for {symbol}")
+        logger.info("="*60)
+        logger.info(f"Starting Streaming Ingestion Engine for {symbol}...")
         if self.validate_greeks:
             logger.info("Greeks validation: ENABLED")
-        logger.info("="*80)
+        logger.info("="*60)
 
-        async with TradeStationStreamingClient(
-            self.ts_client_id,
-            self.ts_client_secret,
-            self.ts_refresh_token,
-            sandbox=self.ts_sandbox
-        ) as client:
+        while True:
+            try:
 
-            while True:
-                try:
+                # Only run if market is open unless explicitly
+                # specified otherwise
+                if (os.getenv('VALIDATE_MARKET_OPEN', 'true').lower() == 'true'):
                     if not self.is_market_open():
                         logger.info("Market closed, waiting 5 minutes...")
                         await asyncio.sleep(300)
@@ -461,74 +591,72 @@ class StreamingIngestionEngine:
 
                     logger.info("Market is open, starting stream...")
 
-                    # Get underlying price
+                async with TradeStationStreamingClient(
+                    self.ts_client_id,
+                    self.ts_client_secret,
+                    self.ts_refresh_token,
+                    sandbox=self.ts_sandbox
+                ) as client:
+
+                    # Get quote for underlying symbol
+                    logger.debug(f"Getting quote for {symbol}...")
                     quote = await client.get_quote(symbol)
-                    if quote:
-                        self.underlying_price = quote['price']
-                        self._store_underlying_price(symbol, self.underlying_price)
-                        logger.info(f"Underlying {symbol}: ${self.underlying_price:.2f}")
 
-                    # Start streaming
-                    await client.start_streaming_0dte(symbol, self.option_update_handler)
-
-                    logger.info("🚀 Stream task started, waiting for connection...")
-
-                    # Wait for stream to actually connect (up to 30 seconds)
-                    connection_timeout = 30
-                    elapsed = 0
-                    while not client.is_streaming and elapsed < connection_timeout:
-                        await asyncio.sleep(1)
-                        elapsed += 1
-
-                    if not client.is_streaming:
-                        logger.error("Stream failed to connect within 30 seconds")
+                    if not quote:
+                        logger.error(f"Failed to get quote for {symbol}")
+                        await asyncio.sleep(60)
                         continue
 
-                    logger.info("✅ Stream connected and active")
+                    logger.info(f"✅ {symbol}: ${quote['price']:.2f}")
 
-                    # Keep streaming while market is open
-                    while self.is_market_open():
-                        # Check if stream is still active
-                        if not client.is_streaming:
-                            logger.warning("Stream disconnected, will restart on next iteration")
-                            break
+                    # Store underlying price
+                    self._store_underlying_price(symbol, quote['price'], quote['volume'])
 
-                        # Log stats every minute
+                    # Get expirations
+                    logger.info(f"Getting expirations for {symbol}...")
+                    expirations = await client.get_option_expirations(symbol)
+
+                    if not expirations:
+                        logger.error(f"No expirations found for {symbol}")
                         await asyncio.sleep(60)
+                        continue
 
-                        stats = client.get_stats()
-                        logger.info(
-                            f"📊 Stats - Received: {self.options_received}, "
-                            f"Stored: {self.options_stored}, "
-                            f"Errors: {self.errors}, "
-                            f"Messages: {stats['messages_received']}"
-                        )
+                    # Find 0DTE
+                    today = date.today()
+                    today_str = today.strftime('%Y-%m-%d')
 
-                        # Periodic flush
-                        if self.batch_buffer:
-                            async with self.batch_lock:
-                                await self._flush_batch()
+                    if today in expirations:
+                        logger.info(f"✅ Found 0DTE expiration: {today_str}")
+                        target_expiration = today
+                    else:
+                        logger.warning(f"No 0DTE expiration today, using nearest: {expirations[0]}")
+                        target_expiration = expirations[0]
 
-                    logger.info("Market closed or stream ended")
-                    await client.stop_streaming()
+                    # Start streaming
+                    logger.info(f"🚀 Starting options stream for {symbol} {target_expiration}")
 
-                    # Final flush
-                    if self.batch_buffer:
-                        async with self.batch_lock:
-                            await self._flush_batch()
+                    await client.stream_options_chain(
+                        symbol,
+                        target_expiration,
+                        self.option_update_handler
+                    )
 
-                    if self.validate_greeks and self.greeks_validated > 0:
-                        self._log_validation_summary()
+            except KeyboardInterrupt:
+                logger.info("Shutting down...")
+                break
+            except Exception as e:
+                logger.error(f"Error in main loop: {e}", exc_info=True)
+                logger.info("Restarting in 30 seconds...")
+                await asyncio.sleep(30)
 
-                except KeyboardInterrupt:
-                    logger.info("Shutting down...")
-                    break
-                except Exception as e:
-                    logger.error(f"Error in main loop: {e}", exc_info=True)
-                    await asyncio.sleep(30)
+        # Cleanup
+        logger.info("Flushing remaining batch data...")
+        await self._flush_batch()
 
         self.db_conn.close()
         logger.info("Ingestion engine stopped")
+        logger.info(f"Final stats - Received: {self.options_received}, Stored: {self.options_stored}, "
+                   f"Batches: {self.batch_count}, Errors: {self.error_count}")
 
 
 async def main():

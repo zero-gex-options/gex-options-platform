@@ -11,8 +11,11 @@ WorkingDirectory=/home/ubuntu/gex-options-platform
 
 ExecStart=/home/ubuntu/gex-options-platform/deployment/run/ingestion.sh
 
+# Restart behavior
 Restart=always
 RestartSec=10
+
+# Logging
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=gex-ingestion

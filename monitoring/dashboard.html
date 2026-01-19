@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ZeroGEX Monitor</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom: 1px solid #334155;
+        }
+        .sidebar-header h1 {
+            font-size: 20px;
+            margin-bottom: 4px;
+        }
+        .sidebar-header .status {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        .nav-menu {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        .nav-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #94a3b8;
+        }
+        .nav-item:hover {
+            background: #334155;
+            color: #e2e8f0;
+        }
+        .nav-item.active {
+            background: #334155;
+            color: #60a5fa;
+            border-left: 3px solid #60a5fa;
+        }
+        .nav-icon {
+            font-size: 18px;
+        }
+
+        /* Main content */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+        .page {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        .page.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Page header */
+        .page-header {
+            margin-bottom: 24px;
+        }
+        .page-header h2 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .page-header .subtitle {
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        /* Cards */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid #334155;
+        }
+        .card h3 {
+            font-size: 16px;
+            margin-bottom: 16px;
+            color: #60a5fa;
+        }
+        .metric {
+            margin-bottom: 12px;
+        }
+        .metric-label {
+            color: #94a3b8;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+        .metric-value.large {
+            font-size: 48px;
+            color: #60a5fa;
+        }
+
+        /* Status indicators */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-badge.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .status-badge.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .status-badge.warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* Progress bars */
+        .progress-bar {
+            background: #334155;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .progress-fill {
+            height: 100%;
+            transition: width 0.3s;
+        }
+        .progress-fill.green { background: #10b981; }
+        .progress-fill.yellow { background: #f59e0b; }
+        .progress-fill.red { background: #ef4444; }
+
+        /* Tables */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .data-table th {
+            background: #334155;
+            padding: 12px;
+            text-align: left;
+            color: #94a3b8;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+        }
+        .data-table td {
+            padding: 12px;
+            border-bottom: 1px solid #334155;
+        }
+        .data-table tr:hover {
+            background: #1e293b;
+        }
+
+        /* Charts */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 16px;
+        }
+
+        /* Alert items */
+        .alert-item {
+            background: rgba(239, 68, 68, 0.1);
+            border-left: 4px solid #ef4444;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            border-radius: 6px;
+        }
+        .alert-item.warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-left-color: #f59e0b;
+        }
+        .alert-time {
+            color: #94a3b8;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        .alert-message {
+            font-size: 13px;
+        }
+
+        /* Market status */
+        .market-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .market-status.open {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .market-status.closed {
+            background: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>🚀 ZeroGEX</h1>
+            <div class="status" id="lastUpdate">Loading...</div>
+            <div style="margin-top: 8px;" id="marketStatusBadge"></div>
+        </div>
+        <nav class="nav-menu">
+            <div class="nav-item active" onclick="showPage('home')">
+                <span class="nav-icon">📊</span>
+                <span>Dashboard</span>
+            </div>
+            <div class="nav-item" onclick="showPage('system')">
+                <span class="nav-icon">💻</span>
+                <span>System Resources</span>
+            </div>
+            <div class="nav-item" onclick="showPage('services')">
+                <span class="nav-icon">⚙️</span>
+                <span>Service Status</span>
+            </div>
+            <div class="nav-item" onclick="showPage('database')">
+                <span class="nav-icon">🗄️</span>
+                <span>Database Metrics</span>
+            </div>
+            <div class="nav-item" onclick="showPage('alerts')">
+                <span class="nav-icon">⚠️</span>
+                <span>Active Alerts</span>
+            </div>
+            <div class="nav-item" onclick="showPage('spy')">
+                <span class="nav-icon">📈</span>
+                <span>SPY Quote</span>
+            </div>
+            <div class="nav-item" onclick="showPage('ingestion')">
+                <span class="nav-icon">📥</span>
+                <span>Ingestion Metrics</span>
+            </div>
+            <div class="nav-item" onclick="showPage('options')">
+                <span class="nav-icon">📋</span>
+                <span>Option Quotes</span>
+            </div>
+            <div class="nav-item" onclick="showPage('uptime')">
+                <span class="nav-icon">⏱️</span>
+                <span>System Uptime</span>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Home Page -->
+        <div id="home" class="page active">
+            <div class="page-header">
+                <h2>System Dashboard</h2>
+                <div class="subtitle">Quick overview of system health</div>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h3>System Health</h3>
+                    <div id="homeSystemHealth">Loading...</div>
+                </div>
+                <div class="card">
+                    <h3>Services</h3>
+                    <div id="homeServices">Loading...</div>
+                </div>
+                <div class="card">
+                    <h3>Data Flow</h3>
+                    <div id="homeDataFlow">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Resources Page -->
+        <div id="system" class="page">
+            <div class="page-header">
+                <h2>System Resources</h2>
+                <div class="subtitle">CPU, Memory, and Disk usage</div>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h3>CPU Usage</h3>
+                    <div id="systemCPU">Loading...</div>
+                </div>
+                <div class="card">
+                    <h3>Memory Usage</h3>
+                    <div id="systemMemory">Loading...</div>
+                </div>
+                <div class="card">
+                    <h3>Disk Usage</h3>
+                    <div id="systemDisk">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service Status Page -->
+        <div id="services" class="page">
+            <div class="page-header">
+                <h2>Service Status</h2>
+                <div class="subtitle">Status of all system services</div>
+            </div>
+            <div class="card">
+                <div id="servicesContent" style="max-width: 600px; margin: 0 auto;">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Database Metrics Page -->
+        <div id="database" class="page">
+            <div class="page-header">
+                <h2>Database Metrics</h2>
+                <div class="subtitle">Database statistics and performance</div>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h3>Quote Statistics</h3>
+                    <div id="dbQuoteStats">Loading...</div>
+                </div>
+                <div class="card">
+                    <h3>Database Info</h3>
+                    <div id="dbInfo">Loading...</div>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 20px;">
+                <h3>Database Tables <span style="color: #94a3b8; font-size: 12px; font-weight: normal;">(Click to view recent records)</span></h3>
+                <div style="display: flex; gap: 16px; margin-top: 16px; flex-wrap: wrap;">
+                    <div onclick="showTableData('options_quotes')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">📊</div>
+                        <div style="font-size: 14px; color: #e2e8f0;">Options Quotes</div>
+                    </div>
+                    <div onclick="showTableData('underlying_prices')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">💰</div>
+                        <div style="font-size: 14px; color: #e2e8f0;">Underlying Prices</div>
+                    </div>
+                    <div onclick="showTableData('latest_gex')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">⚡</div>
+                        <div style="font-size: 14px; color: #e2e8f0;">Latest GEX</div>
+                    </div>
+                    <div onclick="showTableData('ingestion_metrics')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">📥</div>
+                        <div style="font-size: 14px; color: #e2e8f0;">Ingestion Metrics</div>
+                    </div>
+                </div>
+                <div id="tableDataDisplay" style="margin-top: 20px; display: none;">
+                    <h4 id="tableDataTitle" style="color: #60a5fa; margin-bottom: 12px;"></h4>
+                    <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
+                        <table class="data-table" id="tableDataTable">
+                            <thead id="tableDataHead"></thead>
+                            <tbody id="tableDataBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts Page -->
+        <div id="alerts" class="page">
+            <div class="page-header">
+                <h2>Active Alerts</h2>
+                <div class="subtitle">System warnings and errors</div>
+            </div>
+            <div class="card">
+                <div id="alertsContent">Loading...</div>
+            </div>
+        </div>
+
+        <!-- SPY Quote Page -->
+        <div id="spy" class="page">
+            <div class="page-header">
+                <h2>SPY Quote</h2>
+                <div class="subtitle">Latest SPY pricing and volume</div>
+            </div>
+            <div class="card" style="margin-bottom: 20px;">
+                <div id="spyLatest">Loading...</div>
+            </div>
+            <div class="card">
+                <h3>Price & Volume History</h3>
+                <div class="chart-container">
+                    <canvas id="spyChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ingestion Metrics Page -->
+        <div id="ingestion" class="page">
+            <div class="page-header">
+                <h2>Ingestion Metrics</h2>
+                <div class="subtitle">Data ingestion performance</div>
+            </div>
+            <div class="card" style="margin-bottom: 20px;">
+                <h3>Latest Metrics</h3>
+                <div id="ingestionLatest">Loading...</div>
+            </div>
+            <div class="card">
+                <h3>48-Hour History</h3>
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="ingestionCombinedChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Option Quotes Page -->
+        <div id="options" class="page">
+            <div class="page-header">
+                <h2>Recent Option Quotes</h2>
+                <div class="subtitle">Last 50 options received</div>
+            </div>
+            <div class="card">
+                <div style="overflow-x: auto;">
+                    <table class="data-table" id="optionsTable">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Strike</th>
+                                <th>Exp</th>
+                                <th>DTE</th>
+                                <th>Type</th>
+                                <th>Last</th>
+                                <th>Bid</th>
+                                <th>Ask</th>
+                                <th>Mid</th>
+                                <th>Vol</th>
+                                <th>OI</th>
+                                <th>IV</th>
+                                <th>Delta</th>
+                                <th>Gamma</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="optionsTableBody">
+                            <tr><td colspan="15">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Uptime Page -->
+        <div id="uptime" class="page">
+            <div class="page-header">
+                <h2>System Uptime</h2>
+                <div class="subtitle">Service availability timeline (Last 48 Hours)</div>
+            </div>
+            <div class="card">
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="uptimeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let globalData = {};
+        let charts = {};
+
+        // Make showTableData globally accessible
+        window.showTableData = async function(tableName) {
+            try {
+                const response = await fetch(`/api/table/${tableName}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                    return;
+                }
+
+                // Create modal or display area for table data
+                const modal = document.createElement('div');
+                modal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1e293b; padding: 24px; border-radius: 8px; max-width: 90vw; max-height: 80vh; overflow: auto; z-index: 1000; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);';
+
+                let html = `<h3 style="margin-top: 0; color: #e2e8f0;">${tableName} (Last 100 rows)</h3>`;
+                html += `<button onclick="this.parentElement.remove(); document.getElementById('modalOverlay').remove();" style="position: absolute; top: 12px; right: 12px; background: #334155; border: none; color: #e2e8f0; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Close</button>`;
+                html += '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+
+                // Headers
+                if (data.length > 0) {
+                    html += '<thead><tr>';
+                    Object.keys(data[0]).forEach(key => {
+                        html += `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">${key}</th>`;
+                    });
+                    html += '</tr></thead>';
+
+                    // Rows
+                    html += '<tbody>';
+                    data.forEach(row => {
+                        html += '<tr style="border-bottom: 1px solid #334155;">';
+                        Object.values(row).forEach(val => {
+                            html += `<td style="padding: 8px; color: #e2e8f0;">${val !== null ? val : 'NULL'}</td>`;
+                        });
+                        html += '</tr>';
+                    });
+                    html += '</tbody>';
+                }
+
+                html += '</table></div>';
+                modal.innerHTML = html;
+
+                const overlay = document.createElement('div');
+                overlay.id = 'modalOverlay';
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999;';
+                overlay.onclick = () => { modal.remove(); overlay.remove(); };
+
+                document.body.appendChild(overlay);
+                document.body.appendChild(modal);
+
+            } catch (error) {
+                console.error('Error fetching table data:', error);
+                alert('Failed to fetch table data');
+            }
+        }
+
+        // Navigation
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+            document.getElementById(pageId).classList.add('active');
+            event.target.closest('.nav-item').classList.add('active');
+        }
+
+        // Utility functions
+        function formatNumber(num) {
+            return new Intl.NumberFormat().format(num);
+        }
+
+        function getProgressColor(value) {
+            if (value >= 90) return 'red';
+            if (value >= 80) return 'yellow';
+            return 'green';
+        }
+
+        function renderProgressBar(value) {
+            const color = getProgressColor(value);
+            return `<div class="progress-bar"><div class="progress-fill ${color}" style="width: ${value}%"></div></div>`;
+        }
+
+        // Update functions for each page
+        function updateHome(data) {
+            // System Health
+            const sys = data.system;
+            const maxUsage = Math.max(sys.cpu_percent, sys.memory_percent, sys.disk_percent);
+            const healthStatus = maxUsage >= 90 ? 'error' : maxUsage >= 80 ? 'warning' : 'success';
+            const healthText = maxUsage >= 90 ? 'Critical' : maxUsage >= 80 ? 'Warning' : 'Healthy';
+
+            document.getElementById('homeSystemHealth').innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <div class="status-badge ${healthStatus}" style="font-size: 16px; padding: 8px 16px;">
+                        <span class="status-dot"></span>
+                        ${healthText}
+                    </div>
+                    <div style="margin-top: 12px; color: #94a3b8; font-size: 14px;">
+                        CPU: ${sys.cpu_percent.toFixed(1)}% | Mem: ${sys.memory_percent.toFixed(1)}% | Disk: ${sys.disk_percent.toFixed(1)}%
+                    </div>
+                </div>
+            `;
+
+            // Services
+            let allActive = Object.values(data.services).every(s => s === 'active');
+            document.getElementById('homeServices').innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <div class="status-badge ${allActive ? 'success' : 'error'}" style="font-size: 16px; padding: 8px 16px;">
+                        <span class="status-dot"></span>
+                        ${allActive ? 'All Running' : 'Issues Detected'}
+                    </div>
+                    <div style="margin-top: 12px; color: #94a3b8; font-size: 14px;">
+                        ${Object.keys(data.services).length} services monitored
+                    </div>
+                </div>
+            `;
+
+            // Data Flow
+            if (data.database && !data.database.error) {
+                const db = data.database;
+                document.getElementById('homeDataFlow').innerHTML = `
+                    <div style="padding: 12px;">
+                        <div class="metric">
+                            <div class="metric-label">Recent Quotes (10 min)</div>
+                            <div class="metric-value">${formatNumber(db.quotes_recent_10min)}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Total Options</div>
+                            <div class="metric-value" style="font-size: 18px;">${formatNumber(db.quotes_total)}</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function updateSystem(data) {
+            const sys = data.system;
+
+            document.getElementById('systemCPU').innerHTML = `
+                <div class="metric-value">${sys.cpu_percent.toFixed(1)}%</div>
+                ${renderProgressBar(sys.cpu_percent)}
+            `;
+
+            document.getElementById('systemMemory').innerHTML = `
+                <div class="metric-value">${sys.memory_percent.toFixed(1)}%</div>
+                <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">
+                    ${sys.memory_used_gb.toFixed(1)} GB / ${sys.memory_total_gb.toFixed(1)} GB
+                </div>
+                ${renderProgressBar(sys.memory_percent)}
+            `;
+
+            document.getElementById('systemDisk').innerHTML = `
+                <div class="metric-value">${sys.disk_percent.toFixed(1)}%</div>
+                <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">
+                    ${sys.disk_used_gb.toFixed(1)} GB / ${sys.disk_total_gb.toFixed(1)} GB
+                </div>
+                ${renderProgressBar(sys.disk_percent)}
+            `;
+        }
+
+        function updateServices(data) {
+            let html = '<div style="display: grid; gap: 12px;">';
+            for (const [service, status] of Object.entries(data.services)) {
+                const isActive = status === 'active';
+                html += `
+                    <div style="padding: 16px; background: #0f172a; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 14px;">${service}</span>
+                        <span class="status-badge ${isActive ? 'success' : 'error'}">
+                            <span class="status-dot"></span>
+                            ${status}
+                        </span>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            document.getElementById('servicesContent').innerHTML = html;
+        }
+
+        function updateDatabase(data) {
+            if (!data.database || data.database.error) {
+                document.getElementById('dbQuoteStats').innerHTML = '<div style="color: #ef4444;">Database unavailable</div>';
+                return;
+            }
+
+            const db = data.database;
+            document.getElementById('dbQuoteStats').innerHTML = `
+                <div class="metric">
+                    <div class="metric-label">Total Quotes</div>
+                    <div class="metric-value">${formatNumber(db.quotes_total)}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Recent (10 min)</div>
+                    <div class="metric-value">${formatNumber(db.quotes_recent_10min)}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Recent (1 hour)</div>
+                    <div class="metric-value">${formatNumber(db.quotes_recent_1hour)}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">GEX Calculations</div>
+                    <div class="metric-value">${formatNumber(db.gex_count)}</div>
+                </div>
+            `;
+
+            document.getElementById('dbInfo').innerHTML = `
+                <div class="metric">
+                    <div class="metric-label">Database Size</div>
+                    <div class="metric-value" style="font-size: 18px;">${db.db_size}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Active Connections</div>
+                    <div class="metric-value">${db.active_connections}</div>
+                </div>
+            `;
+        }
+
+        function updateAlerts(data) {
+            const alerts = data.alerts || [];
+            if (alerts.length === 0) {
+                document.getElementById('alertsContent').innerHTML = '<div style="color: #10b981; text-align: center; padding: 40px;">✓ All systems operational</div>';
+                return;
+            }
+
+            let html = '';
+            alerts.forEach(alert => {
+                const time = new Date(alert.timestamp).toLocaleTimeString();
+                html += `
+                    <div class="alert-item ${alert.level}">
+                        <div class="alert-time">${time} - ${alert.category}</div>
+                        <div class="alert-message">${alert.message}</div>
+                    </div>
+                `;
+            });
+            document.getElementById('alertsContent').innerHTML = html;
+        }
+
+        function updateSPY(data) {
+            if (!data.database || !data.database.spy_quote) {
+                document.getElementById('spyLatest').innerHTML = '<div style="color: #64748b;">No SPY data available</div>';
+                return;
+            }
+
+            const spy = data.database.spy_quote;
+            const spyTime = new Date(spy.timestamp);
+
+            document.getElementById('spyLatest').innerHTML = `
+                <div style="display: flex; justify-content: space-around; align-items: center; padding: 20px;">
+                    <div style="text-align: center;">
+                        <div class="metric-label">SPY PRICE</div>
+                        <div class="metric-value large">$${spy.price.toFixed(2)}</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div class="metric-label">VOLUME</div>
+                        <div class="metric-value">${formatNumber(spy.volume)}</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div class="metric-label">LAST UPDATE</div>
+                        <div class="metric-value" style="font-size: 16px;">${spyTime.toLocaleString()}</div>
+                    </div>
+                </div>
+            `;
+
+            // Store for chart (you'll need to query historical data from backend)
+            // For now, just placeholder
+            updateSPYChart();
+        }
+
+        function updateIngestion(data) {
+            if (!data.database || !data.database.ingestion_metric) {
+                document.getElementById('ingestionLatest').innerHTML = '<div style="color: #64748b;">No ingestion metrics available</div>';
+                return;
+            }
+
+            const im = data.database.ingestion_metric;
+            const imTime = new Date(im.timestamp);
+            const lastHeartbeat = im.last_heartbeat ? new Date(im.last_heartbeat) : null;
+
+            document.getElementById('ingestionLatest').innerHTML = `
+                <div class="grid">
+                    <div class="metric">
+                        <div class="metric-label">Records Ingested</div>
+                        <div class="metric-value">${formatNumber(im.records_ingested || 0)}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Errors</div>
+                        <div class="metric-value">${im.error_count || 0}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Processing Time</div>
+                        <div class="metric-value">${im.processing_time_ms || 0}ms</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Heartbeat Count</div>
+                        <div class="metric-value">${formatNumber(im.heartbeat_count || 0)}</div>
+                    </div>
+                </div>
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #334155; color: #94a3b8; font-size: 12px;">
+                    Last Update: ${imTime.toLocaleString()}
+                </div>
+            `;
+
+            // Store for charts
+            ingestionHistoryData.push({
+                timestamp: imTime,
+                records: im.records_ingested || 0,
+                errors: im.error_count || 0
+            });
+            if (ingestionHistoryData.length > 20) ingestionHistoryData.shift();
+
+            updateIngestionCharts();
+        }
+
+        function updateOptions(data) {
+            if (!data.database || !data.database.recent_options || data.database.recent_options.length === 0) {
+                document.getElementById('optionsTableBody').innerHTML = '<tr><td colspan="15" style="text-align: center; color: #64748b;">No recent options available</td></tr>';
+                return;
+            }
+
+            let html = '';
+            data.database.recent_options.forEach(opt => {
+                const optTime = new Date(opt.timestamp);
+                html += `
+                    <tr>
+                        <td>${opt.symbol || 'N/A'}</td>
+                        <td>$${opt.strike?.toFixed(0) || 'N/A'}</td>
+                        <td>${opt.expiration || 'N/A'}</td>
+                        <td>${opt.dte !== null && opt.dte !== undefined ? opt.dte : 'N/A'}</td>
+                        <td>${opt.option_type || 'N/A'}</td>
+                        <td>$${opt.last?.toFixed(2) || 'N/A'}</td>
+                        <td>$${opt.bid?.toFixed(2) || 'N/A'}</td>
+                        <td>$${opt.ask?.toFixed(2) || 'N/A'}</td>
+                        <td>$${opt.mid?.toFixed(2) || 'N/A'}</td>
+                        <td>${formatNumber(opt.volume || 0)}</td>
+                        <td>${formatNumber(opt.open_interest || 0)}</td>
+                        <td>${opt.implied_vol !== null && opt.implied_vol !== undefined ? (opt.implied_vol * 100).toFixed(1) + '%' : 'N/A'}</td>
+                        <td>${opt.delta !== null && opt.delta !== undefined ? opt.delta.toFixed(3) : 'N/A'}</td>
+                        <td>${opt.gamma !== null && opt.gamma !== undefined ? opt.gamma.toFixed(4) : 'N/A'}</td>
+                        <td style="font-size: 11px;">${optTime.toLocaleTimeString()}</td>
+                    </tr>
+                `;
+            });
+            document.getElementById('optionsTableBody').innerHTML = html;
+        }
+
+        // Chart functions
+        function updateSPYChart() {
+            // Placeholder - you'll need historical data from backend
+            if (charts.spyChart) {
+                charts.spyChart.destroy();
+            }
+
+            const ctx = document.getElementById('spyChart');
+            charts.spyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Price',
+                        data: [],
+                        borderColor: '#60a5fa',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: '#334155' }
+                        },
+                        x: { 
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: '#334155' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#e2e8f0' } }
+                    }
+                }
+            });
+        }
+
+        function updateIngestionCharts() {
+            // Records chart
+            if (charts.ingestionRecords) charts.ingestionRecords.destroy();
+
+            const recordsCtx = document.getElementById('ingestionRecordsChart');
+            charts.ingestionRecords = new Chart(recordsCtx, {
+                type: 'bar',
+                data: {
+                    labels: ingestionHistoryData.map(d => d.timestamp.toLocaleTimeString()),
+                    datasets: [{
+                        label: 'Records',
+                        data: ingestionHistoryData.map(d => d.records),
+                        backgroundColor: '#60a5fa'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: '#334155' }
+                        },
+                        x: { 
+                            ticks: { color: '#94a3b8', maxRotation: 45 },
+                            grid: { color: '#334155' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#e2e8f0' } }
+                    }
+                }
+            });
+
+            // Errors chart
+            if (charts.ingestionErrors) charts.ingestionErrors.destroy();
+
+            const errorsCtx = document.getElementById('ingestionErrorsChart');
+            charts.ingestionErrors = new Chart(errorsCtx, {
+                type: 'bar',
+                data: {
+                    labels: ingestionHistoryData.map(d => d.timestamp.toLocaleTimeString()),
+                    datasets: [{
+                        label: 'Errors',
+                        data: ingestionHistoryData.map(d => d.errors),
+                        backgroundColor: '#ef4444'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: '#334155' }
+                        },
+                        x: { 
+                            ticks: { color: '#94a3b8', maxRotation: 45 },
+                            grid: { color: '#334155' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#e2e8f0' } }
+                    }
+                }
+            });
+        }
+
+        function updateUptimeChart() {
+            // Placeholder - you'd need uptime history from backend
+            if (charts.uptime) charts.uptime.destroy();
+
+            const ctx = document.getElementById('uptimeChart');
+            charts.uptime = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(24).fill(0).map((_, i) => `${i}:00`),
+                    datasets: [{
+                        label: 'Uptime %',
+                        data: Array(24).fill(100), // Placeholder
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            min: 0,
+                            max: 100,
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: '#334155' }
+                        },
+                        x: { 
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: '#334155' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#e2e8f0' } }
+                    }
+                }
+            });
+        }
+
+        // Main update function
+        function updateDashboard() {
+            fetch('/api/metrics')
+                .then(response => response.json())
+                .then(data => {
+                    globalData = data;
+
+                    // Update header
+                    const timestamp = new Date(data.timestamp);
+                    document.getElementById('lastUpdate').textContent = 
+                        `Updated: ${timestamp.toLocaleTimeString()}`;
+
+                    // Market status
+                    const marketBadge = document.getElementById('marketStatusBadge');
+                    if (data.market_open) {
+                        marketBadge.innerHTML = '<span class="market-status open"><span class="status-dot"></span> Market Open</span>';
+                    } else {
+                        marketBadge.innerHTML = '<span class="market-status closed"><span class="status-dot"></span> Market Closed</span>';
+                    }
+
+                    // Update all pages
+                    updateHome(data);
+                    updateSystem(data);
+                    updateServices(data);
+                    updateDatabase(data);
+                    updateAlerts(data);
+                    updateSPY(data);
+                    updateIngestion(data);
+                    updateOptions(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching metrics:', error);
+                });
+        }
+
+        // Initialize
+        updateDashboard();
+        setInterval(updateDashboard, 5000);
+
+        // Initialize uptime chart on first load
+        setTimeout(() => {
+            updateUptimeChart();
+        }, 1000);
+    </script>
+</body>
+</html>
