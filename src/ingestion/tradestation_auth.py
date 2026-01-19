@@ -7,7 +7,6 @@ Handles OAuth2 authentication with TradeStation API.
 import os
 import requests
 import time
-import logging
 from datetime import datetime, timedelta
 from src.utils import get_logger
 
@@ -30,7 +29,7 @@ class TradeStationAuth:
             refresh_token: Refresh token for obtaining access tokens
             sandbox: Use sandbox environment (default False)
         """
-        logger.debug(f"Initializing TradeStationAuth...") 
+        logger.debug("Initializing TradeStationAuth...")
 
         if not client_id or not client_secret or not refresh_token:
             logger.critical("Missing required authentication credentials!")
@@ -47,7 +46,7 @@ class TradeStationAuth:
         self.access_token = None
         self.token_expiry = None
 
-        logger.info(f"TradeStation Auth initialized for {'sandbox' if sandbox else 'production'}")
+        logger.info(f"TradeStationAuth initialized for {'sandbox' if sandbox else 'production'}")
 
     def get_access_token(self) -> str:
         """
@@ -100,7 +99,7 @@ class TradeStationAuth:
 
         try:
 
-            # Make refresh_token request to https://signin.tradestation.com/oauth/token
+            # Make refresh token request to https://signin.tradestation.com/oauth/token
             # (or for sandbox: https://sim-signin.tradestation.com/oauth/token)
             response = requests.post(self.token_url, data=payload, timeout=10)
 
