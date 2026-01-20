@@ -35,13 +35,12 @@ class TradeStationSimpleClient:
         logger.debug("Initializing TradeStationSimpleClient...")
 
         self.base_url = self.SANDBOX_URL if sandbox else self.BASE_URL
-
         self.auth = TradeStationAuth(client_id, client_secret, refresh_token, sandbox)
 
         if sandbox:
-            logger.warning("Using SANDBOX environment [self.base_url] - data may not be real-time")
+            logger.warning(f"Using SANDBOX environment [{self.base_url}] - data may not be real-time")
         else:
-            logger.info("Using PRODUCTION environment [self.base_url]")
+            logger.info(f"Using PRODUCTION environment [{self.base_url}]")
 
         logger.info(f"TradeStationSimpleClient initialized for {'sandbox' if sandbox else 'production'}")
 
@@ -97,12 +96,14 @@ class TradeStationSimpleClient:
             logger.critical(f"Error fetching data for {symbol}: {e}", exc_info=True)
             raise
 
-    def get_quote(self,
-                        symbol: str = "SPY",
-                        unit: str = "Minute",
-                        bars_back: str = "1",
-                        last_date: str = None,
-                        mkt_session: str = None) -> dict:
+    def get_quote(
+        self,
+        symbol: str = "SPY",
+        unit: str = "Minute",
+        bars_back: str = "1",
+        last_date: str = None,
+        mkt_session: str = None
+    ) -> dict:
         """
         Get current quote for symbol
 
@@ -165,9 +166,11 @@ class TradeStationSimpleClient:
             'up_vol': quote.get('UpVolume', 0),
         }
 
-    def get_option_expirations(self,
-                                     underlying: str = "SPY",
-                                     strike: str = None) -> list:
+    def get_option_expirations(
+        self,
+        underlying: str = "SPY",
+        strike: str = None
+    ) -> list:
         """
         Get available option expiration dates
 
@@ -199,15 +202,17 @@ class TradeStationSimpleClient:
 
         return sorted(expirations)
 
-    def get_option_strikes (self,
-                                  underlying: str = "SPY",
-                                  expiration: date = None) -> list:
+    def get_option_strikes(
+        self,
+        underlying: str = "SPY",
+        expiration: date = None
+    ) -> list:
         """
         Get available option strikes
 
         Args:
-            underlying: Underlying symbol
-            expiration: Option expiration date
+            underlying: Underlying symbol (e.g., 'SPY')
+            expiration: Option expiration date (DD-MM-YYYY format)
 
         Returns:
             List of strikes
@@ -251,7 +256,7 @@ Examples:
   %(prog)s --quote --symbol SPY --last-date 2024-01-15T10:00:00Z --mkt-session USEQ24Hour
   %(prog)s --option-expirations --underlying SPY
   %(prog)s --option-expirations --underlying SPY --strike 450
-  %(prog)s --option-strikes --underlying AAPL --expiration 2024-12-20
+  %(prog)s --option-strikes --underlying AAPL --expiration 01-31-2026
 
 For more help, use -h or --help
         '''
