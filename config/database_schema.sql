@@ -7,21 +7,26 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 -- Drop existing tables if recreating
 DROP TABLE IF EXISTS gex_metrics CASCADE;
 DROP TABLE IF EXISTS options_quotes CASCADE;
-DROP TABLE IF EXISTS underlying_prices CASCADE;
+DROP TABLE IF EXISTS underlying_quotes CASCADE;
 DROP TABLE IF EXISTS ingestion_metrics CASCADE;
 
--- Underlying prices table
-CREATE TABLE underlying_prices (
+-- Underlying quotes table
+CREATE TABLE underlying_quotes (
     timestamp TIMESTAMPTZ NOT NULL,
     symbol TEXT NOT NULL,
-    price DOUBLE PRECISION NOT NULL,
-    volume BIGINT,
+    open DOUBLE PRECISION,
+    close DOUBLE PRECISION NOT NULL,
+    high DOUBLE PRECISION,
+    low DOUBLE PRECISION,
+    total_volume BIGINT,
+    up_volume BIGINT,
+    down_volume BIGINT,
     source TEXT,
     PRIMARY KEY (timestamp, symbol)
 );
 
 -- Convert to hypertable
-SELECT create_hypertable('underlying_prices', 'timestamp');
+SELECT create_hypertable('underlying_quotes', 'timestamp');
 
 -- Options quotes table
 CREATE TABLE options_quotes (
@@ -101,17 +106,17 @@ SELECT create_hypertable('ingestion_metrics', 'timestamp');
 CREATE INDEX idx_options_quotes_symbol_exp ON options_quotes(symbol, expiration, timestamp DESC);
 CREATE INDEX idx_options_quotes_strike ON options_quotes(strike, timestamp DESC);
 CREATE INDEX idx_gex_metrics_symbol ON gex_metrics(symbol, timestamp DESC);
-CREATE INDEX idx_underlying_prices_symbol ON underlying_prices(symbol, timestamp DESC);
+CREATE INDEX idx_underlying_quotes_symbol ON underlying_quotes(symbol, timestamp DESC);
 
 -- Compression policy (compress data older than 7 days)
 SELECT add_compression_policy('options_quotes', INTERVAL '7 days');
-SELECT add_compression_policy('underlying_prices', INTERVAL '7 days');
+SELECT add_compression_policy('underlying_quotes', INTERVAL '7 days');
 SELECT add_compression_policy('gex_metrics', INTERVAL '7 days');
 SELECT add_compression_policy('ingestion_metrics', INTERVAL '30 days');
 
 -- Retention policy (keep data for 90 days)
 SELECT add_retention_policy('options_quotes', INTERVAL '90 days');
-SELECT add_retention_policy('underlying_prices', INTERVAL '90 days');
+SELECT add_retention_policy('underlying_quotes', INTERVAL '90 days');
 SELECT add_retention_policy('gex_metrics', INTERVAL '90 days');
 SELECT add_retention_policy('ingestion_metrics', INTERVAL '90 days');
 
@@ -122,19 +127,19 @@ SELECT DISTINCT ON (symbol, expiration)
 FROM gex_metrics
 ORDER BY symbol, expiration, timestamp DESC;
 
-CREATE OR REPLACE VIEW latest_underlying AS
+CREATE OR REPLACE VIEW latest_underlying_quotes AS
 SELECT DISTINCT ON (symbol)
     *
-FROM underlying_prices
+FROM underlying_quotes
 ORDER BY symbol, timestamp DESC;
 
 -- Grant permissions (adjust as needed)
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO gex_user;
 
 -- Success message
-DO $$
+DO $
 BEGIN
     RAISE NOTICE 'Database schema created successfully!';
-    RAISE NOTICE 'Tables: underlying_prices, options_quotes, gex_metrics, ingestion_metrics';
-    RAISE NOTICE 'Views: latest_gex, latest_underlying';
-END $$;
+    RAISE NOTICE 'Tables: underlying_quotes, options_quotes, gex_metrics, ingestion_metrics';
+    RAISE NOTICE 'Views: latest_gex, latest_underlying_quotes';
+END $;

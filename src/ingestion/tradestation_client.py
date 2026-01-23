@@ -332,6 +332,7 @@ def main():
 
     args = parse_arguments()
 
+    # Initialize client
     client = TradeStationSimpleClient(
         os.getenv('TRADESTATION_CLIENT_ID'),
         os.getenv('TRADESTATION_CLIENT_SECRET'),
