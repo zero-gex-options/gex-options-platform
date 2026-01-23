@@ -43,15 +43,19 @@ class StreamingIngestionEngine:
         self.config = self._load_config(config_path)
         logger.info(f"✅ Configuration loaded from {config_path}")
 
+        # Load database credentials from ~/.zerogex_db_creds
+        db_creds = self._load_db_credentials()
+        logger.info("✅ Database credentials loaded from ~/.zerogex_db_creds")
+
         # Database connection
         logger.debug("Connecting to database...")
         try:
             self.db_conn = psycopg2.connect(
-                host=self.config['database']['host'],
-                database=self.config['database']['name'],
-                user=self.config['database']['user'],
-                password=self.config['database']['password'],
-                port=self.config['database']['port']
+                host=db_creds['host'],
+                database=db_creds['name'],
+                user=db_creds['user'],
+                password=db_creds['password'],
+                port=db_creds['port']
             )
             logger.info("✅ Database connection established")
         except Exception as e:
@@ -109,6 +113,37 @@ class StreamingIngestionEngine:
 
         logger.debug("Configuration loaded successfully")
         return config
+
+    def _load_db_credentials(self) -> Dict:
+        """Load database credentials from ~/.zerogex_db_creds"""
+        creds_file = Path.home() / ".zerogex_db_creds"
+
+        if not creds_file.exists():
+            logger.error(f"Database credentials file not found: {creds_file}")
+            raise FileNotFoundError(f"Database credentials file not found: {creds_file}")
+
+        logger.debug(f"Loading database credentials from {creds_file}...")
+
+        creds = {}
+        with open(creds_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                # Skip comments and empty lines
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    creds[key] = value
+
+        # Map the keys to what we need
+        db_config = {
+            'host': creds.get('DB_HOST', 'localhost'),
+            'port': int(creds.get('DB_PORT', '5432')),
+            'name': creds.get('DB_NAME', 'gex_db'),
+            'user': creds.get('DB_USER', 'gex_user'),
+            'password': creds.get('DB_PASSWORD', ''),
+        }
+
+        logger.debug("Database credentials parsed successfully")
+        return db_config
 
     async def option_update_handler(self, data: Dict, symbol: str, expiration: date):
         """

@@ -10,12 +10,15 @@ tradestation:
   use_sandbox: false
 
 # Database Configuration
+# Note: Database credentials are loaded from ~/.zerogex_db_creds
+# This section is kept for reference but values are overridden at runtime
 database:
-  host: ${DB_HOST}
-  port: ${DB_PORT}
-  name: ${DB_NAME}
-  user: ${DB_USER}
-  password: ${DB_PASSWORD}
+  # These will be loaded from ~/.zerogex_db_creds
+  host: localhost
+  port: 5432
+  name: gex_db
+  user: gex_user
+  password: "loaded_from_file"
 
 # Ingestion Settings
 ingestion:

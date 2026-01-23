@@ -126,16 +126,6 @@ TRADESTATION_REFRESH_TOKEN=None
 TRADESTATION_USE_SANDBOX=false
 
 ###########################################################################################################
-# Database Parameters
-###########################################################################################################
-DB_HOST=${DB_HOST}
-DB_PORT=${DB_PORT}
-DB_NAME=${DB_NAME}
-DB_USER=${DB_USER}
-DB_PASSWORD=${DB_PASSWORD}
-DATABASE_URL=${DATABASE_URL}
-
-###########################################################################################################
 # Application Settings
 ###########################################################################################################
 POLL_INTERVAL=5
@@ -174,7 +164,6 @@ log "  ✓ Application directories created"
 log ""
 log "Configuration:"
 log "  • Environment file: $ENV_FILE"
-log "  • Database connected: ${DB_NAME}@${DB_HOST}"
 log "  • TradeStation API configured"
 log ""
 log "Next steps:"
