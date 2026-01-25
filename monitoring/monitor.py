@@ -77,7 +77,7 @@ class MonitoringCollector:
             conn = psycopg2.connect(**self.db_config)
             cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-            # Get recent data counts
+            # Get recent data counts from options_quotes
             cursor.execute("""
                 SELECT 
                     COUNT(*) as total_rows,
@@ -91,7 +91,7 @@ class MonitoringCollector:
             # Get GEX calculations
             cursor.execute("""
                 SELECT COUNT(*) as gex_count, MAX(timestamp) as latest_gex
-                FROM latest_gex;
+                FROM gex_metrics;
             """)
             gex_data = cursor.fetchone()
 
@@ -109,15 +109,14 @@ class MonitoringCollector:
             """)
             conn_data = cursor.fetchone()
 
-            # Get most recent SPY quote
+            # Get most recent underlying quote
             cursor.execute("""
-                SELECT symbol, price, volume, timestamp
-                FROM underlying_prices
-                WHERE symbol = 'SPY'
+                SELECT symbol, close as price, total_volume as volume, timestamp
+                FROM underlying_quotes
                 ORDER BY timestamp DESC
                 LIMIT 1;
             """)
-            spy_quote = cursor.fetchone()
+            underlying_quote = cursor.fetchone()
 
             # Get 50 most recent option quotes
             cursor.execute("""
@@ -130,15 +129,14 @@ class MonitoringCollector:
             """)
             recent_options = cursor.fetchall()
 
-            # Get SPY price history (all available data, chronologically)
+            # Get underlying price history (all available data)
             cursor.execute("""
-                SELECT timestamp, price, volume
-                FROM underlying_prices
-                WHERE symbol = 'SPY'
+                SELECT timestamp, symbol, close as price, total_volume as volume
+                FROM underlying_quotes
                 ORDER BY timestamp ASC;
             """)
-            spy_history_raw = cursor.fetchall()
-            spy_history = [dict(row) for row in spy_history_raw] if spy_history_raw else []
+            underlying_history_raw = cursor.fetchall()
+            underlying_history = [dict(row) for row in underlying_history_raw] if underlying_history_raw else []
 
             # Get ingestion metrics history (last 48 hours)
             cursor.execute("""
@@ -172,8 +170,8 @@ class MonitoringCollector:
                 'latest_gex': gex_data['latest_gex'].isoformat() if gex_data and gex_data['latest_gex'] else None,
                 'db_size': size_data['db_size'] if size_data else 'unknown',
                 'active_connections': conn_data['active_connections'] if conn_data else 0,
-                'spy_quote': dict(spy_quote) if spy_quote else None,
-                'spy_history': spy_history,
+                'underlying_quote': dict(underlying_quote) if underlying_quote else None,
+                'underlying_history': underlying_history,
                 'recent_options': [dict(row) for row in recent_options] if recent_options else [],
                 'ingestion_metric': dict(ingestion_metric) if ingestion_metric else None,
                 'ingestion_history': ingestion_history,
@@ -317,13 +315,11 @@ class MonitoringCollector:
         hour_start = now.replace(minute=0, second=0, microsecond=0)
         minutes_elapsed = (now - hour_start).seconds / 60
 
-        # Simple calculation: if we're collecting metrics, server is up
-        # This is a simplified version - proper uptime tracking would need a heartbeat table
         uptime_pct = (minutes_elapsed / 60) * 100 if minutes_elapsed > 0 else 0
 
         return {
             'hour_label': hour_start.strftime('%m/%d %H:00'),
-            'uptime_percent': min(uptime_pct, 100),  # Cap at 100%
+            'uptime_percent': min(uptime_pct, 100),
             'minutes_up': minutes_elapsed
         }
 
@@ -459,7 +455,7 @@ class MetricsExporter:
 
 
 def load_db_config() -> Optional[Dict]:
-    """Load database configuration from credentials file"""
+    """Load database configuration from ~/.zerogex_db_creds file"""
     creds_file = Path.home() / ".zerogex_db_creds"
     if not creds_file.exists():
         return None
@@ -493,7 +489,7 @@ def main():
 
     args = parser.parse_args()
 
-    # Load database config
+    # Load database config from ~/.zerogex_db_creds
     db_config = load_db_config()
     if not db_config:
         print("Warning: Could not load database configuration from ~/.zerogex_db_creds")

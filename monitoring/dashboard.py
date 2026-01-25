@@ -13,12 +13,13 @@ from psycopg2.extras import RealDictCursor
 app = Flask(__name__)
 METRICS_FILE = Path("/home/ubuntu/monitoring/current_metrics.json")
 DASHBOARD_DIR = Path("/opt/zerogex/monitoring")
-CREDS_FILE = Path("/home/ubuntu/.zerogex_db_creds")
+CREDS_FILE = Path.home() / ".zerogex_db_creds"
 
 def load_db_config():
-    """Load database configuration"""
+    """Load database configuration from ~/.zerogex_db_creds"""
     if not CREDS_FILE.exists():
         return None
+
     config = {}
     with open(CREDS_FILE) as f:
         for line in f:
@@ -26,6 +27,7 @@ def load_db_config():
             if line and not line.startswith('#') and '=' in line:
                 key, value = line.split('=', 1)
                 config[key] = value
+
     return {
         'host': config.get('DB_HOST', 'localhost'),
         'port': int(config.get('DB_PORT', '5432')),
@@ -52,7 +54,7 @@ def get_metrics():
 def get_table_data(table_name):
     """Get recent 100 rows from a database table"""
     # Whitelist allowed tables
-    allowed_tables = ['options_quotes', 'underlying_prices', 'latest_gex', 'ingestion_metrics']
+    allowed_tables = ['options_quotes', 'underlying_quotes', 'gex_metrics', 'ingestion_metrics']
     if table_name not in allowed_tables:
         return jsonify({'error': 'Invalid table name'}), 400
 
