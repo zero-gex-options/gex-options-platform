@@ -45,29 +45,9 @@ fi
 log "  → Installing Python dependencies..."
 pip install -r requirements.txt
 
-# Load database credentials
-CREDS_FILE="/home/ubuntu/.zerogex_db_creds"
-if [ ! -f "$CREDS_FILE" ]; then
-    log "  ✗ Database credentials file not found: $CREDS_FILE"
-    log "     Run step 020.database first"
-    exit 1
-fi
-
-log "  → Loading database credentials..."
-source "$CREDS_FILE"
-
-# Check if database schema file exists
-SCHEMA_FILE="config/database_schema.sql"
-if [ ! -f "$SCHEMA_FILE" ]; then
-    log "  ✗ Database schema file not found: $SCHEMA_FILE"
-    exit 1
-fi
-
-# Initialize database schema
-log "  → Initializing database schema..."
-export PGPASSWORD="$DB_PASSWORD"
-psql -U gex_user -d gex_db -h localhost -f "$SCHEMA_FILE"
-unset PGPASSWORD
+# Verify PyYAML is installed
+log "  → Verifying PyYAML installation..."
+python -c "import yaml" 2>/dev/null || pip install pyyaml
 
 # Create .env file if it doesn't exist
 ENV_FILE="$APP_DIR/.env"
@@ -99,13 +79,16 @@ if [ ! -f "$ENV_FILE" ]; then
     done
 
     log ""
-    log "  → Creating .env file with credentials..."
+    log "  → Creating .env file with TradeStation credentials..."
     cat > "$ENV_FILE" << EOF
 ###########################################################################################################
 ###########################################################################################################
 ##
 ## ZeroGEX Environment Configuration
 ## Generated: $(date)
+##
+## Note: Database credentials are stored in ~/.zerogex_db_creds
+##       This file only contains TradeStation API credentials
 ##
 ###########################################################################################################
 ###########################################################################################################
@@ -128,11 +111,7 @@ TRADESTATION_USE_SANDBOX=false
 ###########################################################################################################
 # Application Settings
 ###########################################################################################################
-POLL_INTERVAL=5
-BATCH_SIZE=100
 LOG_LEVEL=INFO
-VALIDATE_GREEKS=false
-VALIDATE_MARKET_OPEN=true
 
 # Add other configuration variables as needed
 EOF
@@ -144,9 +123,57 @@ else
     log "     If you need to update TradeStation credentials, edit: $ENV_FILE"
 fi
 
+# Create ingestion config file if it doesn't exist
+CONFIG_DIR="$APP_DIR/config"
+INGESTION_CONFIG="$CONFIG_DIR/ingestion_config.yaml"
+
+if [ ! -f "$INGESTION_CONFIG" ]; then
+    log "  → Creating ingestion configuration file..."
+    mkdir -p "$CONFIG_DIR"
+
+    cat > "$INGESTION_CONFIG" << 'EOF'
+###########################################################################################################
+# Streaming Ingestion Engine Configuration
+###########################################################################################################
+
+# TradeStation API Configuration
+tradestation:
+  client_id: ${TRADESTATION_CLIENT_ID}
+  client_secret: ${TRADESTATION_CLIENT_SECRET}
+  refresh_token: ${TRADESTATION_REFRESH_TOKEN}
+  use_sandbox: false
+
+# Database Configuration
+# Note: Database credentials are loaded from ~/.zerogex_db_creds
+database:
+  host: localhost
+  port: 5432
+  name: gex_db
+  user: gex_user
+  password: "loaded_from_file"
+
+# Ingestion Settings
+ingestion:
+  symbols:
+    - SPY
+  target_expiration: 'today'
+  batch_size: 100
+  underlying_update_interval: 5
+  metrics_interval: 60
+
+# Greeks Calculation Parameters
+greeks:
+  risk_free_rate: 0.045
+  dividend_yield: 0.013
+EOF
+    log "     ✓ Ingestion config created at: $INGESTION_CONFIG"
+else
+    log "     ℹ Ingestion config already exists"
+fi
+
 # Verify installation
 log "  → Verifying Python packages..."
-python -c "import psycopg2; import pandas; import numpy; print('✓ Core packages verified')" 2>/dev/null || {
+python -c "import psycopg2; import pandas; import numpy; import yaml; print('✓ Core packages verified')" 2>/dev/null || {
     log "  ⚠ Some packages may not have installed correctly"
 }
 
@@ -158,13 +185,14 @@ log ""
 log "Summary:"
 log "  ✓ Virtual environment created"
 log "  ✓ Python dependencies installed"
-log "  ✓ Database schema initialized"
-log "  ✓ .env file created with database and TradeStation credentials"
-log "  ✓ Application directories created"
+log "  ✓ .env file created with TradeStation credentials"
+log "  ✓ Ingestion config file created"
+log "  ✓ Database credentials in: ~/.zerogex_db_creds"
 log ""
-log "Configuration:"
-log "  • Environment file: $ENV_FILE"
-log "  • TradeStation API configured"
+log "Configuration files:"
+log "  • TradeStation credentials: $ENV_FILE"
+log "  • Database credentials: ~/.zerogex_db_creds"
+log "  • Ingestion config: $INGESTION_CONFIG"
 log ""
 log "Next steps:"
 log "  1. Activate environment: cd $APP_DIR && source venv/bin/activate"

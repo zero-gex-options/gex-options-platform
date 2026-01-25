@@ -83,7 +83,7 @@ host    all             gex_user        127.0.0.1/32            md5
 host    all             gex_user        ::1/128                 md5
 EOF
 
-# Ensure listen_addresses is set correctly (already should be localhost)
+# Ensure listen_addresses is set correctly
 sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = 'localhost'/" /etc/postgresql/${PG_VERSION}/main/postgresql.conf
 
 # Restart PostgreSQL to apply changes
@@ -116,6 +116,32 @@ else
     exit 1
 fi
 
+# Apply database schema
+log "  → Applying database schema..."
+APP_DIR="/home/ubuntu/gex-options-platform"
+SCHEMA_FILE="$APP_DIR/config/database_schema.sql"
+
+if [ -f "$SCHEMA_FILE" ]; then
+    PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -f "$SCHEMA_FILE"
+    log "     ✓ Database schema applied successfully!"
+else
+    log "     ✗ Schema file not found: $SCHEMA_FILE"
+    exit 1
+fi
+
+# Validate database schema
+log "  → Validating database schema..."
+EXPECTED_TABLES=("options_quotes" "underlying_quotes" "gex_metrics" "ingestion_metrics")
+for table in "${EXPECTED_TABLES[@]}"; do
+    PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -c "\dt $table" >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        log "    ✓ Table exists: $table"
+    else
+        log "    ✗ Missing table: $table"
+        exit 1
+    fi
+done
+
 log "Database setup complete!"
 log ""
 log "Summary:"
@@ -125,6 +151,7 @@ log "  ✓ Database 'gex_db' created"
 log "  ✓ User 'gex_user' created with secure password"
 log "  ✓ TimescaleDB extension enabled"
 log "  ✓ Authentication configured"
+log "  ✓ Database schema applied"
 log "  ✓ Credentials saved to: ${CREDS_FILE}"
 log ""
 log "Connection details:"

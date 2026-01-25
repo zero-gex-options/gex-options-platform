@@ -74,15 +74,27 @@ log "3. Database Schema Validation"
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Check for critical tables
-TABLES=("options_quotes" "latest_gex")
+TABLES=("options_quotes" "underlying_quotes" "gex_metrics" "ingestion_metrics")
 for table in "${TABLES[@]}"; do
     TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
-    TABLE_OUT=""
     if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dt $table" 2>/dev/null | grep -q "$table"; then
 	log "  ✓ Table exists: $table"
         PASSED_CHECKS=$((PASSED_CHECKS + 1))
     else
 	log "  ⚠ Table not found: $table (may not be created yet)"
+        WARNING_CHECKS=$((WARNING_CHECKS + 1))
+    fi
+done
+
+# Check for views
+VIEWS=("latest_gex" "latest_underlying_quotes")
+for view in "${VIEWS[@]}"; do
+    TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+    if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dv $view" 2>/dev/null | grep -q "$view"; then
+	log "  ✓ View exists: $view"
+        PASSED_CHECKS=$((PASSED_CHECKS + 1))
+    else
+	log "  ⚠ View not found: $view"
         WARNING_CHECKS=$((WARNING_CHECKS + 1))
     fi
 done
@@ -126,35 +138,61 @@ else
 fi
 log ""
 
-# Section 7: GEX Calculations
+# Section 7: Underlying Quotes Check
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-log "7. Latest GEX Calculations"
+log "7. Underlying Quotes Check"
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 
-if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dt latest_gex" 2>/dev/null | grep -q "latest_gex"; then
-    GEX_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "SELECT COUNT(*) FROM latest_gex;" 2>/dev/null | xargs)
+if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dt underlying_quotes" 2>/dev/null | grep -q "underlying_quotes"; then
+    UND_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "SELECT COUNT(*) FROM underlying_quotes;" 2>/dev/null | xargs)
+
+    if [ -n "$UND_COUNT" ] && [ "$UND_COUNT" -gt 0 ]; then
+	log "  ✓ Underlying quotes found: $UND_COUNT rows"
+        PASSED_CHECKS=$((PASSED_CHECKS + 1))
+        log ""
+        log "  Sample underlying data:"
+        PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -c "SELECT symbol, close, total_volume, timestamp FROM underlying_quotes ORDER BY timestamp DESC LIMIT 3;" 2>/dev/null || echo "     (no data yet)"
+    else
+	log "  ⚠ No underlying quotes yet"
+        log "     This is normal if services just started"
+        WARNING_CHECKS=$((WARNING_CHECKS + 1))
+    fi
+else
+    log "  ⚠ underlying_quotes table not yet created"
+    WARNING_CHECKS=$((WARNING_CHECKS + 1))
+fi
+log ""
+
+# Section 8: GEX Calculations
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "8. Latest GEX Calculations"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+
+if PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "\dt gex_metrics" 2>/dev/null | grep -q "gex_metrics"; then
+    GEX_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "SELECT COUNT(*) FROM gex_metrics;" 2>/dev/null | xargs)
 
     if [ -n "$GEX_COUNT" ] && [ "$GEX_COUNT" -gt 0 ]; then
 	log "  ✓ GEX calculations found: $GEX_COUNT rows"
         PASSED_CHECKS=$((PASSED_CHECKS + 1))
         log ""
         log "  Sample GEX data:"
-        PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -c "SELECT * FROM latest_gex LIMIT 5;" 2>/dev/null || echo "     (no data yet)"
+        PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -c "SELECT symbol, underlying_price, total_gamma_exposure, net_gex, timestamp FROM gex_metrics ORDER BY timestamp DESC LIMIT 3;" 2>/dev/null || echo "     (no data yet)"
     else
 	log "  ⚠ No GEX calculations yet"
         log "     This is normal if services just started"
         WARNING_CHECKS=$((WARNING_CHECKS + 1))
     fi
 else
-    log "  ⚠ latest_gex table not yet created"
+    log "  ⚠ gex_metrics table not yet created"
     WARNING_CHECKS=$((WARNING_CHECKS + 1))
 fi
 log ""
 
-# Section 8: System Resources
+# Section 9: System Resources
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-log "8. System Resource Usage"
+log "9. System Resource Usage"
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Disk usage
@@ -185,9 +223,9 @@ else
 fi
 log ""
 
-# Section 9: Security Status
+# Section 10: Security Status
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-log "9. Security Configuration"
+log "10. Security Configuration"
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # UFW status
@@ -219,7 +257,29 @@ else
     log "  ⚠ Automated backups not configured"
     WARNING_CHECKS=$((WARNING_CHECKS + 1))
 fi
-log "${BKUP_OUT}"
+log ""
+
+# Section 11: Configuration Files
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "11. Configuration Files Check"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+CONFIG_FILES=(
+    "$HOME/.zerogex_db_creds"
+    "$HOME/gex-options-platform/.env"
+    "$HOME/gex-options-platform/config/ingestion_config.yaml"
+)
+
+for config_file in "${CONFIG_FILES[@]}"; do
+    TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+    if [ -f "$config_file" ]; then
+        log "  ✓ Config file exists: $config_file"
+        PASSED_CHECKS=$((PASSED_CHECKS + 1))
+    else
+        log "  ✗ Missing config file: $config_file"
+        FAILED_CHECKS=$((FAILED_CHECKS + 1))
+    fi
+done
 log ""
 
 # Final Summary
