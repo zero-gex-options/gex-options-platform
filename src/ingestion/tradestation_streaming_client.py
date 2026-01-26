@@ -12,7 +12,7 @@ import argparse
 import asyncio
 from datetime import datetime
 from typing import Callable, Optional
-from tradestation_auth import TradeStationAuth
+from src.ingestion.tradestation_auth import TradeStationAuth
 from src.utils import get_logger
 
 # Initialize logger

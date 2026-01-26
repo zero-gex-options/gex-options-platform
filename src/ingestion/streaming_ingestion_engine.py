@@ -39,7 +39,13 @@ class StreamingIngestionEngine:
         """
         logger.info("🔄 Initializing Streaming Ingestion Engine...")
 
-        # Load configuration
+        # Load environment variables from .env file FIRST
+        from dotenv import load_dotenv
+        env_file = Path(__file__).parent.parent.parent / ".env"
+        load_dotenv(env_file)
+        logger.debug(f"Environment variables loaded from {env_file}")
+
+        # Load configuration (will now have access to env vars)
         self.config = self._load_config(config_path)
         logger.info(f"✅ Configuration loaded from {config_path}")
 
@@ -62,11 +68,11 @@ class StreamingIngestionEngine:
             logger.critical(f"Failed to connect to database: {e}", exc_info=True)
             raise
 
-        # TradeStation credentials
-        self.ts_client_id = self.config['tradestation']['client_id']
-        self.ts_client_secret = self.config['tradestation']['client_secret']
-        self.ts_refresh_token = self.config['tradestation']['refresh_token']
-        self.ts_sandbox = self.config['tradestation']['use_sandbox']
+        # TradeStation credentials from environment variables
+        self.ts_client_id = os.getenv('TRADESTATION_CLIENT_ID')
+        self.ts_client_secret = os.getenv('TRADESTATION_CLIENT_SECRET')
+        self.ts_refresh_token = os.getenv('TRADESTATION_REFRESH_TOKEN')
+        self.ts_sandbox = os.getenv('TRADESTATION_USE_SANDBOX', 'false').lower() == 'true'
 
         # Greeks calculator
         self.greeks_calc = GreeksCalculator(
@@ -95,7 +101,7 @@ class StreamingIngestionEngine:
         self.underlying_prices = {}
 
         logger.info("✅ Streaming Ingestion Engine initialized")
-        logger.info(f"   Symbols: {', '.join(self.config['ingestion']['symbols'])}")
+        logger.info(f"   Symbols: {', '.join(self.config['symbols'])}")
         logger.info(f"   Batch size: {self.batch_size}")
         logger.info(f"   Greeks calculation: ENABLED")
 
@@ -417,7 +423,7 @@ class StreamingIngestionEngine:
             # Calculate uptime
             uptime_seconds = (datetime.now(timezone.utc) - self.stats['start_time']).total_seconds()
 
-            for symbol in self.config['ingestion']['symbols']:
+            for symbol in self.config['symbols']:
                 cursor.execute(insert_query, (
                     datetime.now(timezone.utc),
                     'tradestation_stream',
@@ -455,7 +461,7 @@ class StreamingIngestionEngine:
 
         while True:
             try:
-                for symbol in self.config['ingestion']['symbols']:
+                for symbol in self.config['symbols']:
                     quote = rest_client.get_quote(symbol=symbol)
 
                     if quote:
@@ -496,7 +502,7 @@ class StreamingIngestionEngine:
         logger.info("Starting Streaming Ingestion Engine")
         logger.info("="*60)
 
-        symbols = self.config['ingestion']['symbols']
+        symbols = self.config['symbols']
         target_expiration = self.config['ingestion']['target_expiration']
 
         logger.info(f"Symbols: {', '.join(symbols)}")
@@ -532,15 +538,19 @@ class StreamingIngestionEngine:
             for symbol in symbols:
                 logger.info(f"🚀 Starting stream for {symbol} {expiration}")
 
-                # Create callback for this symbol
-                async def callback(data):
-                    await self.option_update_handler(data, symbol, expiration)
+                # Create callback for this symbol using closure factory
+                def make_callback(sym, exp):
+                    async def callback(data):
+                        await self.option_update_handler(data, sym, exp)
+                    return callback
+
+                callback_func = make_callback(symbol, expiration)
 
                 stream_task = asyncio.create_task(
                     stream_client.stream_options_chain(
-                        symbol,
-                        expiration.strftime('%Y-%m-%d'),
-                        callback,
+                        underlying=symbol,
+                        expiration=expiration.strftime('%Y-%m-%d'),
+                        callback=callback_func,
                         strike_proximity=self.config['ingestion'].get('strike_proximity')
                     )
                 )

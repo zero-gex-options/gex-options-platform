@@ -123,54 +123,6 @@ else
     log "     If you need to update TradeStation credentials, edit: $ENV_FILE"
 fi
 
-# Create ingestion config file if it doesn't exist
-CONFIG_DIR="$APP_DIR/config"
-INGESTION_CONFIG="$CONFIG_DIR/ingestion_config.yaml"
-
-if [ ! -f "$INGESTION_CONFIG" ]; then
-    log "  → Creating ingestion configuration file..."
-    mkdir -p "$CONFIG_DIR"
-
-    cat > "$INGESTION_CONFIG" << 'EOF'
-###########################################################################################################
-# Streaming Ingestion Engine Configuration
-###########################################################################################################
-
-# TradeStation API Configuration
-tradestation:
-  client_id: ${TRADESTATION_CLIENT_ID}
-  client_secret: ${TRADESTATION_CLIENT_SECRET}
-  refresh_token: ${TRADESTATION_REFRESH_TOKEN}
-  use_sandbox: false
-
-# Database Configuration
-# Note: Database credentials are loaded from ~/.zerogex_db_creds
-database:
-  host: localhost
-  port: 5432
-  name: gex_db
-  user: gex_user
-  password: "loaded_from_file"
-
-# Ingestion Settings
-ingestion:
-  symbols:
-    - SPY
-  target_expiration: 'today'
-  batch_size: 100
-  underlying_update_interval: 5
-  metrics_interval: 60
-
-# Greeks Calculation Parameters
-greeks:
-  risk_free_rate: 0.045
-  dividend_yield: 0.013
-EOF
-    log "     ✓ Ingestion config created at: $INGESTION_CONFIG"
-else
-    log "     ℹ Ingestion config already exists"
-fi
-
 # Verify installation
 log "  → Verifying Python packages..."
 python -c "import psycopg2; import pandas; import numpy; import yaml; print('✓ Core packages verified')" 2>/dev/null || {
@@ -186,7 +138,6 @@ log "Summary:"
 log "  ✓ Virtual environment created"
 log "  ✓ Python dependencies installed"
 log "  ✓ .env file created with TradeStation credentials"
-log "  ✓ Ingestion config file created"
 log "  ✓ Database credentials in: ~/.zerogex_db_creds"
 log ""
 log "Configuration files:"

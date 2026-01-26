@@ -10,7 +10,7 @@ import json
 from datetime import datetime, date, timezone
 import os
 import argparse
-from tradestation_auth import TradeStationAuth
+from src.ingestion.tradestation_auth import TradeStationAuth
 from src.utils import get_logger
 
 # Initialize logger

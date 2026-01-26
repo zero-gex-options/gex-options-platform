@@ -1,33 +1,30 @@
 ###########################################################################################################
 # Streaming Ingestion Engine Configuration
+# Data specification only - API and DB credentials loaded from other sources
 ###########################################################################################################
 
-# TradeStation API Configuration
-tradestation:
-  client_id: ${TRADESTATION_CLIENT_ID}
-  client_secret: ${TRADESTATION_CLIENT_SECRET}
-  refresh_token: ${TRADESTATION_REFRESH_TOKEN}
-  use_sandbox: false
+# Symbols to ingest
+symbols:
+  - SPY
+  # - QQQ
+  # - AAPL
 
-# Database Configuration
-# Note: Database credentials are loaded from ~/.zerogex_db_creds
-# This section is kept for reference but values are overridden at runtime
-database:
-  # These will be loaded from ~/.zerogex_db_creds
-  host: localhost
-  port: 5432
-  name: gex_db
-  user: gex_user
-  password: "loaded_from_file"
+# Time intervals to track
+intervals:
+  - 1min
+  - 5min
 
-# Ingestion Settings
+# Historical lookback period (days)
+lookback_days: 5
+
+# Streaming configuration
+streaming:
+  enabled: true
+  reconnect_delay: 5
+  max_reconnect_attempts: 10
+
+# Ingestion settings
 ingestion:
-  # Symbols to stream (comma-separated)
-  symbols:
-    - SPY
-    # - QQQ
-    # - AAPL
-  
   # Target expiration: 'today' for 0DTE, or specific date 'YYYY-MM-DD'
   target_expiration: 'today'
   
@@ -43,7 +40,7 @@ ingestion:
   # How often to log ingestion metrics (seconds)
   metrics_interval: 60
 
-# Greeks Calculation Parameters
+# Greeks calculation parameters
 greeks:
   risk_free_rate: 0.045    # 4.5% (current 10Y treasury)
   dividend_yield: 0.013    # 1.3% (SPY dividend yield)
