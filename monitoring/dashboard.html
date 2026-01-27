@@ -15,8 +15,6 @@
             height: 100vh;
             overflow: hidden;
         }
-
-        /* Sidebar */
         .sidebar {
             width: 250px;
             background: #1e293b;
@@ -62,8 +60,6 @@
         .nav-icon {
             font-size: 18px;
         }
-
-        /* Main content */
         .main-content {
             flex: 1;
             overflow-y: auto;
@@ -80,8 +76,6 @@
             from { opacity: 0; }
             to { opacity: 1; }
         }
-
-        /* Page header */
         .page-header {
             margin-bottom: 24px;
         }
@@ -93,8 +87,6 @@
             color: #94a3b8;
             font-size: 14px;
         }
-
-        /* Cards */
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -129,8 +121,6 @@
             font-size: 48px;
             color: #60a5fa;
         }
-
-        /* Status indicators */
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -158,8 +148,6 @@
             border-radius: 50%;
             background: currentColor;
         }
-
-        /* Progress bars */
         .progress-bar {
             background: #334155;
             height: 8px;
@@ -174,8 +162,6 @@
         .progress-fill.green { background: #10b981; }
         .progress-fill.yellow { background: #f59e0b; }
         .progress-fill.red { background: #ef4444; }
-
-        /* Tables */
         .data-table {
             width: 100%;
             border-collapse: collapse;
@@ -197,15 +183,11 @@
         .data-table tr:hover {
             background: #1e293b;
         }
-
-        /* Charts */
         .chart-container {
             position: relative;
             height: 300px;
             margin-top: 16px;
         }
-
-        /* Alert items */
         .alert-item {
             background: rgba(239, 68, 68, 0.1);
             border-left: 4px solid #ef4444;
@@ -225,8 +207,6 @@
         .alert-message {
             font-size: 13px;
         }
-
-        /* Market status */
         .market-status {
             display: inline-flex;
             align-items: center;
@@ -247,7 +227,6 @@
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">
             <h1>🚀 ZeroGEX</h1>
@@ -294,7 +273,6 @@
         </nav>
     </div>
 
-    <!-- Main Content -->
     <div class="main-content">
         <!-- Home Page -->
         <div id="home" class="page active">
@@ -303,18 +281,9 @@
                 <div class="subtitle">Quick overview of system health</div>
             </div>
             <div class="grid">
-                <div class="card">
-                    <h3>System Health</h3>
-                    <div id="homeSystemHealth">Loading...</div>
-                </div>
-                <div class="card">
-                    <h3>Services</h3>
-                    <div id="homeServices">Loading...</div>
-                </div>
-                <div class="card">
-                    <h3>Data Flow</h3>
-                    <div id="homeDataFlow">Loading...</div>
-                </div>
+                <div class="card"><h3>System Health</h3><div id="homeSystemHealth">Loading...</div></div>
+                <div class="card"><h3>Services</h3><div id="homeServices">Loading...</div></div>
+                <div class="card"><h3>Data Flow</h3><div id="homeDataFlow">Loading...</div></div>
             </div>
         </div>
 
@@ -325,18 +294,9 @@
                 <div class="subtitle">CPU, Memory, and Disk usage</div>
             </div>
             <div class="grid">
-                <div class="card">
-                    <h3>CPU Usage</h3>
-                    <div id="systemCPU">Loading...</div>
-                </div>
-                <div class="card">
-                    <h3>Memory Usage</h3>
-                    <div id="systemMemory">Loading...</div>
-                </div>
-                <div class="card">
-                    <h3>Disk Usage</h3>
-                    <div id="systemDisk">Loading...</div>
-                </div>
+                <div class="card"><h3>CPU Usage</h3><div id="systemCPU">Loading...</div></div>
+                <div class="card"><h3>Memory Usage</h3><div id="systemMemory">Loading...</div></div>
+                <div class="card"><h3>Disk Usage</h3><div id="systemDisk">Loading...</div></div>
             </div>
         </div>
 
@@ -358,42 +318,27 @@
                 <div class="subtitle">Database statistics and performance</div>
             </div>
             <div class="grid">
-                <div class="card">
-                    <h3>Quote Statistics</h3>
-                    <div id="dbQuoteStats">Loading...</div>
-                </div>
-                <div class="card">
-                    <h3>Database Info</h3>
-                    <div id="dbInfo">Loading...</div>
-                </div>
+                <div class="card"><h3>Quote Statistics</h3><div id="dbQuoteStats">Loading...</div></div>
+                <div class="card"><h3>Database Info</h3><div id="dbInfo">Loading...</div></div>
             </div>
             <div class="card" style="margin-top: 20px;">
                 <h3>Database Tables <span style="color: #94a3b8; font-size: 12px; font-weight: normal;">(Click to view recent records)</span></h3>
                 <div style="display: flex; gap: 16px; margin-top: 16px; flex-wrap: wrap;">
-                    <div onclick="showTableData('options_quotes')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                    <div onclick="showTableData('options_quotes')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px;">
                         <div style="font-size: 32px; margin-bottom: 8px;">📊</div>
                         <div style="font-size: 14px; color: #e2e8f0;">Options Quotes</div>
                     </div>
-                    <div onclick="showTableData('underlying_prices')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                    <div onclick="showTableData('underlying_quotes')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px;">
                         <div style="font-size: 32px; margin-bottom: 8px;">💰</div>
                         <div style="font-size: 14px; color: #e2e8f0;">Underlying Prices</div>
                     </div>
-                    <div onclick="showTableData('latest_gex')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                    <div onclick="showTableData('gex_metrics')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px;">
                         <div style="font-size: 32px; margin-bottom: 8px;">⚡</div>
                         <div style="font-size: 14px; color: #e2e8f0;">Latest GEX</div>
                     </div>
-                    <div onclick="showTableData('ingestion_metrics')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px; transition: all 0.2s; border: 2px solid transparent;">
+                    <div onclick="showTableData('ingestion_metrics')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px;">
                         <div style="font-size: 32px; margin-bottom: 8px;">📥</div>
                         <div style="font-size: 14px; color: #e2e8f0;">Ingestion Metrics</div>
-                    </div>
-                </div>
-                <div id="tableDataDisplay" style="margin-top: 20px; display: none;">
-                    <h4 id="tableDataTitle" style="color: #60a5fa; margin-bottom: 12px;"></h4>
-                    <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
-                        <table class="data-table" id="tableDataTable">
-                            <thead id="tableDataHead"></thead>
-                            <tbody id="tableDataBody"></tbody>
-                        </table>
                     </div>
                 </div>
             </div>
@@ -420,7 +365,7 @@
                 <div id="spyLatest">Loading...</div>
             </div>
             <div class="card">
-                <h3>Price & Volume History</h3>
+                <h3>Price & Volume History (48 Hours)</h3>
                 <div class="chart-container">
                     <canvas id="spyChart"></canvas>
                 </div>
@@ -453,24 +398,12 @@
             </div>
             <div class="card">
                 <div style="overflow-x: auto;">
-                    <table class="data-table" id="optionsTable">
+                    <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Symbol</th>
-                                <th>Strike</th>
-                                <th>Exp</th>
-                                <th>DTE</th>
-                                <th>Type</th>
-                                <th>Last</th>
-                                <th>Bid</th>
-                                <th>Ask</th>
-                                <th>Mid</th>
-                                <th>Vol</th>
-                                <th>OI</th>
-                                <th>IV</th>
-                                <th>Delta</th>
-                                <th>Gamma</th>
-                                <th>Time</th>
+                                <th>Symbol</th><th>Strike</th><th>Exp</th><th>DTE</th><th>Type</th>
+                                <th>Last</th><th>Bid</th><th>Ask</th><th>Mid</th><th>Vol</th>
+                                <th>OI</th><th>IV</th><th>Delta</th><th>Gamma</th><th>Time</th>
                             </tr>
                         </thead>
                         <tbody id="optionsTableBody">
@@ -499,177 +432,102 @@
         let globalData = {};
         let charts = {};
 
-        // Make showTableData globally accessible
         window.showTableData = async function(tableName) {
             try {
                 const response = await fetch(`/api/table/${tableName}`);
                 const data = await response.json();
-
-                if (data.error) {
-                    alert(`Error: ${data.error}`);
-                    return;
-                }
-
-                // Create modal or display area for table data
+                if (data.error) { alert(`Error: ${data.error}`); return; }
                 const modal = document.createElement('div');
                 modal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1e293b; padding: 24px; border-radius: 8px; max-width: 90vw; max-height: 80vh; overflow: auto; z-index: 1000; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);';
-
                 let html = `<h3 style="margin-top: 0; color: #e2e8f0;">${tableName} (Last 100 rows)</h3>`;
                 html += `<button onclick="this.parentElement.remove(); document.getElementById('modalOverlay').remove();" style="position: absolute; top: 12px; right: 12px; background: #334155; border: none; color: #e2e8f0; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Close</button>`;
                 html += '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
-
-                // Headers
                 if (data.length > 0) {
                     html += '<thead><tr>';
-                    Object.keys(data[0]).forEach(key => {
-                        html += `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">${key}</th>`;
-                    });
-                    html += '</tr></thead>';
-
-                    // Rows
-                    html += '<tbody>';
+                    Object.keys(data[0]).forEach(key => { html += `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">${key}</th>`; });
+                    html += '</tr></thead><tbody>';
                     data.forEach(row => {
                         html += '<tr style="border-bottom: 1px solid #334155;">';
-                        Object.values(row).forEach(val => {
-                            html += `<td style="padding: 8px; color: #e2e8f0;">${val !== null ? val : 'NULL'}</td>`;
-                        });
+                        Object.values(row).forEach(val => { html += `<td style="padding: 8px; color: #e2e8f0;">${val !== null ? val : 'NULL'}</td>`; });
                         html += '</tr>';
                     });
                     html += '</tbody>';
                 }
-
                 html += '</table></div>';
                 modal.innerHTML = html;
-
                 const overlay = document.createElement('div');
                 overlay.id = 'modalOverlay';
                 overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999;';
                 overlay.onclick = () => { modal.remove(); overlay.remove(); };
-
                 document.body.appendChild(overlay);
                 document.body.appendChild(modal);
-
             } catch (error) {
                 console.error('Error fetching table data:', error);
                 alert('Failed to fetch table data');
             }
         }
 
-        // Navigation
         function showPage(pageId) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
             document.getElementById(pageId).classList.add('active');
             event.target.closest('.nav-item').classList.add('active');
         }
 
-        // Utility functions
-        function formatNumber(num) {
-            return new Intl.NumberFormat().format(num);
-        }
-
-        function getProgressColor(value) {
-            if (value >= 90) return 'red';
-            if (value >= 80) return 'yellow';
-            return 'green';
-        }
-
+        function formatNumber(num) { return new Intl.NumberFormat().format(num); }
+        function getProgressColor(value) { return value >= 90 ? 'red' : value >= 80 ? 'yellow' : 'green'; }
         function renderProgressBar(value) {
             const color = getProgressColor(value);
             return `<div class="progress-bar"><div class="progress-fill ${color}" style="width: ${value}%"></div></div>`;
         }
 
-        // Update functions for each page
         function updateHome(data) {
-            // System Health
             const sys = data.system;
             const maxUsage = Math.max(sys.cpu_percent, sys.memory_percent, sys.disk_percent);
             const healthStatus = maxUsage >= 90 ? 'error' : maxUsage >= 80 ? 'warning' : 'success';
             const healthText = maxUsage >= 90 ? 'Critical' : maxUsage >= 80 ? 'Warning' : 'Healthy';
-
             document.getElementById('homeSystemHealth').innerHTML = `
                 <div style="text-align: center; padding: 20px;">
                     <div class="status-badge ${healthStatus}" style="font-size: 16px; padding: 8px 16px;">
-                        <span class="status-dot"></span>
-                        ${healthText}
+                        <span class="status-dot"></span>${healthText}
                     </div>
                     <div style="margin-top: 12px; color: #94a3b8; font-size: 14px;">
                         CPU: ${sys.cpu_percent.toFixed(1)}% | Mem: ${sys.memory_percent.toFixed(1)}% | Disk: ${sys.disk_percent.toFixed(1)}%
                     </div>
-                </div>
-            `;
-
-            // Services
+                </div>`;
             let allActive = Object.values(data.services).every(s => s === 'active');
             document.getElementById('homeServices').innerHTML = `
                 <div style="text-align: center; padding: 20px;">
                     <div class="status-badge ${allActive ? 'success' : 'error'}" style="font-size: 16px; padding: 8px 16px;">
-                        <span class="status-dot"></span>
-                        ${allActive ? 'All Running' : 'Issues Detected'}
+                        <span class="status-dot"></span>${allActive ? 'All Running' : 'Issues Detected'}
                     </div>
-                    <div style="margin-top: 12px; color: #94a3b8; font-size: 14px;">
-                        ${Object.keys(data.services).length} services monitored
-                    </div>
-                </div>
-            `;
-
-            // Data Flow
+                    <div style="margin-top: 12px; color: #94a3b8; font-size: 14px;">${Object.keys(data.services).length} services monitored</div>
+                </div>`;
             if (data.database && !data.database.error) {
                 const db = data.database;
                 document.getElementById('homeDataFlow').innerHTML = `
                     <div style="padding: 12px;">
-                        <div class="metric">
-                            <div class="metric-label">Recent Quotes (10 min)</div>
-                            <div class="metric-value">${formatNumber(db.quotes_recent_10min)}</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Total Options</div>
-                            <div class="metric-value" style="font-size: 18px;">${formatNumber(db.quotes_total)}</div>
-                        </div>
-                    </div>
-                `;
+                        <div class="metric"><div class="metric-label">Recent Quotes (10 min)</div><div class="metric-value">${formatNumber(db.quotes_recent_10min)}</div></div>
+                        <div class="metric"><div class="metric-label">Total Options</div><div class="metric-value" style="font-size: 18px;">${formatNumber(db.quotes_total)}</div></div>
+                    </div>`;
             }
         }
 
         function updateSystem(data) {
             const sys = data.system;
-
-            document.getElementById('systemCPU').innerHTML = `
-                <div class="metric-value">${sys.cpu_percent.toFixed(1)}%</div>
-                ${renderProgressBar(sys.cpu_percent)}
-            `;
-
-            document.getElementById('systemMemory').innerHTML = `
-                <div class="metric-value">${sys.memory_percent.toFixed(1)}%</div>
-                <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">
-                    ${sys.memory_used_gb.toFixed(1)} GB / ${sys.memory_total_gb.toFixed(1)} GB
-                </div>
-                ${renderProgressBar(sys.memory_percent)}
-            `;
-
-            document.getElementById('systemDisk').innerHTML = `
-                <div class="metric-value">${sys.disk_percent.toFixed(1)}%</div>
-                <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">
-                    ${sys.disk_used_gb.toFixed(1)} GB / ${sys.disk_total_gb.toFixed(1)} GB
-                </div>
-                ${renderProgressBar(sys.disk_percent)}
-            `;
+            document.getElementById('systemCPU').innerHTML = `<div class="metric-value">${sys.cpu_percent.toFixed(1)}%</div>${renderProgressBar(sys.cpu_percent)}`;
+            document.getElementById('systemMemory').innerHTML = `<div class="metric-value">${sys.memory_percent.toFixed(1)}%</div><div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">${sys.memory_used_gb.toFixed(1)} GB / ${sys.memory_total_gb.toFixed(1)} GB</div>${renderProgressBar(sys.memory_percent)}`;
+            document.getElementById('systemDisk').innerHTML = `<div class="metric-value">${sys.disk_percent.toFixed(1)}%</div><div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">${sys.disk_used_gb.toFixed(1)} GB / ${sys.disk_total_gb.toFixed(1)} GB</div>${renderProgressBar(sys.disk_percent)}`;
         }
 
         function updateServices(data) {
             let html = '<div style="display: grid; gap: 12px;">';
             for (const [service, status] of Object.entries(data.services)) {
                 const isActive = status === 'active';
-                html += `
-                    <div style="padding: 16px; background: #0f172a; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 14px;">${service}</span>
-                        <span class="status-badge ${isActive ? 'success' : 'error'}">
-                            <span class="status-dot"></span>
-                            ${status}
-                        </span>
-                    </div>
-                `;
+                html += `<div style="padding: 16px; background: #0f172a; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 14px;">${service}</span>
+                    <span class="status-badge ${isActive ? 'success' : 'error'}"><span class="status-dot"></span>${status}</span>
+                </div>`;
             }
             html += '</div>';
             document.getElementById('servicesContent').innerHTML = html;
@@ -680,37 +538,15 @@
                 document.getElementById('dbQuoteStats').innerHTML = '<div style="color: #ef4444;">Database unavailable</div>';
                 return;
             }
-
             const db = data.database;
             document.getElementById('dbQuoteStats').innerHTML = `
-                <div class="metric">
-                    <div class="metric-label">Total Quotes</div>
-                    <div class="metric-value">${formatNumber(db.quotes_total)}</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Recent (10 min)</div>
-                    <div class="metric-value">${formatNumber(db.quotes_recent_10min)}</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Recent (1 hour)</div>
-                    <div class="metric-value">${formatNumber(db.quotes_recent_1hour)}</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">GEX Calculations</div>
-                    <div class="metric-value">${formatNumber(db.gex_count)}</div>
-                </div>
-            `;
-
+                <div class="metric"><div class="metric-label">Total Quotes</div><div class="metric-value">${formatNumber(db.quotes_total)}</div></div>
+                <div class="metric"><div class="metric-label">Recent (10 min)</div><div class="metric-value">${formatNumber(db.quotes_recent_10min)}</div></div>
+                <div class="metric"><div class="metric-label">Recent (1 hour)</div><div class="metric-value">${formatNumber(db.quotes_recent_1hour)}</div></div>
+                <div class="metric"><div class="metric-label">GEX Calculations</div><div class="metric-value">${formatNumber(db.gex_count)}</div></div>`;
             document.getElementById('dbInfo').innerHTML = `
-                <div class="metric">
-                    <div class="metric-label">Database Size</div>
-                    <div class="metric-value" style="font-size: 18px;">${db.db_size}</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Active Connections</div>
-                    <div class="metric-value">${db.active_connections}</div>
-                </div>
-            `;
+                <div class="metric"><div class="metric-label">Database Size</div><div class="metric-value" style="font-size: 18px;">${db.db_size}</div></div>
+                <div class="metric"><div class="metric-label">Active Connections</div><div class="metric-value">${db.active_connections}</div></div>`;
         }
 
         function updateAlerts(data) {
@@ -719,94 +555,97 @@
                 document.getElementById('alertsContent').innerHTML = '<div style="color: #10b981; text-align: center; padding: 40px;">✓ All systems operational</div>';
                 return;
             }
-
             let html = '';
             alerts.forEach(alert => {
                 const time = new Date(alert.timestamp).toLocaleTimeString();
-                html += `
-                    <div class="alert-item ${alert.level}">
-                        <div class="alert-time">${time} - ${alert.category}</div>
-                        <div class="alert-message">${alert.message}</div>
-                    </div>
-                `;
+                html += `<div class="alert-item ${alert.level}"><div class="alert-time">${time} - ${alert.category}</div><div class="alert-message">${alert.message}</div></div>`;
             });
             document.getElementById('alertsContent').innerHTML = html;
         }
 
-        function updateSPY(data) {
+        async function updateSPY(data) {
             if (!data.database || !data.database.spy_quote) {
                 document.getElementById('spyLatest').innerHTML = '<div style="color: #64748b;">No SPY data available</div>';
                 return;
             }
-
             const spy = data.database.spy_quote;
             const spyTime = new Date(spy.timestamp);
-
             document.getElementById('spyLatest').innerHTML = `
                 <div style="display: flex; justify-content: space-around; align-items: center; padding: 20px;">
-                    <div style="text-align: center;">
-                        <div class="metric-label">SPY PRICE</div>
-                        <div class="metric-value large">$${spy.price.toFixed(2)}</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <div class="metric-label">VOLUME</div>
-                        <div class="metric-value">${formatNumber(spy.volume)}</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <div class="metric-label">LAST UPDATE</div>
-                        <div class="metric-value" style="font-size: 16px;">${spyTime.toLocaleString()}</div>
-                    </div>
-                </div>
-            `;
-
-            // Store for chart (you'll need to query historical data from backend)
-            // For now, just placeholder
-            updateSPYChart();
+                    <div style="text-align: center;"><div class="metric-label">SPY PRICE</div><div class="metric-value large">$${spy.price.toFixed(2)}</div></div>
+                    <div style="text-align: center;"><div class="metric-label">VOLUME</div><div class="metric-value">${formatNumber(spy.volume)}</div></div>
+                    <div style="text-align: center;"><div class="metric-label">LAST UPDATE</div><div class="metric-value" style="font-size: 16px;">${spyTime.toLocaleString()}</div></div>
+                </div>`;
+            await updateSPYChart();
         }
 
-        function updateIngestion(data) {
+        async function updateSPYChart() {
+            try {
+                const response = await fetch('/api/spy-history');
+                const data = await response.json();
+                if (data.error || data.length === 0) { console.log('No SPY history data'); return; }
+                if (charts.spyChart) charts.spyChart.destroy();
+                const ctx = document.getElementById('spyChart');
+                charts.spyChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => { const date = new Date(d.timestamp); return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }),
+                        datasets: [{ label: 'Price', data: data.map(d => d.price), borderColor: '#60a5fa', backgroundColor: 'rgba(96, 165, 250, 0.1)', tension: 0.4, fill: true }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: { y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, x: { ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 }, grid: { color: '#334155' } } },
+                        plugins: { legend: { labels: { color: '#e2e8f0' } } }
+                    }
+                });
+            } catch (error) { console.error('Error updating SPY chart:', error); }
+        }
+
+        async function updateIngestion(data) {
             if (!data.database || !data.database.ingestion_metric) {
                 document.getElementById('ingestionLatest').innerHTML = '<div style="color: #64748b;">No ingestion metrics available</div>';
                 return;
             }
-
             const im = data.database.ingestion_metric;
             const imTime = new Date(im.timestamp);
-            const lastHeartbeat = im.last_heartbeat ? new Date(im.last_heartbeat) : null;
-
             document.getElementById('ingestionLatest').innerHTML = `
                 <div class="grid">
-                    <div class="metric">
-                        <div class="metric-label">Records Ingested</div>
-                        <div class="metric-value">${formatNumber(im.records_ingested || 0)}</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Errors</div>
-                        <div class="metric-value">${im.error_count || 0}</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Processing Time</div>
-                        <div class="metric-value">${im.processing_time_ms || 0}ms</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Heartbeat Count</div>
-                        <div class="metric-value">${formatNumber(im.heartbeat_count || 0)}</div>
-                    </div>
+                    <div class="metric"><div class="metric-label">Records Ingested</div><div class="metric-value">${formatNumber(im.records_ingested || 0)}</div></div>
+                    <div class="metric"><div class="metric-label">Errors</div><div class="metric-value">${im.error_count || 0}</div></div>
+                    <div class="metric"><div class="metric-label">Processing Time</div><div class="metric-value">${im.processing_time_ms || 0}ms</div></div>
+                    <div class="metric"><div class="metric-label">Heartbeat Count</div><div class="metric-value">${formatNumber(im.heartbeat_count || 0)}</div></div>
                 </div>
-                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #334155; color: #94a3b8; font-size: 12px;">
-                    Last Update: ${imTime.toLocaleString()}
-                </div>
-            `;
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #334155; color: #94a3b8; font-size: 12px;">Last Update: ${imTime.toLocaleString()}</div>`;
+            await updateIngestionCharts();
+        }
 
-            // Store for charts
-            ingestionHistoryData.push({
-                timestamp: imTime,
-                records: im.records_ingested || 0,
-                errors: im.error_count || 0
-            });
-            if (ingestionHistoryData.length > 20) ingestionHistoryData.shift();
-
-            updateIngestionCharts();
+        async function updateIngestionCharts() {
+            try {
+                const response = await fetch('/api/ingestion-history');
+                const data = await response.json();
+                if (data.error || data.length === 0) { console.log('No ingestion history'); return; }
+                if (charts.ingestionCombined) charts.ingestionCombined.destroy();
+                const ctx = document.getElementById('ingestionCombinedChart');
+                charts.ingestionCombined = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => { const date = new Date(d.timestamp); return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }),
+                        datasets: [
+                            { label: 'Records Ingested', data: data.map(d => d.records_ingested || 0), borderColor: '#60a5fa', backgroundColor: 'rgba(96, 165, 250, 0.1)', tension: 0.4, yAxisID: 'y' },
+                            { label: 'Errors', data: data.map(d => d.error_count || 0), borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', tension: 0.4, yAxisID: 'y1' }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                        scales: {
+                            y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Records', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+                            y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'Errors', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { drawOnChartArea: false } },
+                            x: { ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 }, grid: { color: '#334155' } }
+                        },
+                        plugins: { legend: { labels: { color: '#e2e8f0' } } }
+                    }
+                });
+            } catch (error) { console.error('Error updating ingestion charts:', error); }
         }
 
         function updateOptions(data) {
@@ -814,222 +653,82 @@
                 document.getElementById('optionsTableBody').innerHTML = '<tr><td colspan="15" style="text-align: center; color: #64748b;">No recent options available</td></tr>';
                 return;
             }
-
             let html = '';
             data.database.recent_options.forEach(opt => {
                 const optTime = new Date(opt.timestamp);
-                html += `
-                    <tr>
-                        <td>${opt.symbol || 'N/A'}</td>
-                        <td>$${opt.strike?.toFixed(0) || 'N/A'}</td>
-                        <td>${opt.expiration || 'N/A'}</td>
-                        <td>${opt.dte !== null && opt.dte !== undefined ? opt.dte : 'N/A'}</td>
-                        <td>${opt.option_type || 'N/A'}</td>
-                        <td>$${opt.last?.toFixed(2) || 'N/A'}</td>
-                        <td>$${opt.bid?.toFixed(2) || 'N/A'}</td>
-                        <td>$${opt.ask?.toFixed(2) || 'N/A'}</td>
-                        <td>$${opt.mid?.toFixed(2) || 'N/A'}</td>
-                        <td>${formatNumber(opt.volume || 0)}</td>
-                        <td>${formatNumber(opt.open_interest || 0)}</td>
-                        <td>${opt.implied_vol !== null && opt.implied_vol !== undefined ? (opt.implied_vol * 100).toFixed(1) + '%' : 'N/A'}</td>
-                        <td>${opt.delta !== null && opt.delta !== undefined ? opt.delta.toFixed(3) : 'N/A'}</td>
-                        <td>${opt.gamma !== null && opt.gamma !== undefined ? opt.gamma.toFixed(4) : 'N/A'}</td>
-                        <td style="font-size: 11px;">${optTime.toLocaleTimeString()}</td>
-                    </tr>
-                `;
+                html += `<tr>
+                    <td>${opt.symbol || 'N/A'}</td>
+                    <td>$${opt.strike?.toFixed(0) || 'N/A'}</td>
+                    <td>${opt.expiration || 'N/A'}</td>
+                    <td>${opt.dte !== null && opt.dte !== undefined ? opt.dte : 'N/A'}</td>
+                    <td>${opt.option_type || 'N/A'}</td>
+                    <td>$${opt.last?.toFixed(2) || 'N/A'}</td>
+                    <td>$${opt.bid?.toFixed(2) || 'N/A'}</td>
+                    <td>$${opt.ask?.toFixed(2) || 'N/A'}</td>
+                    <td>$${opt.mid?.toFixed(2) || 'N/A'}</td>
+                    <td>${formatNumber(opt.volume || 0)}</td>
+                    <td>${formatNumber(opt.open_interest || 0)}</td>
+                    <td>${opt.implied_vol !== null && opt.implied_vol !== undefined ? (opt.implied_vol * 100).toFixed(1) + '%' : 'N/A'}</td>
+                    <td>${opt.delta !== null && opt.delta !== undefined ? opt.delta.toFixed(3) : 'N/A'}</td>
+                    <td>${opt.gamma !== null && opt.gamma !== undefined ? opt.gamma.toFixed(4) : 'N/A'}</td>
+                    <td style="font-size: 11px;">${optTime.toLocaleTimeString()}</td>
+                </tr>`;
             });
             document.getElementById('optionsTableBody').innerHTML = html;
         }
 
-        // Chart functions
-        function updateSPYChart() {
-            // Placeholder - you'll need historical data from backend
-            if (charts.spyChart) {
-                charts.spyChart.destroy();
-            }
-
-            const ctx = document.getElementById('spyChart');
-            charts.spyChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Price',
-                        data: [],
-                        borderColor: '#60a5fa',
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { 
-                            ticks: { color: '#94a3b8' },
-                            grid: { color: '#334155' }
-                        },
-                        x: { 
-                            ticks: { color: '#94a3b8' },
-                            grid: { color: '#334155' }
-                        }
+        async function updateUptimeChart() {
+            try {
+                const response = await fetch('/api/uptime-history');
+                const data = await response.json();
+                if (data.error || data.length === 0) { console.log('No uptime history'); return; }
+                if (charts.uptime) charts.uptime.destroy();
+                const ctx = document.getElementById('uptimeChart');
+                charts.uptime = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.map(d => { const date = new Date(d.timestamp); return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }),
+                        datasets: [{
+                            label: 'Uptime %',
+                            data: data.map(d => d.uptime_percent),
+                            backgroundColor: data.map(d => d.uptime_percent === 100 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)'),
+                            borderColor: data.map(d => d.uptime_percent === 100 ? '#10b981' : '#ef4444'),
+                            borderWidth: 1
+                        }]
                     },
-                    plugins: {
-                        legend: { labels: { color: '#e2e8f0' } }
-                    }
-                }
-            });
-        }
-
-        function updateIngestionCharts() {
-            // Records chart
-            if (charts.ingestionRecords) charts.ingestionRecords.destroy();
-
-            const recordsCtx = document.getElementById('ingestionRecordsChart');
-            charts.ingestionRecords = new Chart(recordsCtx, {
-                type: 'bar',
-                data: {
-                    labels: ingestionHistoryData.map(d => d.timestamp.toLocaleTimeString()),
-                    datasets: [{
-                        label: 'Records',
-                        data: ingestionHistoryData.map(d => d.records),
-                        backgroundColor: '#60a5fa'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { 
-                            ticks: { color: '#94a3b8' },
-                            grid: { color: '#334155' }
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            y: { min: 0, max: 100, title: { display: true, text: 'Uptime %', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+                            x: { ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 }, grid: { color: '#334155' } }
                         },
-                        x: { 
-                            ticks: { color: '#94a3b8', maxRotation: 45 },
-                            grid: { color: '#334155' }
-                        }
-                    },
-                    plugins: {
-                        legend: { labels: { color: '#e2e8f0' } }
+                        plugins: { legend: { labels: { color: '#e2e8f0' } }, tooltip: { callbacks: { label: function(context) { return context.parsed.y + '% uptime'; } } } }
                     }
-                }
-            });
-
-            // Errors chart
-            if (charts.ingestionErrors) charts.ingestionErrors.destroy();
-
-            const errorsCtx = document.getElementById('ingestionErrorsChart');
-            charts.ingestionErrors = new Chart(errorsCtx, {
-                type: 'bar',
-                data: {
-                    labels: ingestionHistoryData.map(d => d.timestamp.toLocaleTimeString()),
-                    datasets: [{
-                        label: 'Errors',
-                        data: ingestionHistoryData.map(d => d.errors),
-                        backgroundColor: '#ef4444'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { 
-                            ticks: { color: '#94a3b8' },
-                            grid: { color: '#334155' }
-                        },
-                        x: { 
-                            ticks: { color: '#94a3b8', maxRotation: 45 },
-                            grid: { color: '#334155' }
-                        }
-                    },
-                    plugins: {
-                        legend: { labels: { color: '#e2e8f0' } }
-                    }
-                }
-            });
-        }
-
-        function updateUptimeChart() {
-            // Placeholder - you'd need uptime history from backend
-            if (charts.uptime) charts.uptime.destroy();
-
-            const ctx = document.getElementById('uptimeChart');
-            charts.uptime = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: Array(24).fill(0).map((_, i) => `${i}:00`),
-                    datasets: [{
-                        label: 'Uptime %',
-                        data: Array(24).fill(100), // Placeholder
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { 
-                            min: 0,
-                            max: 100,
-                            ticks: { color: '#94a3b8' },
-                            grid: { color: '#334155' }
-                        },
-                        x: { 
-                            ticks: { color: '#94a3b8' },
-                            grid: { color: '#334155' }
-                        }
-                    },
-                    plugins: {
-                        legend: { labels: { color: '#e2e8f0' } }
-                    }
-                }
-            });
-        }
-
-        // Main update function
-        function updateDashboard() {
-            fetch('/api/metrics')
-                .then(response => response.json())
-                .then(data => {
-                    globalData = data;
-
-                    // Update header
-                    const timestamp = new Date(data.timestamp);
-                    document.getElementById('lastUpdate').textContent = 
-                        `Updated: ${timestamp.toLocaleTimeString()}`;
-
-                    // Market status
-                    const marketBadge = document.getElementById('marketStatusBadge');
-                    if (data.market_open) {
-                        marketBadge.innerHTML = '<span class="market-status open"><span class="status-dot"></span> Market Open</span>';
-                    } else {
-                        marketBadge.innerHTML = '<span class="market-status closed"><span class="status-dot"></span> Market Closed</span>';
-                    }
-
-                    // Update all pages
-                    updateHome(data);
-                    updateSystem(data);
-                    updateServices(data);
-                    updateDatabase(data);
-                    updateAlerts(data);
-                    updateSPY(data);
-                    updateIngestion(data);
-                    updateOptions(data);
-                })
-                .catch(error => {
-                    console.error('Error fetching metrics:', error);
                 });
+            } catch (error) { console.error('Error updating uptime chart:', error); }
         }
 
-        // Initialize
+        function updateDashboard() {
+            fetch('/api/metrics').then(response => response.json()).then(data => {
+                globalData = data;
+                const timestamp = new Date(data.timestamp);
+                document.getElementById('lastUpdate').textContent = `Updated: ${timestamp.toLocaleTimeString()}`;
+                const marketBadge = document.getElementById('marketStatusBadge');
+                marketBadge.innerHTML = data.market_open ? '<span class="market-status open"><span class="status-dot"></span> Market Open</span>' : '<span class="market-status closed"><span class="status-dot"></span> Market Closed</span>';
+                updateHome(data);
+                updateSystem(data);
+                updateServices(data);
+                updateDatabase(data);
+                updateAlerts(data);
+                updateSPY(data);
+                updateIngestion(data);
+                updateOptions(data);
+            }).catch(error => { console.error('Error fetching metrics:', error); });
+        }
+
         updateDashboard();
         setInterval(updateDashboard, 5000);
-
-        // Initialize uptime chart on first load
-        setTimeout(() => {
-            updateUptimeChart();
-        }, 1000);
+        setTimeout(() => { updateUptimeChart(); updateSPYChart(); updateIngestionCharts(); }, 1000);
     </script>
 </body>
 </html>
