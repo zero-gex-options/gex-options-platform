@@ -156,30 +156,33 @@ def get_uptime_history():
 
         # Calculate uptime by checking if data was flowing each hour
         cursor.execute("""
-            WITH hourly_buckets AS (
-                SELECT 
-                    date_trunc('hour', timestamp) as hour,
-                    COUNT(*) as record_count
+            WITH quarter_hour_buckets AS (
+                SELECT
+                    date_trunc('hour', timestamp)
+                    + floor(date_part('minute', timestamp) / 15) * INTERVAL '15 minutes'
+                        AS bucket_15m,
+                    COUNT(*) AS record_count
                 FROM options_quotes
                 WHERE timestamp > NOW() - INTERVAL '48 hours'
-                GROUP BY date_trunc('hour', timestamp)
+                GROUP BY 1
             ),
-            all_hours AS (
+            all_15m_buckets AS (
                 SELECT generate_series(
                     date_trunc('hour', NOW() - INTERVAL '48 hours'),
-                    date_trunc('hour', NOW()),
-                    '1 hour'::interval
-                ) as hour
+                    date_trunc('minute', NOW()),
+                    INTERVAL '15 minutes'
+                ) AS bucket_15m
             )
-            SELECT 
-                ah.hour as timestamp,
-                CASE 
-                    WHEN hb.record_count > 0 THEN 100
+            SELECT
+                a.bucket_15m AS timestamp,
+                CASE
+                    WHEN q.record_count > 0 THEN 100
                     ELSE 0
-                END as uptime_percent
-            FROM all_hours ah
-            LEFT JOIN hourly_buckets hb ON ah.hour = hb.hour
-            ORDER BY ah.hour ASC
+                END AS uptime_percent
+            FROM all_15m_buckets a
+            LEFT JOIN quarter_hour_buckets q
+                ON a.bucket_15m = q.bucket_15m
+            ORDER BY a.bucket_15m ASC;
         """)
 
         rows = cursor.fetchall()
