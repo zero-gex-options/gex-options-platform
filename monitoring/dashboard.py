@@ -145,7 +145,7 @@ def get_ingestion_history():
 
 @app.route('/api/uptime-history')
 def get_uptime_history():
-    """Get service uptime history for past 48 hours"""
+    """Get service uptime history based on actual service checks"""
     try:
         db_config = load_db_config()
         if not db_config:
@@ -154,35 +154,42 @@ def get_uptime_history():
         conn = psycopg2.connect(**db_config)
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Calculate uptime by checking if data was flowing each hour
+        # Calculate uptime based on service check data
+        # Group into 15-minute buckets, then aggregate by hour
         cursor.execute("""
-            WITH quarter_hour_buckets AS (
+            WITH fifteen_min_buckets AS (
                 SELECT
-                    date_trunc('hour', timestamp)
-                    + floor(date_part('minute', timestamp) / 15) * INTERVAL '15 minutes'
-                        AS bucket_15m,
-                    COUNT(*) AS record_count
-                FROM options_quotes
-                WHERE timestamp > NOW() - INTERVAL '48 hours'
-                GROUP BY 1
+                    date_trunc('hour', timestamp) +
+                    (EXTRACT(minute FROM timestamp)::int / 15) * INTERVAL '15 minutes' as interval_time,
+                    -- If ANY check in this 15-min interval shows service up, count it as up
+                    MAX(is_up) as interval_up
+                FROM service_uptime_checks
+                WHERE service_name = 'gex-ingestion'
+                  AND timestamp > NOW() - INTERVAL '48 hours'
+                GROUP BY interval_time
             ),
-            all_15m_buckets AS (
+            hourly_uptime AS (
+                SELECT
+                    date_trunc('hour', interval_time) as hour,
+                    SUM(interval_up) as intervals_up,
+                    -- Each hour has 4 possible 15-minute intervals
+                    (SUM(interval_up)::float / 4.0) * 100 as uptime_percent
+                FROM fifteen_min_buckets
+                GROUP BY date_trunc('hour', interval_time)
+            ),
+            all_hours AS (
                 SELECT generate_series(
                     date_trunc('hour', NOW() - INTERVAL '48 hours'),
-                    date_trunc('minute', NOW()),
-                    INTERVAL '15 minutes'
-                ) AS bucket_15m
+                    date_trunc('hour', NOW()),
+                    '1 hour'::interval
+                ) as hour
             )
             SELECT
-                a.bucket_15m AS timestamp,
-                CASE
-                    WHEN q.record_count > 0 THEN 100
-                    ELSE 0
-                END AS uptime_percent
-            FROM all_15m_buckets a
-            LEFT JOIN quarter_hour_buckets q
-                ON a.bucket_15m = q.bucket_15m
-            ORDER BY a.bucket_15m ASC;
+                ah.hour as timestamp,
+                COALESCE(ROUND(hu.uptime_percent::numeric, 1), 0) as uptime_percent
+            FROM all_hours ah
+            LEFT JOIN hourly_uptime hu ON ah.hour = hu.hour
+            ORDER BY ah.hour ASC
         """)
 
         rows = cursor.fetchall()
@@ -192,6 +199,10 @@ def get_uptime_history():
         return jsonify([dict(row) for row in rows])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/logo')
+def get_logo():
+    return send_from_directory('/opt/zerogex/monitoring', 'ZeroGEX.png')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=False)

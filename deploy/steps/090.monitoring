@@ -12,6 +12,7 @@ log "Monitoring System Setup"
 APP_DIR="$HOME/gex-options-platform"
 MONITOR_DIR="/opt/zerogex/monitoring"
 MONITOR_SCRIPT="$APP_DIR/monitoring/monitor.py"
+BRANDING="$APP_DIR/branding"
 
 # Check if application directory exists
 if [ ! -d "$APP_DIR" ]; then
@@ -78,8 +79,14 @@ if [ ! -f "$DASHBOARD_SOURCE/dashboard.html" ]; then
     exit 1
 fi
 
+if [ ! -f "$BRANDING/ZeroGEX.png" ]; then
+    log "  ✗ ZeroGEX logo image file not found: $BRANDING/ZeroGEX.png"
+    exit 1
+fi
+
 sudo cp "$DASHBOARD_SOURCE/dashboard.py" "$MONITOR_DIR/"
 sudo cp "$DASHBOARD_SOURCE/dashboard.html" "$MONITOR_DIR/"
+sudo cp "$BRANDING/ZeroGEX.png" "$MONITOR_DIR/"
 
 # Set proper ownership and permissions
 log "  → Setting permissions..."
@@ -88,6 +95,7 @@ sudo chmod 755 "$MONITOR_DIR"
 sudo chmod 755 "$MONITOR_DIR/monitor.py"
 sudo chmod 755 "$MONITOR_DIR/dashboard.py"
 sudo chmod 644 "$MONITOR_DIR/dashboard.html"
+sudo chmod 644 "$MONITOR_DIR/ZeroGEX.png"
 log "     ✓ Dashboard files installed"
 
 # Reload systemd

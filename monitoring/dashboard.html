@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>ZeroGEX Monitor</title>
+    <title>ZeroGEX Monitoring Dashboard</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
@@ -222,55 +222,58 @@
         }
         .market-status.closed {
             background: rgba(148, 163, 184, 0.2);
-            color: #94a3b8;
+            color: #f54927;
         }
     </style>
 </head>
 <body>
     <div class="sidebar">
         <div class="sidebar-header">
-            <h1>ðŸš€ ZeroGEX</h1>
+            <h1>ZeroGEX Monitoring</h1>
             <div class="status" id="lastUpdate">Loading...</div>
             <div style="margin-top: 8px;" id="marketStatusBadge"></div>
         </div>
         <nav class="nav-menu">
             <div class="nav-item active" onclick="showPage('home')">
-                <span class="nav-icon">ðŸ“Š</span>
+                <span class="nav-icon">📊</span>
                 <span>Dashboard</span>
             </div>
             <div class="nav-item" onclick="showPage('system')">
-                <span class="nav-icon">ðŸ’»</span>
+                <span class="nav-icon">💻</span>
                 <span>System Resources</span>
             </div>
             <div class="nav-item" onclick="showPage('services')">
-                <span class="nav-icon">âš™ï¸�</span>
+                <span class="nav-icon">⚙️</span>
                 <span>Service Status</span>
             </div>
             <div class="nav-item" onclick="showPage('database')">
-                <span class="nav-icon">ðŸ—„ï¸�</span>
+                <span class="nav-icon">🗄️</span>
                 <span>Database Metrics</span>
             </div>
             <div class="nav-item" onclick="showPage('alerts')">
-                <span class="nav-icon">âš ï¸�</span>
+                <span class="nav-icon">⚠️</span>
                 <span>Active Alerts</span>
             </div>
             <div class="nav-item" onclick="showPage('spy')">
-                <span class="nav-icon">ðŸ“ˆ</span>
+                <span class="nav-icon">📈</span>
                 <span>SPY Quote</span>
             </div>
             <div class="nav-item" onclick="showPage('ingestion')">
-                <span class="nav-icon">ðŸ“¥</span>
+                <span class="nav-icon">📥</span>
                 <span>Ingestion Metrics</span>
             </div>
             <div class="nav-item" onclick="showPage('options')">
-                <span class="nav-icon">ðŸ“‹</span>
+                <span class="nav-icon">📋</span>
                 <span>Option Quotes</span>
             </div>
             <div class="nav-item" onclick="showPage('uptime')">
-                <span class="nav-icon">â�±ï¸�</span>
+                <span class="nav-icon">⏱️</span>
                 <span>System Uptime</span>
             </div>
         </nav>
+        <div style="padding: 0px; border-top: 1px solid #334155; text-align: center;">
+            <img src="/logo" alt="ZeroGEX™" style="width: 100%; max-width: 250px; opacity: 0.8;">
+        </div>
     </div>
 
     <div class="main-content">
@@ -325,19 +328,19 @@
                 <h3>Database Tables <span style="color: #94a3b8; font-size: 12px; font-weight: normal;">(Click to view recent records)</span></h3>
                 <div style="display: flex; gap: 16px; margin-top: 16px; flex-wrap: wrap;">
                     <div onclick="showTableData('options_quotes')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px;">
-                        <div style="font-size: 32px; margin-bottom: 8px;">ðŸ“Š</div>
+                        <div style="font-size: 32px; margin-bottom: 8px;">📊</div>
                         <div style="font-size: 14px; color: #e2e8f0;">Options Quotes</div>
                     </div>
                     <div onclick="showTableData('underlying_quotes')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px;">
-                        <div style="font-size: 32px; margin-bottom: 8px;">ðŸ’°</div>
+                        <div style="font-size: 32px; margin-bottom: 8px;">💰</div>
                         <div style="font-size: 14px; color: #e2e8f0;">Underlying Prices</div>
                     </div>
                     <div onclick="showTableData('gex_metrics')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px;">
-                        <div style="font-size: 32px; margin-bottom: 8px;">âš¡</div>
+                        <div style="font-size: 32px; margin-bottom: 8px;">⚡</div>
                         <div style="font-size: 14px; color: #e2e8f0;">Latest GEX</div>
                     </div>
                     <div onclick="showTableData('ingestion_metrics')" style="cursor: pointer; padding: 20px; background: #0f172a; border-radius: 8px; text-align: center; flex: 1; min-width: 150px;">
-                        <div style="font-size: 32px; margin-bottom: 8px;">ðŸ“¥</div>
+                        <div style="font-size: 32px; margin-bottom: 8px;">📥</div>
                         <div style="font-size: 14px; color: #e2e8f0;">Ingestion Metrics</div>
                     </div>
                 </div>
@@ -365,7 +368,7 @@
                 <div id="spyLatest">Loading...</div>
             </div>
             <div class="card">
-                <h3>Price & Volume History (48 Hours)</h3>
+                <h3>Price & Volume History</h3>
                 <div class="chart-container">
                     <canvas id="spyChart"></canvas>
                 </div>
@@ -418,7 +421,7 @@
         <div id="uptime" class="page">
             <div class="page-header">
                 <h2>System Uptime</h2>
-                <div class="subtitle">Service availability timeline (Last 48 Hours)</div>
+                <div class="subtitle">Service availability timeline</div>
             </div>
             <div class="card">
                 <div class="chart-container" style="height: 400px;">
@@ -582,83 +585,87 @@
         async function updateSPYChart() {
             try {
                 const response = await fetch('/api/spy-history');
-				const data = await response.json();
-				if (data.error || data.length === 0) { console.log('No SPY history data'); return; }
-				if (charts.spyChart) charts.spyChart.destroy();
-				const ctx = document.getElementById('spyChart');
-				charts.spyChart = new Chart(ctx, {
-					type: 'line',
-					data: {
-						labels: data.map(d => { 
-							const date = new Date(d.timestamp); 
-							return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + 
-								   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); 
-						}),
-						datasets: [
-							{ 
-								label: 'Price', 
-								data: data.map(d => d.price), 
-								borderColor: '#60a5fa', 
-								backgroundColor: 'rgba(96, 165, 250, 0.1)', 
-								tension: 0.4, 
-								fill: true,
-								yAxisID: 'y',
-								type: 'line'
-							},
-							{
-								label: 'Volume',
-								data: data.map(d => d.volume),
-								backgroundColor: 'rgba(16, 185, 129, 0.5)',
-								borderColor: '#10b981',
-								borderWidth: 1,
-								yAxisID: 'y1',
-								type: 'bar'
-							}
-						]
-					},
-					options: {
-						responsive: true, 
-						maintainAspectRatio: false,
-						interaction: {
-							mode: 'index',
-							intersect: false
-						},
-						scales: { 
-							y: { 
-								type: 'linear',
-								display: true,
-								position: 'left',
-								title: {
-									display: true,
-									text: 'Price ($)',
-									color: '#94a3b8'
-								},
-								ticks: { color: '#94a3b8' }, 
-								grid: { color: '#334155' } 
-							},
-							y1: {
-								type: 'linear',
-								display: true,
-								position: 'right',
-								title: {
-									display: true,
-									text: 'Volume',
-									color: '#94a3b8'
-								},
-								ticks: { color: '#94a3b8' },
-								grid: { drawOnChartArea: false }
-							},
-							x: { 
-								ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 }, 
-								grid: { color: '#334155' } 
-							} 
-						},
-						plugins: { 
-							legend: { labels: { color: '#e2e8f0' } } 
-						}
-					}
-				});
-			} catch (error) { console.error('Error updating SPY chart:', error); }
+                const data = await response.json();
+                if (data.error || data.length === 0) { console.log('No SPY history data'); return; }
+                if (charts.spyChart) charts.spyChart.destroy();
+                const ctx = document.getElementById('spyChart');
+                charts.spyChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => {
+                            const date = new Date(d.timestamp);
+                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+                                   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                        }),
+                        datasets: [
+                            {
+                                label: 'Price',
+                                data: data.map(d => d.price),
+                                borderColor: '#60a5fa',
+                                backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                pointHoverRadius: 5,
+                                tension: 0.4,
+                                fill: true,
+                                yAxisID: 'y',
+                                type: 'line'
+                            },
+                            {
+                                label: 'Volume',
+                                data: data.map(d => d.volume),
+                                backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                                borderColor: '#10b981',
+                                borderWidth: 1,
+                                yAxisID: 'y1',
+                                type: 'bar'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'Price ($)',
+                                    color: '#94a3b8'
+                                },
+                                ticks: { color: '#94a3b8' },
+                                grid: { color: '#334155' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'Volume',
+                                    color: '#94a3b8'
+                                },
+                                ticks: { color: '#94a3b8' },
+                                grid: { drawOnChartArea: false }
+                            },
+                            x: {
+                                ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 },
+                                grid: { color: '#334155' }
+                            }
+                        },
+                        plugins: {
+                            legend: { labels: { color: '#e2e8f0' } }
+                        }
+                    }
+                });
+            } catch (error) { console.error('Error updating SPY chart:', error); }
         }
 
         async function updateIngestion(data) {
@@ -681,63 +688,64 @@
 
         async function updateIngestionCharts() {
             try {
-				const response = await fetch('/api/ingestion-history');
-				const data = await response.json();
-				if (data.error || data.length === 0) { console.log('No ingestion history'); return; }
-				if (charts.ingestionCombined) charts.ingestionCombined.destroy();
-				const ctx = document.getElementById('ingestionCombinedChart');
-				charts.ingestionCombined = new Chart(ctx, {
-					type: 'line',
-					data: {
-						labels: data.map(d => { 
-							const date = new Date(d.timestamp); 
-							return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + 
-								   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); 
-						}),
-						datasets: [
-							{ 
-								label: 'Records Ingested', 
-								data: data.map(d => d.records_ingested || 0), 
-								borderColor: '#60a5fa', 
-								backgroundColor: 'rgba(96, 165, 250, 0.1)', 
-								tension: 0.4
-							},
-							{ 
-								label: 'Errors', 
-								data: data.map(d => d.error_count || 0), 
-								borderColor: '#ef4444', 
-								backgroundColor: 'rgba(239, 68, 68, 0.1)', 
-								tension: 0.4
-							}
-						]
-					},
-					options: {
-						responsive: true, 
-						maintainAspectRatio: false, 
-						interaction: { mode: 'index', intersect: false },
-						scales: {
-							y: { 
-								type: 'linear', 
-								display: true, 
-								title: { 
-									display: true, 
-									text: 'Count', 
-									color: '#94a3b8' 
-								}, 
-								ticks: { color: '#94a3b8' }, 
-								grid: { color: '#334155' } 
-							},
-							x: { 
-								ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 }, 
-								grid: { color: '#334155' } 
-							}
-						},
-						plugins: { 
-							legend: { labels: { color: '#e2e8f0' } } 
-						}
-					}
-				});
-			} catch (error) { console.error('Error updating ingestion charts:', error); }
+                const response = await fetch('/api/ingestion-history');
+                const data = await response.json();
+                if (data.error || data.length === 0) { console.log('No ingestion history'); return; }
+                if (charts.ingestionCombined) charts.ingestionCombined.destroy();
+                const ctx = document.getElementById('ingestionCombinedChart');
+                charts.ingestionCombined = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => {
+                            const date = new Date(d.timestamp);
+                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+                                   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                        }),
+                        datasets: [
+                            {
+                                label: 'Records Ingested',
+                                data: data.map(d => d.records_ingested || 0),
+                                borderColor: '#60a5fa',
+                                backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Errors',
+                                data: data.map(d => d.error_count || 0),
+                                borderColor: '#ef4444',
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        interaction: { mode: 'index', intersect: false },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: 'Count',
+                                    color: '#94a3b8'
+                                },
+                                ticks: { color: '#94a3b8' },
+                                grid: { color: '#334155' }
+                            },
+                            x: {
+                                ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 },
+                                grid: { color: '#334155' }
+                            }
+                        },
+                        plugins: {
+                            legend: { labels: { color: '#e2e8f0' } }
+                        }
+                    }
+                });
+            } catch (error) { console.error('Error updating ingestion charts:', error); }
         }
 
         function updateOptions(data) {
@@ -771,77 +779,67 @@
 
         async function updateUptimeChart() {
             try {
-				const response = await fetch('/api/uptime-history');
-				const data = await response.json();
-				if (data.error || data.length === 0) { console.log('No uptime history'); return; }
-				if (charts.uptime) charts.uptime.destroy();
-				const ctx = document.getElementById('uptimeChart');
-				charts.uptime = new Chart(ctx, {
-					type: 'bar',
-					data: {
-						labels: data.map(d => { 
-							const date = new Date(d.timestamp); 
-							return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + 
-								   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); 
-						}),
-						datasets: [{
-							label: 'Uptime %',
-							data: data.map(d => d.uptime_percent),
-							backgroundColor: data.map(d => {
-								if (d.uptime_percent >= 90) return 'rgba(16, 185, 129, 0.8)';
-								if (d.uptime_percent >= 50) return 'rgba(245, 158, 11, 0.8)';
-								if (d.uptime_percent > 0) return 'rgba(239, 68, 68, 0.6)';
-								return 'rgba(100, 116, 139, 0.3)';
-							}),
-							borderColor: data.map(d => {
-								if (d.uptime_percent >= 90) return '#10b981';
-								if (d.uptime_percent >= 50) return '#f59e0b';
-								if (d.uptime_percent > 0) return '#ef4444';
-								return '#64748b';
-							}),
-							borderWidth: 1
-						}]
-					},
-					options: {
-						responsive: true, 
-						maintainAspectRatio: false,
-						scales: {
-							y: { 
-								min: 0, 
-								max: 100, 
-								title: { 
-									display: true, 
-									text: 'Uptime %', 
-									color: '#94a3b8' 
-								}, 
-								ticks: { color: '#94a3b8' }, 
-								grid: { color: '#334155' } 
-							},
-							x: { 
-								ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 }, 
-								grid: { color: '#334155' } 
-							}
-						},
-						plugins: { 
-							legend: { labels: { color: '#e2e8f0' } }, 
-							tooltip: { 
-								callbacks: { 
-									label: function(context) { 
-										return context.parsed.y.toFixed(1) + '% uptime'; 
-									} 
-								} 
-							} 
-						}
-					}
-				});
-			} catch (error) { console.error('Error updating uptime chart:', error); }
+                const response = await fetch('/api/uptime-history');
+                const data = await response.json();
+                if (data.error || data.length === 0) { console.log('No uptime history'); return; }
+                if (charts.uptime) charts.uptime.destroy();
+                const ctx = document.getElementById('uptimeChart');
+                charts.uptime = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.map(d => { 
+                            const date = new Date(d.timestamp); 
+                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + 
+                                   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); 
+                        }),
+                        datasets: [{
+                            label: 'Uptime %',
+                            data: data.map(d => d.uptime_percent),
+                            backgroundColor: 'rgba(96, 165, 250, 0.8)',
+                            borderColor: '#60a5fa',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { 
+                                min: 0, 
+                                max: 100, 
+                                title: { 
+                                    display: true, 
+                                    text: 'Uptime %', 
+                                    color: '#94a3b8' 
+                                }, 
+                                ticks: { color: '#94a3b8' }, 
+                                grid: { color: '#334155' } 
+                            },
+                            x: { 
+                                ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 }, 
+                                grid: { color: '#334155' } 
+                            }
+                        },
+                        plugins: { 
+                            legend: { labels: { color: '#e2e8f0' } }, 
+                            tooltip: { 
+                                callbacks: { 
+                                    label: function(context) { 
+                                        return context.parsed.y.toFixed(1) + '% uptime'; 
+                                    } 
+                                } 
+                            } 
+                        }
+                    }
+                });
+            } catch (error) { console.error('Error updating uptime chart:', error); }
         }
 
         function updateDashboard() {
             fetch('/api/metrics').then(response => response.json()).then(data => {
                 globalData = data;
                 const timestamp = new Date(data.timestamp);
-                document.getElementById('lastUpdate').textContent = `Updated: ${timestamp.toLocaleTimeString()}`;
+                document.getElementById('lastUpdate').textContent = `🚀 Updated: ${timestamp.toLocaleTimeString()}`;
                 const marketBadge = document.getElementById('marketStatusBadge');
                 marketBadge.innerHTML = data.market_open ? '<span class="market-status open"><span class="status-dot"></span> Market Open</span>' : '<span class="market-status closed"><span class="status-dot"></span> Market Closed</span>';
                 updateHome(data);

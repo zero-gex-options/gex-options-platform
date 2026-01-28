@@ -170,7 +170,7 @@ class MonitoringCollector:
                 'latest_gex': gex_data['latest_gex'].isoformat() if gex_data and gex_data['latest_gex'] else None,
                 'db_size': size_data['db_size'] if size_data else 'unknown',
                 'active_connections': conn_data['active_connections'] if conn_data else 0,
-                'underlying_quote': dict(underlying_quote) if underlying_quote else None,
+                'spy_quote': dict(underlying_quote) if underlying_quote else None,  # ADD THIS LINE
                 'underlying_history': underlying_history,
                 'recent_options': [dict(row) for row in recent_options] if recent_options else [],
                 'ingestion_metric': dict(ingestion_metric) if ingestion_metric else None,
@@ -308,6 +308,45 @@ class MonitoringCollector:
         self.metrics_history.append(metrics)
 
         return metrics
+
+    def track_service_uptime(self):
+        """Track service uptime status every check"""
+        if not HAS_PSYCOPG2 or not self.db_config:
+            return
+        
+        try:
+            # Create temporary database connection
+            conn = psycopg2.connect(**self.db_config)
+            cursor = conn.cursor()
+            
+            # Check if gex-ingestion is running
+            result = subprocess.run(
+                ['systemctl', 'is-active', 'gex-ingestion'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            is_up = 1 if result.stdout.strip() == 'active' else 0
+            
+            insert_query = """
+                INSERT INTO service_uptime_checks 
+                (timestamp, service_name, is_up)
+                VALUES (%s, %s, %s)
+            """
+            
+            cursor.execute(insert_query, (
+                datetime.now(timezone.utc),
+                'gex-ingestion',
+                is_up
+            ))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+        except Exception as e:
+            return [f'Failed to track service uptime: {str(e)}']
 
     def calculate_uptime_current_hour(self) -> Dict:
         """Calculate uptime percentage for the current hour"""
@@ -513,6 +552,10 @@ def main():
         try:
             while True:
                 metrics = collector.collect_all_metrics()
+
+                # Track service uptime
+                collector.track_service_uptime()
+
                 if exporter:
                     exporter.export_metrics(metrics)
                 time.sleep(args.interval)
