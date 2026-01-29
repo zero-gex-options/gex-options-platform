@@ -150,10 +150,19 @@ class MonitoringCollector:
 
             # Get most recent ingestion metrics
             cursor.execute("""
-                SELECT timestamp, source, symbol, records_ingested, 
-                       error_count, processing_time_ms, heartbeat_count, last_heartbeat
+                SELECT
+                    MAX(timestamp) as timestamp,
+                    source,
+                    symbol,
+                    SUM(records_ingested) as records_ingested,
+                    SUM(error_count) as error_count,
+                    AVG(processing_time_ms)::BIGINT as processing_time_ms,
+                    SUM(heartbeat_count) as heartbeat_count,
+                    MAX(last_heartbeat) as last_heartbeat
                 FROM ingestion_metrics
-                ORDER BY timestamp DESC
+                WHERE timestamp > NOW() - INTERVAL '1 hour'
+                GROUP BY source, symbol
+                ORDER BY MAX(timestamp) DESC
                 LIMIT 1;
             """)
             ingestion_metric = cursor.fetchone()
