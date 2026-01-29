@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# ==============================================
+# Step 025: Data Volume Setup
+# ==============================================
+
+set -e
+
+log "Data Volume Setup"
+
+# Check if we have a secondary volume available
+SECONDARY_VOLUME=$(lsblk -ndo NAME,SIZE,TYPE,MOUNTPOINT | grep -E "nvme1n1|xvdb|sdb" | grep "disk" | grep -v "/" | awk '{print "/dev/"$1}' | head -1)
+
+if [ -z "$SECONDARY_VOLUME" ]; then
+    log "  ℹ No secondary volume detected, skipping data volume setup"
+    log "     Root volume will be used for all data"
+    exit 0
+fi
+
+log "  → Secondary volume detected: $SECONDARY_VOLUME"
+
+# Check if already mounted
+if mount | grep -q "/data"; then
+    log "  ℹ /data already mounted, skipping setup"
+    exit 0
+fi
+
+# Check if volume is already formatted
+if sudo blkid "$SECONDARY_VOLUME" | grep -q "TYPE="; then
+    log "  → Volume already formatted"
+else
+    log "  → Formatting volume as ext4..."
+    sudo mkfs.ext4 -F "$SECONDARY_VOLUME"
+fi
+
+# Create mount point
+log "  → Creating /data mount point..."
+sudo mkdir -p /data
+
+# Mount the volume
+log "  → Mounting volume..."
+sudo mount "$SECONDARY_VOLUME" /data
+
+# Add to fstab if not already there
+if ! grep -q "$SECONDARY_VOLUME" /etc/fstab; then
+    log "  → Adding to /etc/fstab for persistence..."
+    echo "$SECONDARY_VOLUME /data ext4 defaults,nofail 0 2" | sudo tee -a /etc/fstab
+fi
+
+# Set ownership
+sudo chown ubuntu:ubuntu /data
+log "  ✓ Data volume mounted at /data"
+
+# Check if PostgreSQL needs to be moved
+if [ -d "/var/lib/postgresql" ] && [ ! -L "/var/lib/postgresql" ]; then
+    log "  → PostgreSQL data directory needs migration..."
+    
+    # Stop PostgreSQL if running
+    if systemctl is-active --quiet postgresql; then
+        log "     Stopping PostgreSQL..."
+        sudo systemctl stop postgresql
+    fi
+    
+    # Create PostgreSQL directory on data volume
+    log "     Creating PostgreSQL directory on /data..."
+    sudo mkdir -p /data/postgresql
+    sudo chown postgres:postgres /data/postgresql
+    
+    # Copy existing data if it exists
+    if [ -d "/var/lib/postgresql" ] && [ "$(ls -A /var/lib/postgresql)" ]; then
+        log "     Copying existing PostgreSQL data..."
+        sudo rsync -av /var/lib/postgresql/ /data/postgresql/
+    fi
+    
+    # Backup and create symlink
+    log "     Creating symlink..."
+    sudo mv /var/lib/postgresql /var/lib/postgresql.backup-$(date +%Y%m%d)
+    sudo ln -s /data/postgresql /var/lib/postgresql
+    
+    # Restart PostgreSQL
+    log "     Starting PostgreSQL..."
+    sudo systemctl start postgresql
+    
+    log "  ✓ PostgreSQL migrated to /data"
+fi
+
+# Setup backup directory on data volume
+log "  → Setting up backup directory..."
+sudo mkdir -p /data/backups
+sudo chown ubuntu:ubuntu /data/backups
+
+# Create symlink for backups if needed
+if [ ! -L "/home/ubuntu/backups" ]; then
+    if [ -d "/home/ubuntu/backups" ]; then
+        # Move existing backups
+        sudo mv /home/ubuntu/backups/* /data/backups/ 2>/dev/null || true
+        sudo rmdir /home/ubuntu/backups
+    fi
+    ln -s /data/backups /home/ubuntu/backups
+    log "  ✓ Backup directory linked to /data"
+fi
+
+log ""
+log "Data volume setup complete!"
+log ""
+log "Summary:"
+log "  ✓ Data volume: $SECONDARY_VOLUME"
+log "  ✓ Mount point: /data"
+log "  ✓ Available space: $(df -h /data | tail -1 | awk '{print $4}')"
+log "  ✓ PostgreSQL: /data/postgresql"
+log "  ✓ Backups: /data/backups"
+log ""

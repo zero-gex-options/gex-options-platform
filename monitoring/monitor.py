@@ -10,7 +10,7 @@ import time
 import json
 import psutil
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 import threading
@@ -313,12 +313,12 @@ class MonitoringCollector:
         """Track service uptime status every check"""
         if not HAS_PSYCOPG2 or not self.db_config:
             return
-        
+
         try:
             # Create temporary database connection
             conn = psycopg2.connect(**self.db_config)
             cursor = conn.cursor()
-            
+
             # Check if gex-ingestion is running
             result = subprocess.run(
                 ['systemctl', 'is-active', 'gex-ingestion'],
@@ -326,27 +326,27 @@ class MonitoringCollector:
                 text=True,
                 timeout=5
             )
-            
+
             is_up = 1 if result.stdout.strip() == 'active' else 0
-            
+
             insert_query = """
-                INSERT INTO service_uptime_checks 
+                INSERT INTO service_uptime_checks
                 (timestamp, service_name, is_up)
                 VALUES (%s, %s, %s)
             """
-            
+
             cursor.execute(insert_query, (
                 datetime.now(timezone.utc),
                 'gex-ingestion',
                 is_up
             ))
-            
+
             conn.commit()
             cursor.close()
             conn.close()
-            
+
         except Exception as e:
-            return [f'Failed to track service uptime: {str(e)}']
+            print(f"Failed to track service uptime: {e}")
 
     def calculate_uptime_current_hour(self) -> Dict:
         """Calculate uptime percentage for the current hour"""

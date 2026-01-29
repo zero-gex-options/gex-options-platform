@@ -171,10 +171,10 @@ def get_uptime_history():
             hourly_uptime AS (
                 SELECT
                     date_trunc('hour', interval_time) as hour,
-                    SUM(interval_up) as intervals_up,
-                    -- Each hour has 4 possible 15-minute intervals
-                    (SUM(interval_up)::float / 4.0) * 100 as uptime_percent
+                    COUNT(*) as intervals_up,
+                    (COUNT(*)::float / 4.0) * 100 as uptime_percent
                 FROM fifteen_min_buckets
+                WHERE interval_up = 1  -- Only count intervals where service was up
                 GROUP BY date_trunc('hour', interval_time)
             ),
             all_hours AS (
@@ -185,7 +185,7 @@ def get_uptime_history():
                 ) as hour
             )
             SELECT
-                ah.hour as timestamp,
+                EXTRACT(EPOCH FROM ah.hour)::bigint * 1000 as timestamp_ms,
                 COALESCE(ROUND(hu.uptime_percent::numeric, 1), 0) as uptime_percent
             FROM all_hours ah
             LEFT JOIN hourly_uptime hu ON ah.hour = hu.hour
@@ -196,7 +196,7 @@ def get_uptime_history():
         cursor.close()
         conn.close()
 
-        return jsonify([dict(row) for row in rows])
+        return jsonify([{'timestamp': row['timestamp_ms'], 'uptime_percent': float(row['uptime_percent'])} for row in rows])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

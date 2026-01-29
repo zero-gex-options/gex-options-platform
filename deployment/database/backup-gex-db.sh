@@ -1,7 +1,13 @@
 #!/bin/bash
 
 # Configuration
-BACKUP_DIR="/home/ubuntu/backups"
+# Use /data/backups if available, otherwise fall back to home directory
+if [ -d "/data/backups" ]; then
+    BACKUP_DIR="/data/backups"
+else
+    BACKUP_DIR="/home/ubuntu/backups"
+fi
+
 LOG_DIR="/home/ubuntu/logs"
 LOG_FILE="${LOG_DIR}/backup-gex-db.log"
 DB_NAME="gex_db"
@@ -25,18 +31,19 @@ touch "$LOG_FILE"
 exec &> "${LOG_FILE}"
 
 # Delete logs older than 7 days
-DELETED=$(find "$LOG_DIR" -name "${backup-gex-db.log}.*.gz" -mtime +$RETENTION_DAYS -delete -print | wc -l)
+DELETED=$(find "$LOG_DIR" -name "backup-gex-db.log.*.gz" -mtime +$RETENTION_DAYS -delete -print | wc -l)
 if [ "$DELETED" -gt 0 ]; then
     echo "[$(date)] Deleted $DELETED old log(s)"
 fi
- 
+
 # Create backup directory
 if [ ! -d "$BACKUP_DIR" ]; then
     echo "[$(date)] Creating ${BACKUP_DIR}..."
     mkdir -p "$BACKUP_DIR"
 fi
 
-echo "[$(date)] Starting backup..."
+echo "[$(date)] Starting backup to ${BACKUP_DIR}..."
+echo "[$(date)] Using backup location: ${BACKUP_DIR}"
 
 # Backup with TimescaleDB-friendly options
 # --format=custom is compressed and efficient for large databases
@@ -44,23 +51,27 @@ if pg_dump -U "$DB_USER" -h "$DB_HOST" \
     --format=custom \
     --file="$BACKUP_DIR/${DB_NAME}_${DATE}.dump" \
     "$DB_NAME" 2>&1 | grep -v "circular foreign-key" | grep -v "disable-triggers"; then
-    
+
     echo "[$(date)] ✅ Backup completed: ${DB_NAME}_${DATE}.dump"
-    
+
     # Get backup size
     SIZE=$(du -h "$BACKUP_DIR/${DB_NAME}_${DATE}.dump" | cut -f1)
     echo "[$(date)] Backup size: $SIZE"
-    
+
     # Clean up old backups
     DELETED=$(find "$BACKUP_DIR" -name "${DB_NAME}_*.dump" -mtime +$RETENTION_DAYS -delete -print | wc -l)
     if [ "$DELETED" -gt 0 ]; then
         echo "[$(date)] Deleted $DELETED old backup(s)"
     fi
-    
+
     # List current backups
     echo "[$(date)] Current backups:"
     ls -lh "$BACKUP_DIR/${DB_NAME}_"*.dump 2>/dev/null | tail -5
-    
+
+    # Show disk usage
+    echo "[$(date)] Backup directory usage:"
+    du -sh "$BACKUP_DIR"
+
 else
     echo "[$(date)] ❌ Backup failed!"
     exit 1

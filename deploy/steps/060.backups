@@ -12,7 +12,7 @@ log "Automated Database Backups"
 APP_DIR="$HOME/gex-options-platform"
 BACKUP_SCRIPT_SOURCE="$APP_DIR/deployment/database/backup-gex-db.sh"
 BACKUP_SCRIPT_TARGET="/usr/local/bin/backup-gex-db.sh"
-BACKUP_DIR="$HOME/backups"
+BACKUP_DIR="/data/backups"
 PGPASS_FILE="$HOME/.pgpass"
 CREDS_FILE="$HOME/.zerogex_db_creds"
 

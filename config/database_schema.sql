@@ -121,18 +121,18 @@ CREATE INDEX idx_underlying_quotes_symbol ON underlying_quotes(symbol, timestamp
 CREATE INDEX idx_service_uptime_service ON service_uptime_checks(service_name, timestamp DESC);
 
 -- Compression policy (compress data older than 7 days)
-SELECT add_compression_policy('options_quotes', INTERVAL '7 days');
-SELECT add_compression_policy('underlying_quotes', INTERVAL '7 days');
+SELECT add_compression_policy('options_quotes', INTERVAL '1 day');
+SELECT add_compression_policy('underlying_quotes', INTERVAL '1 day');
 SELECT add_compression_policy('gex_metrics', INTERVAL '7 days');
-SELECT add_compression_policy('ingestion_metrics', INTERVAL '30 days');
+SELECT add_compression_policy('ingestion_metrics', INTERVAL '7 days');
 SELECT add_compression_policy('service_uptime_checks', INTERVAL '7 days');
 
 -- Retention policy (keep data for 90 days)
-SELECT add_retention_policy('options_quotes', INTERVAL '90 days');
-SELECT add_retention_policy('underlying_quotes', INTERVAL '90 days');
-SELECT add_retention_policy('gex_metrics', INTERVAL '90 days');
-SELECT add_retention_policy('ingestion_metrics', INTERVAL '90 days');
-SELECT add_retention_policy('service_uptime_checks', INTERVAL '90 days');
+SELECT add_retention_policy('options_quotes', INTERVAL '2 days');
+SELECT add_retention_policy('underlying_quotes', INTERVAL '2 days');
+SELECT add_retention_policy('gex_metrics', INTERVAL '30 days');
+SELECT add_retention_policy('ingestion_metrics', INTERVAL '30 days');
+SELECT add_retention_policy('service_uptime_checks', INTERVAL '30 days');
 
 -- Views for common queries
 CREATE OR REPLACE VIEW latest_gex AS

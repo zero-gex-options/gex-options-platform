@@ -1,10 +1,17 @@
 #!/bin/bash
 
+# Determine backup directory
+if [ -d "/data/backups" ]; then
+    BACKUP_DIR="/data/backups"
+else
+    BACKUP_DIR="/home/ubuntu/backups"
+fi
+
 if [ -z "$1" ]; then
     echo "Usage: $0 <backup_file>"
     echo ""
     echo "Available backups:"
-    ls -lh /home/ubuntu/backups/gex_db_*.{dump,sql.gz} 2>/dev/null | tail -10
+    ls -lh "$BACKUP_DIR"/gex_db_*.{dump,sql.gz} 2>/dev/null | tail -10
     exit 1
 fi
 
