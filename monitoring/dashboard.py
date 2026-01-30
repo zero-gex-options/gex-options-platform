@@ -99,11 +99,12 @@ def get_spy_history():
         conn = psycopg2.connect(**db_config)
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get last 48 hours of SPY data
+        # Get last 48 hours of SPY data with up/down volume
         cursor.execute("""
-            SELECT timestamp, close as price, total_volume as volume
+            SELECT timestamp, close as price, total_volume as volume,
+                   up_volume, down_volume
             FROM underlying_quotes
-            WHERE symbol = 'SPY' 
+            WHERE symbol = 'SPY'
               AND timestamp > NOW() - INTERVAL '48 hours'
             ORDER BY timestamp ASC
         """)

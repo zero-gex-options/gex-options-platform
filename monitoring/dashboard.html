@@ -358,7 +358,7 @@
             </div>
         </div>
 
-        <!-- SPY Quote Page -->
+	<!-- SPY Quote Page -->
         <div id="spy" class="page">
             <div class="page-header">
                 <h2>SPY Quote</h2>
@@ -367,10 +367,15 @@
             <div class="card" style="margin-bottom: 20px;">
                 <div id="spyLatest">Loading...</div>
             </div>
-            <div class="card">
-                <h3>Price & Volume History</h3>
-                <div class="chart-container">
-                    <canvas id="spyChart"></canvas>
+            <div class="card" style="padding: 24px 24px 0 24px;">
+                <h3 style="margin-bottom: 16px;">Price & Volume History</h3>
+                <!-- Price Chart - no bottom padding -->
+                <div class="chart-container" style="height: 400px; margin-bottom: 0;">
+                    <canvas id="spyPriceChart"></canvas>
+                </div>
+                <!-- Volume Chart - no top padding, directly touching price chart -->
+                <div class="chart-container" style="height: 400px; margin-top: 0; padding-bottom: 24px;">
+                    <canvas id="spyVolumeChart"></canvas>
                 </div>
             </div>
         </div>
@@ -433,7 +438,7 @@
 
     <script>
         let globalData = {};
-        let charts = {};
+        let charts = {}; // Will now hold spyPriceChart, spyVolumeChart, etc.
 
         window.showTableData = async function(tableName) {
             try {
@@ -587,16 +592,23 @@
                 const response = await fetch('/api/spy-history');
                 const data = await response.json();
                 if (data.error || data.length === 0) { console.log('No SPY history data'); return; }
-                if (charts.spyChart) charts.spyChart.destroy();
-                const ctx = document.getElementById('spyChart');
-                charts.spyChart = new Chart(ctx, {
+
+                const labels = data.map(d => {
+                    const date = new Date(d.timestamp);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+                           date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                });
+
+                // Destroy old charts
+                if (charts.spyPriceChart) charts.spyPriceChart.destroy();
+                if (charts.spyVolumeChart) charts.spyVolumeChart.destroy();
+
+                // Price Chart (top)
+                const priceCtx = document.getElementById('spyPriceChart');
+                charts.spyPriceChart = new Chart(priceCtx, {
                     type: 'line',
                     data: {
-                        labels: data.map(d => {
-                            const date = new Date(d.timestamp);
-                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
-                                   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                        }),
+                        labels: labels,
                         datasets: [
                             {
                                 label: 'Price',
@@ -607,18 +619,7 @@
                                 pointRadius: 0,
                                 pointHoverRadius: 5,
                                 tension: 0.4,
-                                fill: true,
-                                yAxisID: 'y',
-                                type: 'line'
-                            },
-                            {
-                                label: 'Volume',
-                                data: data.map(d => d.volume),
-                                backgroundColor: 'rgba(16, 185, 129, 0.5)',
-                                borderColor: '#10b981',
-                                borderWidth: 1,
-                                yAxisID: 'y1',
-                                type: 'bar'
+                                fill: true
                             }
                         ]
                     },
@@ -626,6 +627,11 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         animation: false,
+                        layout: {
+                            padding: {
+                                bottom: 0  // No bottom padding
+                            }
+                        },
                         interaction: {
                             mode: 'index',
                             intersect: false
@@ -633,8 +639,6 @@
                         scales: {
                             y: {
                                 type: 'linear',
-                                display: true,
-                                position: 'left',
                                 title: {
                                     display: true,
                                     text: 'Price ($)',
@@ -643,29 +647,110 @@
                                 ticks: { color: '#94a3b8' },
                                 grid: { color: '#334155' }
                             },
-                            y1: {
+                            x: {
+                                display: false,  // Hide entire x-axis
+                                grid: { display: false }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'Price: $' + context.parsed.y.toFixed(2);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Volume Chart (bottom)
+                const volumeCtx = document.getElementById('spyVolumeChart');
+                charts.spyVolumeChart = new Chart(volumeCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Up Volume',
+                                data: data.map(d => d.up_volume || 0),
+                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                                borderColor: '#10b981',
+                                borderWidth: 0,
+                                stack: 'volume'
+                            },
+                            {
+                                label: 'Down Volume',
+                                data: data.map(d => d.down_volume || 0),
+                                backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                                borderColor: '#ef4444',
+                                borderWidth: 0,
+                                stack: 'volume'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        layout: {
+                            padding: {
+                                top: 0  // No top padding
+                            }
+                        },
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        scales: {
+                            y: {
                                 type: 'linear',
-                                display: true,
-                                position: 'right',
+                                stacked: true,
                                 title: {
                                     display: true,
                                     text: 'Volume',
                                     color: '#94a3b8'
                                 },
-                                ticks: { color: '#94a3b8' },
-                                grid: { drawOnChartArea: false }
+                                ticks: { 
+                                    color: '#94a3b8',
+                                    callback: function(value) {
+                                        return (value / 1000000).toFixed(1) + 'M';
+                                    }
+                                },
+                                grid: { color: '#334155' }
                             },
                             x: {
-                                ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 },
+                                stacked: true,
+                                ticks: { 
+                                    color: '#94a3b8', 
+                                    maxRotation: 45, 
+                                    minRotation: 45
+                                },
                                 grid: { color: '#334155' }
                             }
                         },
                         plugins: {
-                            legend: { labels: { color: '#e2e8f0' } }
+                            legend: { 
+                                labels: { color: '#e2e8f0' },
+                                position: 'top'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        label += (context.parsed.y / 1000000).toFixed(2) + 'M';
+                                        return label;
+                                    }
+                                }
+                            }
                         }
                     }
                 });
-            } catch (error) { console.error('Error updating SPY chart:', error); }
+            } catch (error) { console.error('Error updating SPY charts:', error); }
         }
 
         async function updateIngestion(data) {
