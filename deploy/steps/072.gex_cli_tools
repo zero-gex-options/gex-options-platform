@@ -1,0 +1,131 @@
+#!/bin/bash
+
+# ==============================================
+# Step 072: GEX CLI Tools Installation
+# ==============================================
+
+set -e
+
+log "GEX CLI Tools Installation"
+
+# Define paths
+APP_DIR="$HOME/gex-options-platform"
+VENV_DIR="$APP_DIR/venv"
+BIN_DIR="/usr/local/bin"
+
+# Check if application directory exists
+if [ ! -d "$APP_DIR" ]; then
+    log "  ✗ Application directory not found: $APP_DIR"
+    exit 1
+fi
+
+# Check if virtual environment exists
+if [ ! -d "$VENV_DIR" ]; then
+    log "  ✗ Virtual environment not found: $VENV_DIR"
+    exit 1
+fi
+
+log "  → Creating GEX CLI wrapper script..."
+
+# Create wrapper script for gex-cli
+sudo tee "$BIN_DIR/gex-cli" > /dev/null << 'EOF'
+#!/bin/bash
+# GEX CLI Tool Wrapper
+# Activates venv and runs gex_cli.py
+
+APP_DIR="/home/ubuntu/gex-options-platform"
+source "$APP_DIR/venv/bin/activate"
+python "$APP_DIR/src/gex/gex_cli.py" "$@"
+EOF
+
+sudo chmod +x "$BIN_DIR/gex-cli"
+log "     ✓ gex-cli wrapper created"
+
+# Create wrapper script for gex-calculate
+sudo tee "$BIN_DIR/gex-calculate" > /dev/null << 'EOF'
+#!/bin/bash
+# Quick GEX calculation shortcut
+
+APP_DIR="/home/ubuntu/gex-options-platform"
+source "$APP_DIR/venv/bin/activate"
+
+SYMBOL="${1:-SPY}"
+python "$APP_DIR/src/gex/gex_calculator.py" "$SYMBOL"
+EOF
+
+sudo chmod +x "$BIN_DIR/gex-calculate"
+log "     ✓ gex-calculate wrapper created"
+
+# Create wrapper script for gex-analyze
+sudo tee "$BIN_DIR/gex-analyze" > /dev/null << 'EOF'
+#!/bin/bash
+# Quick GEX analysis shortcut
+
+APP_DIR="/home/ubuntu/gex-options-platform"
+source "$APP_DIR/venv/bin/activate"
+
+SYMBOL="${1:-SPY}"
+python "$APP_DIR/src/gex/gex_analyzer.py" "$SYMBOL"
+EOF
+
+sudo chmod +x "$BIN_DIR/gex-analyze"
+log "     ✓ gex-analyze wrapper created"
+
+# Test the CLI tools
+log "  → Testing CLI tools..."
+
+# Test gex-cli help
+if gex-cli --help > /dev/null 2>&1; then
+    log "     ✓ gex-cli working"
+else
+    log "     ⚠ gex-cli may have issues"
+fi
+
+# Update .bashrc with helpful aliases if not already there
+log "  → Adding convenience aliases to .bashrc..."
+
+if ! grep -q "GEX CLI Aliases" ~/.bashrc; then
+    cat >> ~/.bashrc << 'EOF'
+
+# ==========================================
+# GEX CLI Aliases
+# ==========================================
+alias gex='gex-cli summary'
+alias gex-levels='gex-cli levels'
+alias gex-regime='gex-cli regime'
+alias gex-move='gex-cli expected-move'
+alias gex-history='gex-cli history'
+EOF
+    log "     ✓ Aliases added to .bashrc"
+else
+    log "     ℹ Aliases already exist in .bashrc"
+fi
+
+log "GEX CLI tools installation complete!"
+log ""
+log "Summary:"
+log "  ✓ gex-cli command installed"
+log "  ✓ gex-calculate shortcut installed"
+log "  ✓ gex-analyze shortcut installed"
+log "  ✓ Convenience aliases added"
+log ""
+log "Available Commands:"
+log "  gex-cli <command>          - Full CLI interface"
+log "  gex-calculate [SYMBOL]     - Quick calculation"
+log "  gex-analyze [SYMBOL]       - Quick analysis"
+log ""
+log "CLI Commands:"
+log "  gex-cli calculate SPY      - Calculate GEX"
+log "  gex-cli summary SPY        - Current summary"
+log "  gex-cli levels SPY         - Key gamma levels"
+log "  gex-cli regime SPY         - Regime changes"
+log "  gex-cli expected-move SPY  - Expected move"
+log "  gex-cli history SPY        - Historical data"
+log ""
+log "Convenience Aliases (after sourcing .bashrc):"
+log "  gex SPY                    - Quick summary"
+log "  gex-levels SPY             - Key levels"
+log "  gex-regime SPY             - Regime analysis"
+log "  gex-move SPY               - Expected move"
+log "  gex-history SPY            - Historical view"
+log ""

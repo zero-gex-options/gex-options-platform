@@ -1,216 +1,372 @@
 """
 GEX Calculation Scheduler
 
-Runs GEX calculations periodically during market hours.
-Fetches fresh underlying prices for accurate calculations.
+Runs GEX calculations periodically during market hours with fresh underlying prices.
 """
 
 import asyncio
 import psycopg2
-from datetime import datetime, time as dt_time
+from datetime import datetime, date, time as dt_time
 import pytz
-import logging
 import os
 import sys
+from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 
-# Add parent directories to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ingestion'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'gex'))
+# Add project root to path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
-from gex_calculator import GEXCalculator
-from tradestation_client import TradeStationStreamingClient
+from src.gex.gex_calculator import GEXCalculator
+from src.utils import get_logger
 
-load_dotenv()
+# Load environment
+env_file = project_root / ".env"
+load_dotenv(env_file)
 
-# Get and validate logging level from environment
-log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
-valid_levels = {
-    'DEBUG': logging.DEBUG,
-    'INFO': logging.INFO,
-    'WARNING': logging.WARNING,
-    'ERROR': logging.ERROR,
-    'CRITICAL': logging.CRITICAL
-}
-
-if log_level_str in valid_levels:
-    log_level = valid_levels[log_level_str]
-else:
-    log_level = logging.INFO
-    print(f"Warning: Invalid LOG_LEVEL '{log_level_str}', defaulting to INFO. Valid options: {', '.join(valid_levels.keys())}")
-
-logging.basicConfig(
-    level=log_level,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GEXScheduler:
     """Schedule and run GEX calculations with fresh price data"""
 
-    def __init__(self, interval_seconds: int = 60):
+    def __init__(
+        self,
+        interval_seconds: int = 60,
+        symbols: list = None,
+        target_expiration: str = 'today'
+    ):
         """
+        Initialize GEX scheduler
+
         Args:
-            interval_seconds: How often to calculate GEX (default 60s)
+            interval_seconds: Calculation interval (default 60s)
+            symbols: List of symbols to calculate (default ['SPY'])
+            target_expiration: 'today' for 0DTE or specific date 'YYYY-MM-DD'
         """
-        logger.info(f"Initializing GEX Scheduler (interval: {interval_seconds}s)")
+        logger.info(f"Initializing GEX Scheduler...")
+        logger.info(f"  Interval: {interval_seconds}s")
 
         self.interval = interval_seconds
+        self.symbols = symbols or ['SPY']
+        self.target_expiration = target_expiration
+
+        logger.info(f"  Symbols: {', '.join(self.symbols)}")
+        logger.info(f"  Target expiration: {target_expiration}")
+
+        # Load database credentials
+        db_creds = self._load_db_credentials()
 
         # Database connection
         try:
-            self.db_conn = self._connect_db()
+            self.db_conn = psycopg2.connect(**db_creds)
             logger.info("✅ Database connection established")
         except Exception as e:
             logger.critical(f"Failed to connect to database: {e}", exc_info=True)
             raise
 
+        # GEX calculator
         self.calculator = GEXCalculator(self.db_conn)
 
-        # TradeStation credentials
-        self.ts_client_id = os.getenv('TRADESTATION_CLIENT_ID')
-        self.ts_client_secret = os.getenv('TRADESTATION_CLIENT_SECRET')
-        self.ts_refresh_token = os.getenv('TRADESTATION_REFRESH_TOKEN')
-        self.ts_sandbox = os.getenv('TRADESTATION_USE_SANDBOX', 'false').lower() == 'true'
+        # Statistics
+        self.stats = {
+            'calculations': 0,
+            'errors': 0,
+            'start_time': datetime.now(pytz.timezone('America/New_York'))
+        }
 
-        if not all([self.ts_client_id, self.ts_client_secret, self.ts_refresh_token]):
-            logger.critical("Missing TradeStation credentials")
-            raise ValueError("Missing required TradeStation credentials")
+        logger.info("✅ GEX Scheduler initialized successfully")
 
-        logger.debug("TradeStation credentials loaded")
-        logger.info("GEX Scheduler initialized successfully")
+    def _load_db_credentials(self) -> dict:
+        """Load database credentials from ~/.zerogex_db_creds"""
+        creds_file = Path.home() / ".zerogex_db_creds"
 
-    def _connect_db(self):
-        """Connect to database"""
-        logger.debug("Connecting to database...")
+        if not creds_file.exists():
+            logger.critical(f"Database credentials not found: {creds_file}")
+            raise FileNotFoundError(f"Database credentials not found: {creds_file}")
 
-        return psycopg2.connect(
-            host=os.getenv('DB_HOST'),
-            database=os.getenv('DB_NAME'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            port=os.getenv('DB_PORT')
-        )
+        logger.debug(f"Loading database credentials from {creds_file}...")
+
+        creds = {}
+        with open(creds_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    creds[key] = value
+
+        return {
+            'host': creds.get('DB_HOST', 'localhost'),
+            'port': int(creds.get('DB_PORT', '5432')),
+            'database': creds.get('DB_NAME', 'gex_db'),
+            'user': creds.get('DB_USER', 'gex_user'),
+            'password': creds.get('DB_PASSWORD', ''),
+        }
 
     def is_market_open(self) -> bool:
-        """Check if market is open"""
-        now = datetime.now(pytz.timezone('America/New_York'))
+        """
+        Check if US stock market is open
 
-        logger.debug(f"Market check: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        logger.debug(f"Day: {now.strftime('%A')} (weekday: {now.weekday()})")
+        Returns:
+            True if market is open, False otherwise
+        """
+        et_tz = pytz.timezone('America/New_York')
+        now_et = datetime.now(et_tz)
 
-        if now.weekday() >= 5:
-            logger.debug("Market closed: Weekend")
+        # Weekend check
+        if now_et.weekday() >= 5:
+            logger.debug(f"Market closed: Weekend ({now_et.strftime('%A')})")
             return False
 
+        # Market hours: 9:30 AM - 4:00 PM ET
         market_open = dt_time(9, 30)
         market_close = dt_time(16, 0)
-        current_time = now.time()
+        current_time = now_et.time()
 
         is_open = market_open <= current_time <= market_close
 
-        logger.debug(f"Market hours: {market_open}-{market_close}, Current: {current_time}, Open: {is_open}")
+        logger.debug(f"Market check: {now_et.strftime('%H:%M %Z')} - "
+                    f"{'OPEN' if is_open else 'CLOSED'}")
 
         return is_open
 
-    async def run(self, symbol: str = 'SPY'):
+    def get_expiration_date(self) -> date:
+        """
+        Get expiration date based on target_expiration setting
+
+        Returns:
+            Date object for expiration
+        """
+        if self.target_expiration == 'today':
+            return date.today()
+        else:
+            try:
+                return datetime.strptime(self.target_expiration, '%Y-%m-%d').date()
+            except ValueError:
+                logger.error(f"Invalid expiration date: {self.target_expiration}")
+                return date.today()
+
+    def get_latest_underlying_price(self, symbol: str) -> Optional[float]:
+        """
+        Get latest underlying price from database
+
+        Args:
+            symbol: Symbol to query (e.g., 'SPY')
+
+        Returns:
+            Latest price or None if not found
+        """
+        cursor = self.db_conn.cursor()
+
+        try:
+            cursor.execute("""
+                SELECT close
+                FROM underlying_quotes
+                WHERE symbol = %s
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (symbol,))
+
+            row = cursor.fetchone()
+
+            if row:
+                price = float(row[0])
+                logger.debug(f"Latest {symbol} price from DB: ${price:.2f}")
+                return price
+            else:
+                logger.warning(f"No underlying price found in DB for {symbol}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error fetching underlying price: {e}", exc_info=True)
+            return None
+        finally:
+            cursor.close()
+
+    async def calculate_gex_for_symbol(self, symbol: str) -> bool:
+        """
+        Calculate GEX for a single symbol using database data
+
+        Args:
+            symbol: Symbol to calculate (e.g., 'SPY')
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Get latest price from database
+            logger.debug(f"Fetching latest {symbol} price from database...")
+            current_price = self.get_latest_underlying_price(symbol)
+
+            if not current_price:
+                logger.warning(f"No price data available for {symbol}")
+                return False
+
+            logger.info(f"Latest {symbol} price: ${current_price:.2f}")
+
+            # Get expiration date
+            expiration = self.get_expiration_date()
+
+            # Calculate GEX
+            logger.info(f"Calculating GEX for {symbol} exp {expiration}...")
+            metrics = self.calculator.calculate_current_gex(
+                symbol, 
+                current_price, 
+                expiration
+            )
+
+            if metrics:
+                self.stats['calculations'] += 1
+                logger.info(f"✅ GEX Calculation #{self.stats['calculations']}")
+                logger.info(f"   {symbol}: ${metrics.underlying_price:.2f}")
+                logger.info(f"   Total GEX: ${metrics.total_gex_millions:.1f}M")
+                logger.info(f"   Net GEX: ${metrics.net_gex_millions:.1f}M")
+                logger.info(f"   Regime: {metrics.gamma_regime}")
+
+                return True
+            else:
+                logger.warning(f"No GEX metrics calculated for {symbol}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error calculating GEX for {symbol}: {e}", exc_info=True)
+            self.stats['errors'] += 1
+            return False
+
+    async def run_once(self):
+        """Run one cycle of GEX calculations for all symbols"""
+        logger.debug(f"Starting calculation cycle...")
+
+        results = []
+        for symbol in self.symbols:
+            result = await self.calculate_gex_for_symbol(symbol)
+            results.append((symbol, result))
+
+        # Log summary
+        successful = sum(1 for _, r in results if r)
+        logger.info(f"Cycle complete: {successful}/{len(self.symbols)} successful")
+
+        return all(r for _, r in results)
+
+    async def run(self):
         """Main scheduler loop"""
-
         logger.info("="*60)
-        logger.info(f"Starting GEX Scheduler for {symbol}")
+        logger.info("Starting GEX Scheduler")
+        logger.info("="*60)
+        logger.info(f"Symbols: {', '.join(self.symbols)}")
+        logger.info(f"Interval: {self.interval}s")
+        logger.info(f"Target expiration: {self.target_expiration}")
         logger.info("="*60)
 
-        calculations = 0
-        errors = 0
+        cycle_count = 0
 
-        async with TradeStationStreamingClient(
-            self.ts_client_id,
-            self.ts_client_secret,
-            self.ts_refresh_token,
-            sandbox=self.ts_sandbox
-        ) as client:
-
-            logger.info("TradeStation client initialized")
-
+        try:
             while True:
-                try:
-                    if not self.is_market_open():
-                        logger.info("Market closed, waiting 5 minutes...")
-                        await asyncio.sleep(300)
-                        continue
+                cycle_count += 1
 
-                    logger.debug(f"Starting GEX calculation cycle #{calculations + 1}")
+                # Check if market is open
+                if not self.is_market_open():
+                    logger.info("Market closed, waiting 5 minutes...")
+                    await asyncio.sleep(300)
+                    continue
 
-                    # Get fresh quote from TradeStation
-                    logger.debug(f"Fetching fresh quote for {symbol}...")
-                    quote = await client.get_quote(symbol)
+                logger.info(f"Starting calculation cycle #{cycle_count}...")
 
-                    if quote:
-                        current_price = quote['price']
-                        logger.info(f"Fresh {symbol} price: ${current_price:.2f}")
-                    else:
-                        logger.warning("Could not get quote, will use price from data")
-                        current_price = None
-                        errors += 1
+                # Run calculations
+                await self.run_once()
 
-                    logger.info(f"Calculating GEX for {symbol}...")
+                # Log periodic stats
+                if cycle_count % 10 == 0:
+                    self._log_statistics()
 
-                    # Calculate GEX with fresh price
-                    metrics = self.calculator.calculate_current_gex(symbol, current_price)
+                # Wait for next interval
+                logger.debug(f"Sleeping for {self.interval} seconds...")
+                await asyncio.sleep(self.interval)
 
-                    if metrics:
-                        calculations += 1
-                        logger.info(f"✅ GEX Calculation #{calculations}")
-                        logger.info(f"   Spot: ${metrics.underlying_price:.2f}")
-                        logger.info(f"   Total GEX: ${metrics.total_gamma_exposure/1e6:.1f}M")
-                        logger.info(f"   Net GEX: ${metrics.net_gex/1e6:.1f}M")
-                        logger.info(f"   Max Gamma: ${metrics.max_gamma_strike:.2f}")
-                        if metrics.gamma_flip_point:
-                            logger.info(f"   Flip Point: ${metrics.gamma_flip_point:.2f}")
+        except KeyboardInterrupt:
+            logger.info("Shutting down gracefully...")
+        except Exception as e:
+            logger.error(f"Fatal error in scheduler: {e}", exc_info=True)
+            raise
+        finally:
+            self._cleanup()
 
-                        logger.debug(f"   P/C Ratio: {metrics.put_call_ratio:.2f}")
-                        logger.debug(f"   Contracts: {metrics.total_contracts:,}")
+    def _log_statistics(self):
+        """Log scheduler statistics"""
+        uptime = datetime.now(pytz.timezone('America/New_York')) - self.stats['start_time']
+        uptime_hours = uptime.total_seconds() / 3600
 
-                        if calculations % 10 == 0:
-                            logger.info(f"📊 Stats - Calculations: {calculations}, Errors: {errors}")
-                    else:
-                        logger.warning("No GEX metrics calculated")
-                        errors += 1
+        logger.info("="*60)
+        logger.info("SCHEDULER STATISTICS")
+        logger.info("="*60)
+        logger.info(f"Uptime: {uptime_hours:.1f} hours")
+        logger.info(f"Total calculations: {self.stats['calculations']}")
+        logger.info(f"Errors: {self.stats['errors']}")
 
-                        if errors % 5 == 0:
-                            logger.warning(f"Error count: {errors}")
+        if uptime_hours > 0:
+            calc_per_hour = self.stats['calculations'] / uptime_hours
+            logger.info(f"Calculations/hour: {calc_per_hour:.1f}")
 
-                    logger.debug(f"Sleeping for {self.interval} seconds...")
-                    await asyncio.sleep(self.interval)
+        logger.info("="*60)
 
-                except KeyboardInterrupt:
-                    logger.info("Shutting down...")
-                    break
-                except Exception as e:
-                    errors += 1
-                    logger.error(f"Error in scheduler loop: {e}", exc_info=True)
+    def _cleanup(self):
+        """Cleanup resources"""
+        logger.info("Cleaning up...")
 
-                    if errors > 20:
-                        logger.critical(f"Too many errors ({errors}), may indicate serious issue")
+        try:
+            if self.db_conn:
+                self.db_conn.close()
+                logger.info("✅ Database connection closed")
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
 
-                    wait_time = min(self.interval * 2, 300)  # Max 5 minutes
-                    logger.info(f"Waiting {wait_time}s before retry...")
-                    await asyncio.sleep(wait_time)
-
-        self.db_conn.close()
+        # Log final statistics
+        logger.info("="*60)
+        logger.info("FINAL STATISTICS")
+        logger.info("="*60)
+        logger.info(f"Total calculations: {self.stats['calculations']}")
+        logger.info(f"Total errors: {self.stats['errors']}")
         logger.info("="*60)
         logger.info("GEX Scheduler stopped")
-        logger.info(f"Final stats - Calculations: {calculations}, Errors: {errors}")
-        logger.info("="*60)
 
 
 async def main():
-    interval = int(os.getenv('POLL_INTERVAL', 60))
-    logger.info(f"Starting with interval: {interval}s")
+    """Main entry point"""
+    import argparse
 
-    scheduler = GEXScheduler(interval_seconds=interval)
-    await scheduler.run('SPY')
+    parser = argparse.ArgumentParser(description='GEX Calculation Scheduler')
+    parser.add_argument(
+        '--interval',
+        type=int,
+        default=int(os.getenv('POLL_INTERVAL', 60)),
+        help='Calculation interval in seconds (default: 60)'
+    )
+    parser.add_argument(
+        '--symbols',
+        nargs='+',
+        default=['SPY'],
+        help='Symbols to calculate GEX for (default: SPY)'
+    )
+    parser.add_argument(
+        '--expiration',
+        default='today',
+        help='Target expiration: "today" or YYYY-MM-DD (default: today)'
+    )
+
+    args = parser.parse_args()
+
+    logger.info(f"Starting with interval: {args.interval}s")
+    logger.info(f"Symbols: {', '.join(args.symbols)}")
+    logger.info(f"Expiration: {args.expiration}")
+
+    scheduler = GEXScheduler(
+        interval_seconds=args.interval,
+        symbols=args.symbols,
+        target_expiration=args.expiration
+    )
+
+    await scheduler.run()
 
 
 if __name__ == '__main__':
