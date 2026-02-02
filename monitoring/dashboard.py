@@ -90,7 +90,7 @@ def get_table_data(table_name):
 
 @app.route('/api/spy-history')
 def get_spy_history():
-    """Get SPY price history for charts"""
+    """Get SPY price history with open interest data for charts"""
     try:
         db_config = load_db_config()
         if not db_config:
@@ -101,19 +101,71 @@ def get_spy_history():
 
         # Get last 48 hours of SPY data with up/down volume
         cursor.execute("""
-            SELECT timestamp, close as price, total_volume as volume,
+            SELECT timestamp, open, high, low, close, total_volume as volume,
                    up_volume, down_volume
             FROM underlying_quotes
             WHERE symbol = 'SPY'
               AND timestamp > NOW() - INTERVAL '48 hours'
             ORDER BY timestamp ASC
         """)
+        price_volume_data = cursor.fetchall()
 
-        rows = cursor.fetchall()
+        # Get aggregated open interest by timestamp (same time intervals)
+        cursor.execute("""
+            WITH time_buckets AS (
+                SELECT
+                    date_trunc('minute', timestamp) as bucket_time,
+                    option_type,
+                    SUM(open_interest) as total_oi
+                FROM options_quotes
+                WHERE symbol LIKE 'SPY%%'
+                  AND timestamp > NOW() - INTERVAL '48 hours'
+                GROUP BY date_trunc('minute', timestamp), option_type
+            )
+            SELECT
+                bucket_time as timestamp,
+                SUM(CASE WHEN option_type = 'call' THEN total_oi ELSE 0 END) as call_oi,
+                SUM(CASE WHEN option_type = 'put' THEN total_oi ELSE 0 END) as put_oi
+            FROM time_buckets
+            GROUP BY bucket_time
+            ORDER BY bucket_time ASC
+        """)
+        oi_data = cursor.fetchall()
+
         cursor.close()
         conn.close()
 
-        return jsonify([dict(row) for row in rows])
+        # Merge the data by timestamp
+        # Create a map of OI data by timestamp
+        oi_map = {}
+        for row in oi_data:
+            # Normalize timestamp to string for comparison
+            ts = row['timestamp'].replace(second=0, microsecond=0)
+            oi_map[ts] = {
+                'call_oi': int(row['call_oi'] or 0),
+                'put_oi': int(row['put_oi'] or 0)
+            }
+
+        # Combine price/volume with OI
+        result = []
+        for row in price_volume_data:
+            ts = row['timestamp'].replace(second=0, microsecond=0)
+            oi_info = oi_map.get(ts, {'call_oi': 0, 'put_oi': 0})
+
+            result.append({
+                'timestamp': row['timestamp'].isoformat(),
+                'open': float(row['open'] or 0),
+                'high': float(row['high'] or 0),
+                'low': float(row['low'] or 0),
+                'close': float(row['close'] or 0),
+                'volume': int(row['volume'] or 0),
+                'up_volume': int(row['up_volume'] or 0),
+                'down_volume': int(row['down_volume'] or 0),
+                'call_oi': oi_info['call_oi'],
+                'put_oi': oi_info['put_oi']
+            })
+
+        return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
