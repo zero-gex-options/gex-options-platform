@@ -33,19 +33,36 @@ Examples:
   ./deploy.sh --start-from database  # Start from database step
   ./deploy.sh --start-from monitoring # Start from monitoring step
 
-010.setup     030.application  050.security  070.systemd     090.monitoring
-020.database  040.tokens       060.backups   080.validation
-
 Available Steps:
   010.setup          - System setup and configuration
-  020.database       - PostgreSQL + TimescaleDB setup
+  015.data_volume    - Data volume setup (/data mount and structure)
+  020.database       - PostgreSQL + TimescaleDB setup (uses /data/postgresql)
   030.application    - Application setup and dependencies
   040.tokens         - TradeStation token initialization
-  050.security       - Security hardening
-  060.backups        - Automated database backups
+  050.security       - Security hardening (firewall, SSH)
+  060.backups        - Automated database backups (uses /data/backups)
   070.systemd        - Systemd services configuration
+  072.gex_cli_tools  - GEX CLI tools installation
   080.validation     - Deployment validation
-  090.monitoring     - Monitoring system setup
+  090.monitoring     - Monitoring system setup (uses /data/monitoring)
+
+Deployment Flow:
+  1. System packages and timezone setup
+  2. Mount /data volume and create directory structure
+  3. Install and configure PostgreSQL on /data
+  4. Setup Python application and dependencies
+  5. Initialize TradeStation API tokens
+  6. Harden security (SSH, firewall, auto-updates)
+  7. Configure automated database backups
+  8. Setup and start systemd services
+  9. Install GEX CLI tools
+  10. Validate deployment
+  11. Setup monitoring dashboard
+
+Data Storage:
+  /data/postgresql   - PostgreSQL database files
+  /data/backups      - Database backup files
+  /data/monitoring   - Monitoring metrics (JSON)
 
 Logs are saved to: /home/ubuntu/logs/deployment_YYYYMMDD_HHMMSS.log
 

@@ -485,7 +485,7 @@ class MonitoringDashboard:
 class MetricsExporter:
     """Export metrics to JSON files for external consumption"""
 
-    def __init__(self, output_dir: str = "/home/ubuntu/monitoring"):
+    def __init__(self, output_dir: str = "/data/monitoring"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 

@@ -13,6 +13,7 @@ APP_DIR="$HOME/gex-options-platform"
 MONITOR_DIR="/opt/zerogex/monitoring"
 MONITOR_SCRIPT="$APP_DIR/monitoring/monitor.py"
 BRANDING="$APP_DIR/branding"
+MONITORING_DATA_DIR="/data/monitoring"
 
 # Check if application directory exists
 if [ ! -d "$APP_DIR" ]; then
@@ -27,6 +28,12 @@ if [ ! -f "$MONITOR_SCRIPT" ]; then
     exit 1
 fi
 
+# Ensure monitoring data directory exists
+log "  → Ensuring monitoring data directory exists..."
+sudo mkdir -p "$MONITORING_DATA_DIR"
+sudo chown ubuntu:ubuntu "$MONITORING_DATA_DIR"
+log "     ✓ Monitoring data directory: $MONITORING_DATA_DIR"
+
 # Create monitoring directory
 log "  → Creating monitoring directory..."
 sudo mkdir -p "$MONITOR_DIR"
@@ -35,6 +42,11 @@ sudo mkdir -p "$MONITOR_DIR"
 log "  → Installing monitoring script..."
 sudo cp "$MONITOR_SCRIPT" "$MONITOR_DIR/monitor.py"
 sudo chmod +x "$MONITOR_DIR/monitor.py"
+
+# Update monitor.py to use /data/monitoring
+log "  → Configuring monitor.py to use /data/monitoring..."
+sudo sed -i 's|output_dir: str = "/home/ubuntu/monitoring"|output_dir: str = "/data/monitoring"|g' "$MONITOR_DIR/monitor.py"
+log "     ✓ monitor.py configured to use /data/monitoring"
 
 # Install Python dependencies
 log "  → Installing monitoring dependencies..."
@@ -147,6 +159,7 @@ log "  ✓ Monitoring daemon installed and running"
 log "  ✓ Web dashboard installed and running"
 log "  ✓ Firewall configured (port 8080)"
 log "  ✓ Metrics collection every 60 seconds"
+log "  ✓ Metrics stored in: $MONITORING_DATA_DIR"
 log ""
 log "Dashboard Access:"
 log "  URL: http://${SERVER_IP}:8080"
@@ -160,5 +173,5 @@ log "  • View monitoring logs:   sudo journalctl -u gex-monitor -f"
 log "  • View dashboard logs:    sudo journalctl -u gex-dashboard -f"
 log "  • Restart monitoring:     sudo systemctl restart gex-monitor"
 log "  • Check service status:   sudo systemctl status gex-monitor"
-log "  • View raw metrics:       cat /home/ubuntu/monitoring/current_metrics.json"
+log "  • View raw metrics:       cat $MONITORING_DATA_DIR/current_metrics.json"
 log ""

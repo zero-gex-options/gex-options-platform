@@ -26,6 +26,12 @@ fi
 log "  → Loading database credentials..."
 source "$CREDS_FILE"
 
+# Ensure backup directory exists
+log "  → Ensuring backup directory exists..."
+sudo mkdir -p "$BACKUP_DIR"
+sudo chown ubuntu:ubuntu "$BACKUP_DIR"
+log "     ✓ Backup directory: $BACKUP_DIR"
+
 # Create .pgpass file
 log "  → Creating .pgpass file for passwordless backups..."
 cat > "$PGPASS_FILE" << EOF
@@ -45,11 +51,6 @@ else
     exit 1
 fi
 
-# Create backup directory
-log "  → Creating backup directory..."
-mkdir -p "$BACKUP_DIR"
-log "     ✓ Backup directory: $BACKUP_DIR"
-
 # Check if backup script exists in repo
 if [ -f "$BACKUP_SCRIPT_SOURCE" ]; then
     log "  → Installing backup script from repository..."
@@ -57,7 +58,7 @@ if [ -f "$BACKUP_SCRIPT_SOURCE" ]; then
     sudo chmod +x "$BACKUP_SCRIPT_TARGET"
     log "     ✓ Backup script installed: $BACKUP_SCRIPT_TARGET"
 else
-    log "     ✗ Backup script is not installed"
+    log "     ✗ Backup script not found: $BACKUP_SCRIPT_SOURCE"
     exit 1
 fi
 
@@ -75,7 +76,7 @@ log "  → Verifying backup files..."
 BACKUP_COUNT=$(find "$BACKUP_DIR" -name "gex_db_*.dump" -type f | wc -l)
 if [ "$BACKUP_COUNT" -gt 0 ]; then
     log "     ✓ Found $BACKUP_COUNT backup file(s)"
-    ls -lh "$BACKUP_DIR"/gex_db_*.sql.gz | tail -n 3
+    ls -lh "$BACKUP_DIR"/gex_db_*.dump | tail -n 3
 else
     log "     ✗ No backup files found"
     exit 1
@@ -98,7 +99,7 @@ else
 fi
 
 # Display current crontab
-CRON_SCHED=`crontab -l 2>/dev/null | grep -A1 "ZeroGEX" || echo "     (none found)"`
+CRON_SCHED=$(crontab -l 2>/dev/null | grep -A1 "ZeroGEX" || echo "     (none found)")
 log ""
 log "  Current cron schedule:"
 log "  ${CRON_SCHED}"
@@ -111,18 +112,17 @@ log "  ✓ Backup script installed: $BACKUP_SCRIPT_TARGET"
 log "  ✓ Backup directory: $BACKUP_DIR"
 log "  ✓ Test backup successful"
 log "  ✓ Automated daily backups configured (2:00 AM)"
-log "  ✓ Backup retention: 30 days"
+log "  ✓ Backup retention: 7 days"
 log ""
 log "Backup Configuration:"
 log "  • Schedule: Daily at 2:00 AM"
 log "  • Location: $BACKUP_DIR"
-log "  • Format: Compressed SQL (.sql.gz)"
-log "  • Retention: 30 days"
-log "  • Logs: ~/logs/backup.log"
+log "  • Format: Compressed custom format (.dump)"
+log "  • Retention: 7 days"
+log "  • Logs: ~/logs/backup-gex-db.log"
 log ""
 log "Manual Operations:"
 log "  • Run backup now: sudo -u ubuntu $BACKUP_SCRIPT_TARGET"
-log "  • View backup log: tail -f ~/logs/backup.log"
 log "  • List backups: ls -lh $BACKUP_DIR"
-log "  • Restore backup: gunzip -c <backup.sql.gz> | psql -U gex_user -h localhost gex_db"
+log "  • Restore backup: pg_restore -U gex_user -h localhost -d gex_db <backup.dump>"
 log ""

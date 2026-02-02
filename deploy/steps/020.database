@@ -27,13 +27,37 @@ log "  → Installing TimescaleDB for PostgreSQL ${PG_VERSION}..."
 sudo apt update
 sudo apt install -y timescaledb-2-postgresql-${PG_VERSION}
 
+# Stop PostgreSQL before moving data directory
+log "  → Stopping PostgreSQL..."
+sudo systemctl stop postgresql
+
+# Move PostgreSQL data directory to /data if it exists
+if [ -d "/data/postgresql" ]; then
+    log "  → Configuring PostgreSQL to use /data/postgresql..."
+
+    # Update PostgreSQL config to use /data
+    PG_CONF="/etc/postgresql/${PG_VERSION}/main/postgresql.conf"
+    sudo sed -i "s|data_directory = '/var/lib/postgresql/${PG_VERSION}/main'|data_directory = '/data/postgresql/${PG_VERSION}/main'|" "$PG_CONF"
+
+    # Create the directory structure
+    sudo mkdir -p "/data/postgresql/${PG_VERSION}/main"
+    sudo chown -R postgres:postgres /data/postgresql
+
+    # Initialize the new data directory
+    sudo -u postgres /usr/lib/postgresql/${PG_VERSION}/bin/initdb -D "/data/postgresql/${PG_VERSION}/main"
+
+    log "     ✓ PostgreSQL configured to use /data/postgresql"
+else
+    log "  ℹ /data/postgresql not available, using default location"
+fi
+
 # Tune PostgreSQL for TimescaleDB
 log "  → Tuning PostgreSQL for TimescaleDB..."
 sudo timescaledb-tune --quiet --yes
 
-# Restart PostgreSQL
-log "  → Restarting PostgreSQL..."
-sudo systemctl restart postgresql
+# Start PostgreSQL
+log "  → Starting PostgreSQL..."
+sudo systemctl start postgresql
 
 # Prompt for database password
 echo ""
@@ -142,6 +166,10 @@ for table in "${EXPECTED_TABLES[@]}"; do
     fi
 done
 
+# Show PostgreSQL data location
+PG_DATA_DIR=$(PGPASSWORD="$DB_PASSWORD" psql -U gex_user -d gex_db -h localhost -t -c "SHOW data_directory;" | xargs)
+
+log ""
 log "Database setup complete!"
 log ""
 log "Summary:"
@@ -153,6 +181,7 @@ log "  ✓ TimescaleDB extension enabled"
 log "  ✓ Authentication configured"
 log "  ✓ Database schema applied"
 log "  ✓ Credentials saved to: ${CREDS_FILE}"
+log "  ✓ PostgreSQL data directory: ${PG_DATA_DIR}"
 log ""
 log "Connection details:"
 log "  Database: gex_db"
