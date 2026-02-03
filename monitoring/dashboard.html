@@ -361,16 +361,16 @@
             </div>
         </div>
 
-	<!-- SPY Quote Page -->
+        <!-- SPY Quote Page -->
         <div id="spy" class="page">
             <div class="page-header">
                 <h2>SPY Quote</h2>
                 <div class="subtitle">Latest SPY pricing and volume</div>
             </div>
-            <div class="card" style="margin-bottom: 20px;">
+            <div class="card" style="margin-bottom: 20px; padding: 16px;">
                 <div id="spyLatest">Loading...</div>
             </div>
-	    <div class="card" style="padding: 24px 24px 0 24px;">
+            <div class="card" style="padding: 24px 24px 0 24px;">
                 <h3 style="margin-bottom: 16px;">Price, Volume & Open Interest</h3>
                 <!-- Candlestick Chart - no bottom padding -->
                 <div class="chart-container" style="height: 400px; margin-bottom: 0;">
@@ -381,7 +381,7 @@
                     <canvas id="spyVolumeChart"></canvas>
                 </div>
                 <!-- Open Interest Chart - no top padding, directly touching volume chart -->
-                <div class="chart-container" style="height: 300px; margin-top: 0; padding-bottom: 24px;">
+                <div class="chart-container" style="height: 350px; margin-top: 0; padding-bottom: 24px;">
                     <canvas id="spyOIChart"></canvas>
                 </div>
             </div>
@@ -497,10 +497,17 @@
         }
 
         function updateHome(data) {
+            // Check if data.system exists
+            if (!data.system) {
+                document.getElementById('homeSystemHealth').innerHTML = '<div style="color: #ef4444;">System metrics unavailable</div>';
+                return;
+            }
+
             const sys = data.system;
             const maxUsage = Math.max(sys.cpu_percent, sys.memory_percent, sys.disk_percent);
             const healthStatus = maxUsage >= 90 ? 'error' : maxUsage >= 80 ? 'warning' : 'success';
             const healthText = maxUsage >= 90 ? 'Critical' : maxUsage >= 80 ? 'Warning' : 'Healthy';
+
             document.getElementById('homeSystemHealth').innerHTML = `
                 <div style="text-align: center; padding: 20px;">
                     <div class="status-badge ${healthStatus}" style="font-size: 16px; padding: 8px 16px;">
@@ -510,14 +517,16 @@
                         CPU: ${sys.cpu_percent.toFixed(1)}% | Mem: ${sys.memory_percent.toFixed(1)}% | Disk: ${sys.disk_percent.toFixed(1)}%
                     </div>
                 </div>`;
-            let allActive = Object.values(data.services).every(s => s === 'active');
+
+            let allActive = data.services && Object.values(data.services).every(s => s === 'active');
             document.getElementById('homeServices').innerHTML = `
                 <div style="text-align: center; padding: 20px;">
                     <div class="status-badge ${allActive ? 'success' : 'error'}" style="font-size: 16px; padding: 8px 16px;">
                         <span class="status-dot"></span>${allActive ? 'All Running' : 'Issues Detected'}
                     </div>
-                    <div style="margin-top: 12px; color: #94a3b8; font-size: 14px;">${Object.keys(data.services).length} services monitored</div>
+                    <div style="margin-top: 12px; color: #94a3b8; font-size: 14px;">${data.services ? Object.keys(data.services).length : 0} services monitored</div>
                 </div>`;
+
             if (data.database && !data.database.error) {
                 const db = data.database;
                 document.getElementById('homeDataFlow').innerHTML = `
@@ -567,7 +576,7 @@
         function updateAlerts(data) {
             const alerts = data.alerts || [];
             if (alerts.length === 0) {
-                document.getElementById('alertsContent').innerHTML = '<div style="color: #10b981; text-align: center; padding: 40px;">âœ“ All systems operational</div>';
+                document.getElementById('alertsContent').innerHTML = '<div style="color: #10b981; text-align: center; padding: 40px;">✓ All systems operational</div>';
                 return;
             }
             let html = '';
@@ -586,10 +595,10 @@
             const spy = data.database.spy_quote;
             const spyTime = new Date(spy.timestamp);
             document.getElementById('spyLatest').innerHTML = `
-                <div style="display: flex; justify-content: space-around; align-items: center; padding: 20px;">
-                    <div style="text-align: center;"><div class="metric-label">SPY PRICE</div><div class="metric-value large">$${spy.price.toFixed(2)}</div></div>
-                    <div style="text-align: center;"><div class="metric-label">VOLUME</div><div class="metric-value">${formatNumber(spy.volume)}</div></div>
-                    <div style="text-align: center;"><div class="metric-label">LAST UPDATE</div><div class="metric-value" style="font-size: 16px;">${spyTime.toLocaleString()}</div></div>
+                <div style="display: flex; justify-content: space-around; align-items: center; padding: 8px;">
+                    <div style="text-align: center;"><div class="metric-label">SPY PRICE</div><div class="metric-value" style="font-size: 32px;">$${spy.price.toFixed(2)}</div></div>
+                    <div style="text-align: center;"><div class="metric-label">VOLUME</div><div class="metric-value" style="font-size: 20px;">${formatNumber(spy.volume)}</div></div>
+                    <div style="text-align: center;"><div class="metric-label">LAST UPDATE</div><div class="metric-value" style="font-size: 14px;">${spyTime.toLocaleTimeString()}</div></div>
                 </div>`;
             await updateSPYChart();
         }
