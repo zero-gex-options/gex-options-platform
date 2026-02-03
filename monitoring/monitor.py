@@ -82,14 +82,16 @@ class MonitoringCollector:
             cursor.execute("""
                 SELECT 
                     COUNT(*) as total_rows,
-                    COUNT(*) FILTER (WHERE timestamp > NOW() - INTERVAL '10 minutes') as recent_10min,
-                    COUNT(*) FILTER (WHERE timestamp > NOW() - INTERVAL '1 hour') as recent_1hour,
+                    SUM(CASE WHEN timestamp > NOW() - INTERVAL '10 minutes' THEN 1 ELSE 0 END) as recent_10min,
+                    SUM(CASE WHEN timestamp > NOW() - INTERVAL '1 hour' THEN 1 ELSE 0 END) as recent_1hour,
                     MAX(timestamp) as latest_timestamp
                 FROM options_quotes;
             """)
             quotes_data = cursor.fetchone()
 
+            print(f"Database query result - Total: {quotes_data['total_rows'] if quotes_data else 'None'}")
             print(f"Database query result - Recent 10min: {quotes_data['recent_10min'] if quotes_data else 'None'}")
+            print(f"Database query result - Recent 1hour: {quotes_data['recent_1hour'] if quotes_data else 'None'}")
 
             # Get GEX calculations
             cursor.execute("""

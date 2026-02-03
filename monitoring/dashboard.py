@@ -247,15 +247,17 @@ def get_spy_history():
         cursor.execute("SET statement_timeout = '5s'")
 
         # Simpler, faster query - pre-aggregated to 5-minute buckets
+        print("Fetching SPY aggregated data (5-min buckets)...")
         cursor.execute("""
             WITH five_min_buckets AS (
                 SELECT
-                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') + 
+                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') +
                     (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
                     (array_agg(open ORDER BY timestamp))[1] as open,
                     MAX(high) as high,
                     MIN(low) as low,
                     (array_agg(close ORDER BY timestamp DESC))[1] as close,
+                    MAX(timestamp) as actual_timestamp,
                     SUM(COALESCE(total_volume, 0)) as volume,
                     SUM(COALESCE(up_volume, 0)) as up_volume,
                     SUM(COALESCE(down_volume, 0)) as down_volume
@@ -270,33 +272,44 @@ def get_spy_history():
         """)
         price_data = cursor.fetchall()
 
-        # Separate, lighter OI query
+        # Separate OI query - use SAME bucketing logic as price query
         cursor.execute("""
-            WITH five_min_oi AS (
-                SELECT
-                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') + 
-                    (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
-                    SUM(CASE WHEN option_type = 'call' THEN COALESCE(open_interest, 0) ELSE 0 END) as call_oi,
-                    SUM(CASE WHEN option_type = 'put' THEN COALESCE(open_interest, 0) ELSE 0 END) as put_oi
-                FROM options_quotes
-                WHERE symbol LIKE 'SPY%'
-                  AND timestamp > NOW() - INTERVAL '48 hours'
-                  AND open_interest > 0
-                GROUP BY bucket_time
-            )
-            SELECT * FROM five_min_oi
+            SELECT
+                date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') + 
+                (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
+                SUM(CASE WHEN option_type = 'call' THEN COALESCE(open_interest, 0) ELSE 0 END) as call_oi,
+                SUM(CASE WHEN option_type = 'put' THEN COALESCE(open_interest, 0) ELSE 0 END) as put_oi,
+                COUNT(*) as quote_count
+            FROM options_quotes
+            WHERE symbol LIKE 'SPY%'
+              AND timestamp > NOW() - INTERVAL '48 hours'
+            GROUP BY bucket_time
             ORDER BY bucket_time ASC
             LIMIT 600
         """)
         oi_data = cursor.fetchall()
 
+        print(f"OI query returned {len(oi_data)} buckets")
+        if len(oi_data) > 0:
+            sample = oi_data[-1]  # Most recent
+            print(f"Most recent OI bucket: time={sample['bucket_time']}, call_oi={sample['call_oi']}, put_oi={sample['put_oi']}")
+
         cursor.close()
 
-        # Create OI map
-        oi_map = {row['bucket_time']: {
-            'call_oi': int(row['call_oi'] or 0),
-            'put_oi': int(row['put_oi'] or 0)
-        } for row in oi_data}
+        # Create OI map - use string keys for better matching
+        oi_map = {}
+        for row in oi_data:
+            # Use the original bucket_time without timezone conversion for the key
+            ts_key = row['bucket_time']
+            oi_map[ts_key] = {
+                'call_oi': int(row['call_oi'] or 0),
+                'put_oi': int(row['put_oi'] or 0),
+                'quote_count': int(row['quote_count'] or 0)
+            }
+
+        print(f"Created OI map with {len(oi_map)} entries")
+        if len(oi_map) > 0:
+            print(f"Sample OI map entry: {list(oi_map.values())[0]}")
 
         eastern = pytz.timezone('America/New_York')
 
@@ -307,15 +320,28 @@ def get_spy_history():
             if not ts:
                 continue
 
-            if ts.tzinfo is None:
-                ts = eastern.localize(ts)
-            else:
-                ts = ts.astimezone(eastern)
+            # Match OI using the original bucket_time (before timezone conversion)
+            oi_info = oi_map.get(ts, {'call_oi': 0, 'put_oi': 0, 'quote_count': 0})
 
-            oi_info = oi_map.get(row['bucket_time'], {'call_oi': 0, 'put_oi': 0})
+            # Now convert to ET for output
+            if ts.tzinfo is None:
+                ts_display = eastern.localize(ts)
+            else:
+                ts_display = ts.astimezone(eastern)
+
+            # Convert the actual timestamp to ET
+            actual_ts = row['actual_timestamp']
+            if actual_ts:
+                if actual_ts.tzinfo is None:
+                    actual_ts_display = eastern.localize(actual_ts)
+                else:
+                    actual_ts_display = actual_ts.astimezone(eastern)
+            else:
+                actual_ts_display = ts_display
 
             result.append({
-                'timestamp': ts.isoformat(),
+                'timestamp': ts_display.isoformat(),
+                'actual_timestamp': actual_ts_display.isoformat(),
                 'open': float(row['open'] or row['close'] or 0),
                 'high': float(row['high'] or row['close'] or 0),
                 'low': float(row['low'] or row['close'] or 0),
@@ -326,6 +352,10 @@ def get_spy_history():
                 'call_oi': oi_info['call_oi'],
                 'put_oi': oi_info['put_oi']
             })
+
+        print(f"Returning {len(result)} combined data points")
+        if len(result) > 0:
+            print(f"Sample result with OI: call_oi={result[0]['call_oi']}, put_oi={result[0]['put_oi']}")
 
         return jsonify(result)
 
@@ -447,6 +477,64 @@ def get_uptime_history():
         print(f"Error in uptime-history: {e}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/spy-change')
+def get_spy_change():
+    """Get SPY price change from previous close"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get current price and previous day's close
+        cursor.execute("""
+            WITH latest_price AS (
+                SELECT close as current_price, timestamp
+                FROM underlying_quotes
+                WHERE symbol = 'SPY'
+                ORDER BY timestamp DESC
+                LIMIT 1
+            ),
+            previous_close AS (
+                SELECT close as prev_close
+                FROM underlying_quotes
+                WHERE symbol = 'SPY'
+                  AND timestamp < (SELECT DATE_TRUNC('day', timestamp AT TIME ZONE 'America/New_York')
+                                   FROM latest_price)
+                ORDER BY timestamp DESC
+                LIMIT 1
+            )
+            SELECT
+                lp.current_price,
+                pc.prev_close,
+                (lp.current_price - pc.prev_close) as change,
+                ((lp.current_price - pc.prev_close) / pc.prev_close * 100) as percent_change
+            FROM latest_price lp, previous_close pc
+        """)
+
+        result = cursor.fetchone()
+        cursor.close()
+
+        if result:
+            return jsonify({
+                'current_price': float(result['current_price'] or 0),
+                'prev_close': float(result['prev_close'] or 0),
+                'change': float(result['change'] or 0),
+                'percent_change': float(result['percent_change'] or 0)
+            })
+        else:
+            return jsonify({'change': 0, 'percent_change': 0})
+
+    except Exception as e:
+        print(f"Error in spy-change: {e}")
+        traceback.print_exc()
+        return jsonify({'change': 0, 'percent_change': 0})
     finally:
         if conn:
             return_db_connection(conn)

@@ -532,9 +532,10 @@
                 document.getElementById('homeDataFlow').innerHTML = `
                     <div style="padding: 12px;">
                         <div class="metric"><div class="metric-label">Recent Quotes (10 min)</div><div class="metric-value">${formatNumber(db.quotes_recent_10min)}</div></div>
-                        <div class="metric"><div class="metric-label">Total Options</div><div class="metric-value" style="font-size: 18px;">${formatNumber(db.quotes_total)}</div></div>
+                        <div class="metric"><div class="metric-label">Total Option Quotes (All Time)</div><div class="metric-value" style="font-size: 18px;">${formatNumber(db.quotes_total)}</div></div>
                     </div>`;
             }
+
         }
 
         function updateSystem(data) {
@@ -588,18 +589,7 @@
         }
 
         async function updateSPY(data) {
-            if (!data.database || !data.database.spy_quote) {
-                document.getElementById('spyLatest').innerHTML = '<div style="color: #64748b;">No SPY data available</div>';
-                return;
-            }
-            const spy = data.database.spy_quote;
-            const spyTime = new Date(spy.timestamp);
-            document.getElementById('spyLatest').innerHTML = `
-                <div style="display: flex; justify-content: space-around; align-items: center; padding: 8px;">
-                    <div style="text-align: center;"><div class="metric-label">SPY PRICE</div><div class="metric-value" style="font-size: 32px;">$${spy.price.toFixed(2)}</div></div>
-                    <div style="text-align: center;"><div class="metric-label">VOLUME</div><div class="metric-value" style="font-size: 20px;">${formatNumber(spy.volume)}</div></div>
-                    <div style="text-align: center;"><div class="metric-label">LAST UPDATE</div><div class="metric-value" style="font-size: 14px;">${spyTime.toLocaleTimeString()}</div></div>
-                </div>`;
+            // Quote panel is now updated directly by updateSPYChart
             await updateSPYChart();
         }
 
@@ -848,6 +838,10 @@
 
                 // Open Interest Chart (bottom)
                 const oiCtx = document.getElementById('spyOIChart');
+
+                console.log('Creating OI chart with data points:', filteredData.length);
+                console.log('Sample OI data:', filteredData[0]);
+
                 charts.spyOIChart = new Chart(oiCtx, {
                     type: 'line',
                     data: {
@@ -860,8 +854,11 @@
                                 })),
                                 borderColor: '#10b981',
                                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                fill: true,
-                                tension: 0.4
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                pointHoverRadius: 5,
+                                tension: 0.4,
+                                fill: true
                             },
                             {
                                 label: 'Put OI',
@@ -871,8 +868,11 @@
                                 })),
                                 borderColor: '#ef4444',
                                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                fill: true,
-                                tension: 0.4
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                pointHoverRadius: 5,
+                                tension: 0.4,
+                                fill: true
                             }
                         ]
                     },
@@ -880,34 +880,154 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         animation: false,
+                        layout: { padding: { top: 0 } },
+                        interaction: { mode: 'index', intersect: false },
                         scales: {
                             x: {
                                 type: 'time',
-                                time: { unit: 'hour', displayFormats: { hour: 'MMM dd HH:mm' } },
+                                time: {
+                                    unit: 'hour',
+                                    displayFormats: { hour: 'MMM dd HH:mm' }
+                                },
                                 ticks: {
                                     color: '#94a3b8',
                                     maxRotation: 45,
-                                    minRotation: 45
+                                    minRotation: 45,
+                                    callback: function(value, index, ticks) {
+                                        const date = new Date(value);
+                                        if (date.getMinutes() === 0) {
+                                            return date.toLocaleString('en-US', { 
+                                                month: 'short', 
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            });
+                                        }
+                                        return '';
+                                    }
                                 },
-                                grid: { color: '#334155' }
+                                grid: { 
+                                    color: function(context) {
+                                        const date = new Date(context.tick.value);
+                                        return date.getMinutes() === 0 ? '#475569' : '#334155';
+                                    }
+                                }
                             },
                             y: {
+                                type: 'linear',
                                 title: { display: true, text: 'Open Interest', color: '#94a3b8' },
                                 ticks: { 
                                     color: '#94a3b8',
                                     callback: function(value) {
-                                        return (value / 1000).toFixed(0) + 'K';
+                                        if (value >= 1000000) {
+                                            return (value / 1000000).toFixed(1) + 'M';
+                                        } else if (value >= 1000) {
+                                            return (value / 1000).toFixed(0) + 'K';
+                                        }
+                                        return value.toFixed(0);
                                     }
                                 },
                                 grid: { color: '#334155' }
                             }
                         },
                         plugins: {
-                            legend: { labels: { color: '#e2e8f0' }, position: 'top' }
+                            legend: { 
+                                labels: { color: '#e2e8f0' },
+                                position: 'top'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        const value = context.parsed.y;
+                                        if (value >= 1000000) {
+                                            label += (value / 1000000).toFixed(2) + 'M';
+                                        } else if (value >= 1000) {
+                                            label += (value / 1000).toFixed(0) + 'K';
+                                        } else {
+                                            label += value.toFixed(0);
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
                         }
                     }
                 });
-                console.log('OI chart created');
+
+                console.log('OI chart created successfully');
+
+                // Update the SPY quote panel with the most recent data point from chart
+                if (filteredData.length > 0) {
+                    const latestData = filteredData[filteredData.length - 1];
+                    // Use the ACTUAL database timestamp (not the 5-min bucket time)
+                    const latestTime = new Date(latestData.actual_timestamp || latestData.timestamp);
+
+                    // Fetch the actual previous day's close for accurate change calculation
+                    try {
+                        const changeResponse = await fetch('/api/spy-change');
+                        const changeData = await changeResponse.json();
+
+                        const priceChange = changeData.change || 0;
+                        const percentChange = changeData.percent_change || 0;
+                        const changeColor = priceChange >= 0 ? '#10b981' : '#ef4444';
+                        const changeSymbol = priceChange >= 0 ? '+' : '';
+
+                        document.getElementById('spyLatest').innerHTML = `
+                            <div style="display: flex; justify-content: space-around; align-items: center; padding: 8px;">
+                                <div style="text-align: center;">
+                                    <div class="metric-label">SPY PRICE</div>
+                                    <div style="display: flex; align-items: baseline; justify-content: center; gap: 12px;">
+                                        <div class="metric-value" style="font-size: 32px;">$${latestData.close.toFixed(2)}</div>
+                                        <div style="color: ${changeColor}; font-size: 18px; font-weight: 600;">
+                                            ${changeSymbol}$${Math.abs(priceChange).toFixed(2)} (${changeSymbol}${percentChange.toFixed(2)}%)
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div class="metric-label">VOLUME</div>
+                                    <div class="metric-value" style="font-size: 20px;">${formatNumber(latestData.volume)}</div>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div class="metric-label">DATA AS OF</div>
+                                    <div class="metric-value" style="font-size: 14px;">${latestTime.toLocaleString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        hour: '2-digit', 
+                                        minute: '2-digit',
+                                        second: '2-digit'
+                                    })}</div>
+                                </div>
+                            </div>`;
+                    } catch (error) {
+                        console.error('Error fetching SPY change data:', error);
+                        // Fallback without change data
+                        document.getElementById('spyLatest').innerHTML = `
+                            <div style="display: flex; justify-content: space-around; align-items: center; padding: 8px;">
+                                <div style="text-align: center;">
+                                    <div class="metric-label">SPY PRICE</div>
+                                    <div class="metric-value" style="font-size: 32px;">$${latestData.close.toFixed(2)}</div>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div class="metric-label">VOLUME</div>
+                                    <div class="metric-value" style="font-size: 20px;">${formatNumber(latestData.volume)}</div>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div class="metric-label">DATA AS OF</div>
+                                    <div class="metric-value" style="font-size: 14px;">${latestTime.toLocaleString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        hour: '2-digit', 
+                                        minute: '2-digit',
+                                        second: '2-digit'
+                                    })}</div>
+                                </div>
+                            </div>`;
+                    }
+                }
 
             } catch (error) { 
                 console.error('Error in updateSPYChart:', error);
@@ -1113,7 +1233,7 @@
         function updateDashboard() {
             fetch('/api/metrics').then(response => response.json()).then(data => {
                 globalData = data;
-                
+
                 // Parse timestamp safely
                 let timestamp;
                 try {
@@ -1130,14 +1250,14 @@
                     console.error('Error parsing timestamp:', e);
                     timestamp = new Date();
                 }
-                
+
                 document.getElementById('lastUpdate').textContent = `🚀 Updated: ${timestamp.toLocaleTimeString()}`;
-                
+
                 const marketBadge = document.getElementById('marketStatusBadge');
                 marketBadge.innerHTML = data.market_open ? 
                     '<span class="market-status open"><span class="status-dot"></span> Market Open</span>' : 
                     '<span class="market-status closed"><span class="status-dot"></span> Market Closed</span>';
-                
+
                 updateHome(data);
                 updateSystem(data);
                 updateServices(data);
@@ -1152,20 +1272,32 @@
             });
         }
 
+        // Initial load
         updateDashboard();
+        updateUptimeChart();
+        updateSPYChart();
+        updateIngestionCharts();
+
+        // Update main dashboard data every 5 seconds
         setInterval(updateDashboard, 5000);
-        // Refresh all charts every 5 seconds
+
+        // Update SPY charts every 5 seconds (independent of dashboard)
+        setInterval(() => {
+            // If we're on the SPY page, also update the quote panel
+            if (document.getElementById('spy').classList.contains('active')) {
+                if (globalData && globalData.database) {
+                    updateSPY(globalData);
+                }
+            }
+            updateSPYChart(); 
+        }, 5000);
+
+        // Update other charts every 5 seconds
         setInterval(() => { 
             updateUptimeChart(); 
-            updateSPYChart(); 
             updateIngestionCharts(); 
         }, 5000);
-        // Initial load after 1 second
-        setTimeout(() => { 
-            updateUptimeChart(); 
-            updateSPYChart(); 
-            updateIngestionCharts(); 
-        }, 1000);
+
     </script>
 </body>
 </html>
