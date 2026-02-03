@@ -8,13 +8,19 @@ from flask import Flask, jsonify, send_from_directory
 import json
 from pathlib import Path
 import psycopg2
+from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
 import traceback
+from datetime import datetime
+import pytz
 
 app = Flask(__name__)
 METRICS_FILE = Path("/home/ubuntu/monitoring/current_metrics.json")
 DASHBOARD_DIR = Path("/opt/zerogex/monitoring")
 CREDS_FILE = Path.home() / ".zerogex_db_creds"
+
+# Global connection pool
+db_pool = None
 
 def load_db_config():
     """Load database configuration from ~/.zerogex_db_creds"""
@@ -43,6 +49,47 @@ def load_db_config():
         traceback.print_exc()
         return None
 
+def init_db_pool():
+    """Initialize database connection pool"""
+    global db_pool
+    if db_pool is None:
+        db_config = load_db_config()
+        if db_config:
+            try:
+                db_pool = psycopg2.pool.SimpleConnectionPool(
+                    minconn=1,
+                    maxconn=5,
+                    connect_timeout=3,
+                    **db_config
+                )
+                print("Database connection pool initialized")
+            except Exception as e:
+                print(f"Error creating connection pool: {e}")
+                db_pool = None
+
+def get_db_connection():
+    """Get a connection from the pool"""
+    global db_pool
+    if db_pool is None:
+        init_db_pool()
+
+    if db_pool:
+        try:
+            return db_pool.getconn()
+        except Exception as e:
+            print(f"Error getting connection from pool: {e}")
+            return None
+    return None
+
+def return_db_connection(conn):
+    """Return a connection to the pool"""
+    global db_pool
+    if db_pool and conn:
+        try:
+            db_pool.putconn(conn)
+        except Exception as e:
+            print(f"Error returning connection to pool: {e}")
+
 @app.route('/')
 def dashboard():
     try:
@@ -53,15 +100,98 @@ def dashboard():
 
 @app.route('/api/metrics')
 def get_metrics():
-    try:
-        if METRICS_FILE.exists():
-            with open(METRICS_FILE) as f:
-                return jsonify(json.load(f))
-        return jsonify({'error': 'Metrics file not found'}), 404
-    except Exception as e:
-        print(f"Error getting metrics: {e}")
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+    import time
+    max_retries = 3
+
+    for attempt in range(max_retries):
+        try:
+            if METRICS_FILE.exists():
+                # Use with statement and explicit error handling
+                with open(METRICS_FILE, 'r') as f:
+                    content = f.read()
+
+                # Validate it's not empty
+                if not content or len(content) < 10:
+                    print(f"Metrics file is empty or too small (attempt {attempt + 1})")
+                    time.sleep(0.1)
+                    continue
+
+                try:
+                    data = json.loads(content)
+                    # Ensure timestamp is valid
+                    if not data.get('timestamp'):
+                        data['timestamp'] = datetime.now(pytz.utc).isoformat()
+                    return jsonify(data)
+                except json.JSONDecodeError as e:
+                    print(f"JSON decode error (attempt {attempt + 1}): {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(0.1)
+                        continue
+                    else:
+                        # Return a minimal valid response
+                        return jsonify({
+                            'error': 'Metrics temporarily unavailable',
+                            'timestamp': datetime.now(pytz.utc).isoformat(),
+                            'market_open': False,
+                            'system': {
+                                'cpu_percent': 0,
+                                'memory_percent': 0,
+                                'disk_percent': 0,
+                                'memory_used_gb': 0,
+                                'memory_total_gb': 0,
+                                'disk_used_gb': 0,
+                                'disk_total_gb': 0
+                            },
+                            'services': {},
+                            'database': {'error': 'Unavailable'},
+                            'alerts': []
+                        })
+            else:
+                return jsonify({
+                    'error': 'Metrics file not found',
+                    'timestamp': datetime.now(pytz.utc).isoformat(),
+                    'market_open': False,
+                    'system': {
+                        'cpu_percent': 0,
+                        'memory_percent': 0,
+                        'disk_percent': 0,
+                        'memory_used_gb': 0,
+                        'memory_total_gb': 0,
+                        'disk_used_gb': 0,
+                        'disk_total_gb': 0
+                    },
+                    'services': {},
+                    'database': {'error': 'Unavailable'},
+                    'alerts': []
+                }), 404
+
+        except Exception as e:
+            print(f"Error reading metrics file (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(0.1)
+                continue
+            else:
+                traceback.print_exc()
+                return jsonify({
+                    'error': str(e),
+                    'timestamp': datetime.now(pytz.utc).isoformat(),
+                    'market_open': False,
+                    'system': {
+                        'cpu_percent': 0,
+                        'memory_percent': 0,
+                        'disk_percent': 0,
+                        'memory_used_gb': 0,
+                        'memory_total_gb': 0,
+                        'disk_used_gb': 0,
+                        'disk_total_gb': 0
+                    },
+                    'services': {},
+                    'database': {'error': 'Unavailable'},
+                    'alerts': []
+                }), 500
+
+    # Shouldn't reach here, but just in case
+    return jsonify({'error': 'Failed after retries'}), 500
 
 @app.route('/api/table/<table_name>')
 def get_table_data(table_name):
@@ -77,15 +207,14 @@ def get_table_data(table_name):
         return jsonify({'error': 'Invalid table name'}), 400
 
     actual_table = allowed_tables[table_name]
+    conn = None
 
     try:
-        db_config = load_db_config()
-        if not db_config:
-            return jsonify({'error': 'Database config not found'}), 500
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
 
-        conn = psycopg2.connect(**db_config)
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-
         cursor.execute(f"""
             SELECT * FROM {actual_table}
             ORDER BY timestamp DESC
@@ -94,36 +223,35 @@ def get_table_data(table_name):
 
         rows = cursor.fetchall()
         cursor.close()
-        conn.close()
 
         return jsonify([dict(row) for row in rows])
     except Exception as e:
         print(f"Error getting table data for {table_name}: {e}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/spy-history')
 def get_spy_history():
     """Get SPY price history with open interest data for charts"""
     conn = None
-    cursor = None
     try:
-        db_config = load_db_config()
-        if not db_config:
-            print("DB config not found")
-            return jsonify({'error': 'Database config not found'}), 500
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
 
-        print("Connecting to database...")
-        conn = psycopg2.connect(**db_config, connect_timeout=5)
         cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+        cursor.execute("SET statement_timeout = '5s'")
 
-        print("Fetching SPY aggregated data (5-min buckets)...")
-        # Aggregate to 5-minute buckets to reduce memory - only last 48 hours
+        # Simpler, faster query - pre-aggregated to 5-minute buckets
         cursor.execute("""
             WITH five_min_buckets AS (
                 SELECT
-                    date_trunc('hour', timestamp) +
-                    (floor(EXTRACT(minute FROM timestamp) / 5) * INTERVAL '5 minutes') as bucket_time,
+                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') + 
+                    (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
                     (array_agg(open ORDER BY timestamp))[1] as open,
                     MAX(high) as high,
                     MIN(low) as low,
@@ -138,54 +266,56 @@ def get_spy_history():
             )
             SELECT * FROM five_min_buckets
             ORDER BY bucket_time ASC
-            LIMIT 1000
+            LIMIT 600
         """)
         price_data = cursor.fetchall()
-        print(f"Found {len(price_data)} 5-min buckets")
 
-        print("Fetching aggregated OI data...")
-        # Aggregate OI to 5-minute buckets
+        # Separate, lighter OI query
         cursor.execute("""
             WITH five_min_oi AS (
                 SELECT
-                    date_trunc('hour', timestamp) +
-                    (floor(EXTRACT(minute FROM timestamp) / 5) * INTERVAL '5 minutes') as bucket_time,
+                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') + 
+                    (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
                     SUM(CASE WHEN option_type = 'call' THEN COALESCE(open_interest, 0) ELSE 0 END) as call_oi,
                     SUM(CASE WHEN option_type = 'put' THEN COALESCE(open_interest, 0) ELSE 0 END) as put_oi
                 FROM options_quotes
                 WHERE symbol LIKE 'SPY%'
                   AND timestamp > NOW() - INTERVAL '48 hours'
+                  AND open_interest > 0
                 GROUP BY bucket_time
             )
             SELECT * FROM five_min_oi
             ORDER BY bucket_time ASC
-            LIMIT 1000
+            LIMIT 600
         """)
         oi_data = cursor.fetchall()
-        print(f"Found {len(oi_data)} OI buckets")
 
         cursor.close()
-        conn.close()
 
-        # Create OI map - more memory efficient
+        # Create OI map
         oi_map = {row['bucket_time']: {
             'call_oi': int(row['call_oi'] or 0),
             'put_oi': int(row['put_oi'] or 0)
         } for row in oi_data}
 
-        print(f"Created OI map with {len(oi_map)} entries")
+        eastern = pytz.timezone('America/New_York')
 
-        # Combine data - limit to 576 points (48 hours * 12 per hour)
+        # Combine data
         result = []
-        for row in price_data[:576]:  # Hard limit
+        for row in price_data:
             ts = row['bucket_time']
             if not ts:
                 continue
 
-            oi_info = oi_map.get(ts, {'call_oi': 0, 'put_oi': 0})
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            oi_info = oi_map.get(row['bucket_time'], {'call_oi': 0, 'put_oi': 0})
 
             result.append({
-                'timestamp': ts.strftime('%Y-%m-%dT%H:%M:%S'),
+                'timestamp': ts.isoformat(),
                 'open': float(row['open'] or row['close'] or 0),
                 'high': float(row['high'] or row['close'] or 0),
                 'low': float(row['low'] or row['close'] or 0),
@@ -197,45 +327,35 @@ def get_spy_history():
                 'put_oi': oi_info['put_oi']
             })
 
-        print(f"Returning {len(result)} combined data points")
         return jsonify(result)
 
-    except psycopg2.OperationalError as e:
-        print(f"Database connection error in spy-history: {e}")
-        return jsonify({'error': f'Database connection failed: {str(e)}'}), 500
+    except psycopg2.extensions.QueryCanceledError:
+        print("SPY history query timeout")
+        return jsonify({'error': 'Query timeout'}), 504
     except Exception as e:
         print(f"Error in spy-history: {e}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
-        if cursor:
-            try:
-                cursor.close()
-            except:
-                pass
         if conn:
-            try:
-                conn.close()
-            except:
-                pass
+            return_db_connection(conn)
 
 @app.route('/api/ingestion-history')
 def get_ingestion_history():
     """Get ingestion metrics history for charts"""
     conn = None
-    cursor = None
     try:
-        db_config = load_db_config()
-        if not db_config:
-            return jsonify({'error': 'Database config not found'}), 500
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
 
-        conn = psycopg2.connect(**db_config, connect_timeout=5)
         cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+        cursor.execute("SET statement_timeout = '3s'")
 
-        # Aggregate to hourly to reduce memory
         cursor.execute("""
-            SELECT
-                date_trunc('hour', timestamp) as hour,
+            SELECT 
+                date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') as hour,
                 SUM(COALESCE(records_ingested, 0)) as records_ingested,
                 SUM(COALESCE(error_count, 0)) as error_count
             FROM ingestion_metrics
@@ -247,11 +367,21 @@ def get_ingestion_history():
 
         rows = cursor.fetchall()
         cursor.close()
-        conn.close()
 
-        result = [{'timestamp': row['hour'].strftime('%Y-%m-%dT%H:%M:%S'),
-                   'records_ingested': int(row['records_ingested']),
-                   'error_count': int(row['error_count'])} for row in rows]
+        eastern = pytz.timezone('America/New_York')
+        result = []
+        for row in rows:
+            ts = row['hour']
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            result.append({
+                'timestamp': ts.isoformat(),
+                'records_ingested': int(row['records_ingested']),
+                'error_count': int(row['error_count'])
+            })
 
         return jsonify(result)
 
@@ -260,54 +390,56 @@ def get_ingestion_history():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
-        if cursor:
-            try:
-                cursor.close()
-            except:
-                pass
         if conn:
-            try:
-                conn.close()
-            except:
-                pass
+            return_db_connection(conn)
 
 @app.route('/api/uptime-history')
 def get_uptime_history():
     """Get service uptime history based on actual service checks"""
     conn = None
-    cursor = None
     try:
-        db_config = load_db_config()
-        if not db_config:
-            return jsonify({'error': 'Database config not found'}), 500
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
 
-        conn = psycopg2.connect(**db_config, connect_timeout=5)
         cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+        cursor.execute("SET statement_timeout = '3s'")
 
-        # Calculate uptime - simpler version
         cursor.execute("""
             WITH hourly_checks AS (
                 SELECT
-                    date_trunc('hour', timestamp) as hour,
+                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') as hour,
                     AVG(CASE WHEN is_up = 1 THEN 100.0 ELSE 0.0 END) as uptime_percent
                 FROM service_uptime_checks
                 WHERE service_name = 'gex-ingestion'
                   AND timestamp > NOW() - INTERVAL '48 hours'
-                GROUP BY date_trunc('hour', timestamp)
+                GROUP BY date_trunc('hour', timestamp AT TIME ZONE 'America/New_York')
             )
             SELECT
-                EXTRACT(EPOCH FROM hour)::bigint * 1000 as timestamp_ms,
+                hour,
                 ROUND(uptime_percent::numeric, 1) as uptime_percent
             FROM hourly_checks
             ORDER BY hour ASC
+            LIMIT 100
         """)
 
         rows = cursor.fetchall()
         cursor.close()
-        conn.close()
 
-        result = [{'timestamp': row['timestamp_ms'], 
-                   'uptime_percent': float(row['uptime_percent'] or 0)} for row in rows]
+        eastern = pytz.timezone('America/New_York')
+        result = []
+        for row in rows:
+            ts = row['hour']
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            result.append({
+                'timestamp': int(ts.timestamp() * 1000),
+                'uptime_percent': float(row['uptime_percent'] or 0)
+            })
 
         return jsonify(result)
 
@@ -316,16 +448,8 @@ def get_uptime_history():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
-        if cursor:
-            try:
-                cursor.close()
-            except:
-                pass
         if conn:
-            try:
-                conn.close()
-            except:
-                pass
+            return_db_connection(conn)
 
 @app.route('/logo')
 def get_logo():
@@ -340,4 +464,8 @@ if __name__ == '__main__':
     print(f"Dashboard directory: {DASHBOARD_DIR}")
     print(f"Metrics file: {METRICS_FILE}")
     print(f"Credentials file: {CREDS_FILE}")
-    app.run(host='0.0.0.0', port=8080, debug=True)
+
+    # Initialize connection pool on startup
+    init_db_pool()
+
+    app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)

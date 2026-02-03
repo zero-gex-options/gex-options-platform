@@ -367,21 +367,21 @@
                 <h2>SPY Quote</h2>
                 <div class="subtitle">Latest SPY pricing and volume</div>
             </div>
-            <div class="card" style="margin-bottom: 20px; padding: 16px;">
+	    <div class="card" style="margin-bottom: 20px; padding: 16px;">
                 <div id="spyLatest">Loading...</div>
             </div>
             <div class="card" style="padding: 24px 24px 0 24px;">
                 <h3 style="margin-bottom: 16px;">Price, Volume & Open Interest</h3>
-                <!-- Candlestick Chart - no bottom padding -->
-                <div class="chart-container" style="height: 400px; margin-bottom: 0;">
+                <!-- Candlestick Chart -->
+                <div class="chart-container" style="height: 400px; margin-bottom: 0; padding-bottom: 16px; border-bottom: 2px solid #334155;">
                     <canvas id="spyCandlestickChart"></canvas>
                 </div>
-                <!-- Volume Chart - no top/bottom padding, directly touching charts -->
-                <div class="chart-container" style="height: 300px; margin-top: 0; margin-bottom: 0;">
+                <!-- Volume Chart -->
+                <div class="chart-container" style="height: 300px; margin-top: 16px; margin-bottom: 0; padding-bottom: 16px; border-bottom: 2px solid #334155;">
                     <canvas id="spyVolumeChart"></canvas>
                 </div>
-                <!-- Open Interest Chart - no top padding, directly touching volume chart -->
-                <div class="chart-container" style="height: 350px; margin-top: 0; padding-bottom: 24px;">
+                <!-- Open Interest Chart -->
+                <div class="chart-container" style="height: 350px; margin-top: 16px; padding-bottom: 24px;">
                     <canvas id="spyOIChart"></canvas>
                 </div>
             </div>
@@ -1113,10 +1113,31 @@
         function updateDashboard() {
             fetch('/api/metrics').then(response => response.json()).then(data => {
                 globalData = data;
-                const timestamp = new Date(data.timestamp);
+                
+                // Parse timestamp safely
+                let timestamp;
+                try {
+                    if (data.timestamp) {
+                        timestamp = new Date(data.timestamp);
+                        if (isNaN(timestamp.getTime())) {
+                            console.error('Invalid timestamp from API:', data.timestamp);
+                            timestamp = new Date();
+                        }
+                    } else {
+                        timestamp = new Date();
+                    }
+                } catch (e) {
+                    console.error('Error parsing timestamp:', e);
+                    timestamp = new Date();
+                }
+                
                 document.getElementById('lastUpdate').textContent = `🚀 Updated: ${timestamp.toLocaleTimeString()}`;
+                
                 const marketBadge = document.getElementById('marketStatusBadge');
-                marketBadge.innerHTML = data.market_open ? '<span class="market-status open"><span class="status-dot"></span> Market Open</span>' : '<span class="market-status closed"><span class="status-dot"></span> Market Closed</span>';
+                marketBadge.innerHTML = data.market_open ? 
+                    '<span class="market-status open"><span class="status-dot"></span> Market Open</span>' : 
+                    '<span class="market-status closed"><span class="status-dot"></span> Market Closed</span>';
+                
                 updateHome(data);
                 updateSystem(data);
                 updateServices(data);
@@ -1125,7 +1146,10 @@
                 updateSPY(data);
                 updateIngestion(data);
                 updateOptions(data);
-            }).catch(error => { console.error('Error fetching metrics:', error); });
+            }).catch(error => { 
+                console.error('Error fetching metrics:', error); 
+                document.getElementById('lastUpdate').textContent = '🚀 Updated: Connection Error';
+            });
         }
 
         updateDashboard();

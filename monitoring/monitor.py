@@ -11,6 +11,7 @@ import json
 import psutil
 import subprocess
 from datetime import datetime, timedelta, timezone
+import pytz
 from pathlib import Path
 from typing import Dict, List, Optional
 import threading
@@ -39,7 +40,7 @@ class MonitoringCollector:
         disk = psutil.disk_usage('/')
 
         return {
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'cpu_percent': cpu_percent,
             'memory_percent': memory.percent,
             'memory_used_gb': memory.used / (1024**3),
@@ -87,6 +88,8 @@ class MonitoringCollector:
                 FROM options_quotes;
             """)
             quotes_data = cursor.fetchone()
+
+            print(f"Database query result - Recent 10min: {quotes_data['recent_10min'] if quotes_data else 'None'}")
 
             # Get GEX calculations
             cursor.execute("""
@@ -170,7 +173,7 @@ class MonitoringCollector:
             cursor.close()
             conn.close()
 
-            return {
+            result = {
                 'quotes_total': quotes_data['total_rows'] if quotes_data else 0,
                 'quotes_recent_10min': quotes_data['recent_10min'] if quotes_data else 0,
                 'quotes_recent_1hour': quotes_data['recent_1hour'] if quotes_data else 0,
@@ -179,13 +182,20 @@ class MonitoringCollector:
                 'latest_gex': gex_data['latest_gex'].isoformat() if gex_data and gex_data['latest_gex'] else None,
                 'db_size': size_data['db_size'] if size_data else 'unknown',
                 'active_connections': conn_data['active_connections'] if conn_data else 0,
-                'spy_quote': dict(underlying_quote) if underlying_quote else None,  # ADD THIS LINE
+                'spy_quote': dict(underlying_quote) if underlying_quote else None,
                 'underlying_history': underlying_history,
                 'recent_options': [dict(row) for row in recent_options] if recent_options else [],
                 'ingestion_metric': dict(ingestion_metric) if ingestion_metric else None,
                 'ingestion_history': ingestion_history,
             }
+
+            print(f"Returning database metrics with quotes_recent_10min={result['quotes_recent_10min']}")
+            return result
+
         except Exception as e:
+            print(f"Error getting database metrics: {e}")
+            import traceback
+            traceback.print_exc()
             return {'error': str(e)}
 
     def get_log_errors(self, service: str, minutes: int = 10) -> List[str]:
@@ -205,24 +215,25 @@ class MonitoringCollector:
     def check_alerts(self, metrics: Dict) -> List[Dict]:
         """Check for alert conditions"""
         alerts = []
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         # Check if market is open (9:30 AM - 4:00 PM ET, Mon-Fri)
-        # Use UTC and convert to ET
-        from datetime import timezone
-        import pytz
+        try:
+            eastern = pytz.timezone('US/Eastern')
+            now_et = datetime.now(eastern)
 
-        eastern = pytz.timezone('US/Eastern')
-        now_et = datetime.now(eastern)
+            is_market_open = False
+            if now_et.weekday() < 5:  # Monday = 0, Friday = 4
+                market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+                market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+                is_market_open = market_open <= now_et <= market_close
 
-        is_market_open = False
-        if now_et.weekday() < 5:  # Monday = 0, Friday = 4
-            market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
-            market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
-            is_market_open = market_open <= now_et <= market_close
-
-        # Store market status in metrics
-        metrics['market_open'] = is_market_open
+            # Store market status in metrics
+            metrics['market_open'] = is_market_open
+        except Exception as e:
+            print(f"Error calculating market hours: {e}")
+            metrics['market_open'] = False
+            is_market_open = False
 
         # CPU alert
         if metrics['system']['cpu_percent'] > 90:
@@ -282,12 +293,15 @@ class MonitoringCollector:
                     'message': f"Service {service} is {status}"
                 })
 
-        # Database alerts
-        if metrics.get('database') and not metrics['database'].get('error'):
+        # Database alerts - ONLY during market hours
+        if is_market_open and metrics.get('database') and not metrics['database'].get('error'):
             db = metrics['database']
+            recent_quotes = db.get('quotes_recent_10min', 0)
 
-            # No recent data - only alert during market hours
-            if db.get('quotes_recent_10min', 0) == 0 and is_market_open:
+            # Only alert if BOTH conditions are true:
+            # 1. Market is open
+            # 2. No recent quotes
+            if recent_quotes == 0:
                 alerts.append({
                     'timestamp': timestamp,
                     'level': 'warning',
@@ -299,8 +313,10 @@ class MonitoringCollector:
 
     def collect_all_metrics(self) -> Dict:
         """Collect all metrics"""
+        now_utc = datetime.now(timezone.utc)
+
         metrics = {
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': now_utc.isoformat(),
             'system': self.get_system_metrics(),
             'services': self.get_service_status(),
             'database': self.get_database_metrics(),
@@ -312,9 +328,15 @@ class MonitoringCollector:
             'scheduler': self.get_log_errors('gex-scheduler', 10),
         }
 
-        # Check for alerts
+        # Check for alerts AFTER we have database metrics
         alerts = self.check_alerts(metrics)
         metrics['alerts'] = alerts
+
+        # Debug logging
+        if metrics.get('database') and not metrics['database'].get('error'):
+            print(f"Recent quotes (10min): {metrics['database'].get('quotes_recent_10min', 0)}")
+            print(f"Market open: {metrics.get('market_open', False)}")
+            print(f"Number of alerts: {len(alerts)}")
 
         # Calculate uptime percentage for current hour
         metrics['uptime_current_hour'] = self.calculate_uptime_current_hour()
@@ -487,7 +509,6 @@ class MonitoringDashboard:
             print("\n\nMonitoring stopped by user.")
             self.running = False
 
-
 class MetricsExporter:
     """Export metrics to JSON files for external consumption"""
 
@@ -496,16 +517,45 @@ class MetricsExporter:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def export_metrics(self, metrics: Dict):
-        """Export current metrics to JSON"""
-        current_file = self.output_dir / "current_metrics.json"
-        with open(current_file, 'w') as f:
-            json.dump(metrics, f, indent=2, default=str)
+        """Export current metrics to JSON with atomic write"""
+        import tempfile
+        import shutil
 
-        # Also append to daily log
-        date_str = datetime.now().strftime('%Y%m%d')
-        daily_file = self.output_dir / f"metrics_{date_str}.jsonl"
-        with open(daily_file, 'a') as f:
-            f.write(json.dumps(metrics, default=str) + '\n')
+        current_file = self.output_dir / "current_metrics.json"
+
+        try:
+            # Write to temporary file first
+            with tempfile.NamedTemporaryFile(
+                mode='w',
+                dir=self.output_dir,
+                delete=False,
+                suffix='.tmp'
+            ) as tmp_file:
+                json.dump(metrics, tmp_file, indent=2, default=str)
+                tmp_file.flush()
+                os.fsync(tmp_file.fileno())
+                tmp_path = tmp_file.name
+
+            # Atomic rename
+            shutil.move(tmp_path, current_file)
+
+        except Exception as e:
+            print(f"Error exporting metrics: {e}")
+            # Clean up temp file if it exists
+            try:
+                if 'tmp_path' in locals():
+                    os.unlink(tmp_path)
+            except:
+                pass
+
+        # Also append to daily log (but don't let it fail the main export)
+        try:
+            date_str = datetime.now().strftime('%Y%m%d')
+            daily_file = self.output_dir / f"metrics_{date_str}.jsonl"
+            with open(daily_file, 'a') as f:
+                f.write(json.dumps(metrics, default=str) + '\n')
+        except Exception as e:
+            print(f"Error appending to daily log: {e}")
 
 
 def load_db_config() -> Optional[Dict]:
