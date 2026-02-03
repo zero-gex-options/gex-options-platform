@@ -208,12 +208,18 @@ class MonitoringCollector:
         timestamp = datetime.now().isoformat()
 
         # Check if market is open (9:30 AM - 4:00 PM ET, Mon-Fri)
-        now = datetime.now()
+        # Use UTC and convert to ET
+        from datetime import timezone
+        import pytz
+
+        eastern = pytz.timezone('US/Eastern')
+        now_et = datetime.now(eastern)
+
         is_market_open = False
-        if now.weekday() < 5:  # Monday = 0, Friday = 4
-            market_open = now.replace(hour=9, minute=30, second=0)
-            market_close = now.replace(hour=16, minute=0, second=0)
-            is_market_open = market_open <= now <= market_close
+        if now_et.weekday() < 5:  # Monday = 0, Friday = 4
+            market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+            market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+            is_market_open = market_open <= now_et <= market_close
 
         # Store market status in metrics
         metrics['market_open'] = is_market_open

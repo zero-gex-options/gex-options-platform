@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -607,101 +607,210 @@
             try {
                 const response = await fetch('/api/spy-history');
                 const data = await response.json();
-                if (data.error || data.length === 0) { console.log('No SPY history data'); return; }
 
-                const labels = data.map(d => {
+                console.log('SPY API Response:', data);
+
+                if (data.error) {
+                    console.error('SPY API Error:', data.error);
+                    return;
+                }
+
+                if (!data || data.length === 0) { 
+                    console.log('No SPY history data available'); 
+                    return; 
+                }
+
+                // Filter out weekends (Saturday=6, Sunday=0)
+                const filteredData = data.filter(d => {
+                    if (!d.timestamp) return false;
                     const date = new Date(d.timestamp);
-                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
-                           date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    if (isNaN(date.getTime())) {
+                        console.warn('Invalid timestamp:', d.timestamp);
+                        return false;
+                    }
+                    const day = date.getDay();
+                    return day !== 0 && day !== 6;
                 });
+
+                if (filteredData.length === 0) { 
+                    console.log('No weekday SPY data after filtering'); 
+                    return; 
+                }
+
+                console.log('Filtered data points:', filteredData.length);
+                console.log('Sample data point:', filteredData[0]);
 
                 // Destroy old charts
-                if (charts.spyPriceChart) charts.spyPriceChart.destroy();
-                if (charts.spyVolumeChart) charts.spyVolumeChart.destroy();
+                if (charts.spyPriceChart) {
+                    charts.spyPriceChart.destroy();
+                    charts.spyPriceChart = null;
+                }
+                if (charts.spyVolumeChart) {
+                    charts.spyVolumeChart.destroy();
+                    charts.spyVolumeChart = null;
+                }
+                if (charts.spyOIChart) {
+                    charts.spyOIChart.destroy();
+                    charts.spyOIChart = null;
+                }
 
-                // Price Chart (top)
-                const priceCtx = document.getElementById('spyPriceChart');
-                charts.spyPriceChart = new Chart(priceCtx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'Price',
-                                data: data.map(d => d.price),
-                                borderColor: '#60a5fa',
-                                backgroundColor: 'rgba(96, 165, 250, 0.1)',
-                                borderWidth: 2,
-                                pointRadius: 0,
-                                pointHoverRadius: 5,
-                                tension: 0.4,
-                                fill: true
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        animation: false,
-                        layout: {
-                            padding: {
-                                bottom: 0  // No bottom padding
-                            }
-                        },
-                        interaction: {
-                            mode: 'index',
-                            intersect: false
-                        },
-                        scales: {
-                            y: {
-                                type: 'linear',
-                                title: {
-                                    display: true,
-                                    text: 'Price ($)',
-                                    color: '#94a3b8'
-                                },
-                                ticks: { color: '#94a3b8' },
-                                grid: { color: '#334155' }
-                            },
-                            x: {
-                                display: false,  // Hide entire x-axis
-                                grid: { display: false }
-                            }
-                        },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return 'Price: $' + context.parsed.y.toFixed(2);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                // Check if Chart and required plugins are loaded
+                if (typeof Chart === 'undefined') {
+                    console.error('Chart.js not loaded');
+                    return;
+                }
+
+                // Candlestick Chart (top)
+                const candlestickCtx = document.getElementById('spyCandlestickChart');
+                if (!candlestickCtx) {
+                    console.error('Candlestick canvas not found');
+                    return;
+                }
+
+                // Prepare OHLC data
+                const ohlcData = filteredData.map(d => {
+                    const timestamp = new Date(d.timestamp).getTime();
+                    return {
+                        x: timestamp,
+                        o: d.open || d.close,
+                        h: d.high || d.close,
+                        l: d.low || d.close,
+                        c: d.close
+                    };
                 });
 
-                // Volume Chart (bottom)
+                console.log('OHLC data prepared:', ohlcData.length, 'points');
+                console.log('Sample OHLC:', ohlcData[0]);
+
+                try {
+                    charts.spyPriceChart = new Chart(candlestickCtx, {
+                        type: 'candlestick',
+                        data: {
+                            datasets: [{
+                                label: 'SPY',
+                                data: ohlcData,
+                                borderColor: {
+                                    up: '#059669',      // darker green
+                                    down: '#dc2626',    // darker red
+                                    unchanged: '#64748b' // darker gray
+                                },
+                                backgroundColor: {
+                                    up: 'rgba(16, 185, 129, 0.5)',   // green fill
+                                    down: 'rgba(239, 68, 68, 0.5)',  // red fill
+                                    unchanged: 'rgba(148, 163, 184, 0.5)' // gray fill
+                                }
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'hour',
+                                        displayFormats: { 
+                                            hour: 'MMM dd HH:mm'
+                                        }
+                                    },
+                                    ticks: {
+                                        color: '#94a3b8',
+                                        callback: function(value, index, ticks) {
+                                            const date = new Date(value);
+                                            if (date.getMinutes() === 0) {
+                                                return date.toLocaleString('en-US', { 
+                                                    month: 'short', 
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                });
+                                            }
+                                            return '';
+                                        }
+                                    },
+                                    display: false
+                                },
+                                y: {
+                                    title: { display: true, text: 'Price ($)', color: '#94a3b8' },
+                                    ticks: { 
+                                        color: '#94a3b8',
+                                        callback: function(value) {
+                                            return '$' + value.toFixed(2);
+                                        }
+                                    },
+                                    grid: { color: '#334155' }
+                                }
+                            },
+                            plugins: {
+                                legend: { display: false }
+                            }
+                        }
+                    });
+                    console.log('Candlestick chart created');
+                } catch (e) {
+                    console.error('Error creating candlestick chart:', e);
+                    // Fallback to line chart if candlestick fails
+                    charts.spyPriceChart = new Chart(candlestickCtx, {
+                        type: 'line',
+                        data: {
+                            datasets: [{
+                                label: 'SPY Price',
+                                data: filteredData.map(d => ({
+                                    x: new Date(d.timestamp).getTime(),
+                                    y: d.close
+                                })),
+                                borderColor: '#60a5fa',
+                                backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: { unit: 'hour', displayFormats: { hour: 'MMM dd HH:mm' } },
+                                    ticks: { color: '#94a3b8' },
+                                    display: false
+                                },
+                                y: {
+                                    title: { display: true, text: 'Price ($)', color: '#94a3b8' },
+                                    ticks: { color: '#94a3b8' },
+                                    grid: { color: '#334155' }
+                                }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                    console.log('Fallback line chart created');
+                }
+
+                // Volume Chart (middle)
                 const volumeCtx = document.getElementById('spyVolumeChart');
                 charts.spyVolumeChart = new Chart(volumeCtx, {
                     type: 'bar',
                     data: {
-                        labels: labels,
                         datasets: [
                             {
-                                label: 'Up Volume',
-                                data: data.map(d => d.up_volume || 0),
-                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
-                                borderColor: '#10b981',
-                                borderWidth: 0,
+                                label: 'Down Volume',
+                                data: filteredData.map(d => ({
+                                    x: new Date(d.timestamp).getTime(),
+                                    y: d.down_volume || 0
+                                })),
+                                backgroundColor: 'rgba(239, 68, 68, 0.7)',
                                 stack: 'volume'
                             },
                             {
-                                label: 'Down Volume',
-                                data: data.map(d => d.down_volume || 0),
-                                backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                                borderColor: '#ef4444',
-                                borderWidth: 0,
+                                label: 'Up Volume',
+                                data: filteredData.map(d => ({
+                                    x: new Date(d.timestamp).getTime(),
+                                    y: d.up_volume || 0
+                                })),
+                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
                                 stack: 'volume'
                             }
                         ]
@@ -710,24 +819,17 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         animation: false,
-                        layout: {
-                            padding: {
-                                top: 0  // No top padding
-                            }
-                        },
-                        interaction: {
-                            mode: 'index',
-                            intersect: false
-                        },
                         scales: {
-                            y: {
-                                type: 'linear',
+                            x: {
+                                type: 'time',
                                 stacked: true,
-                                title: {
-                                    display: true,
-                                    text: 'Volume',
-                                    color: '#94a3b8'
-                                },
+                                time: { unit: 'hour', displayFormats: { hour: 'MMM dd HH:mm' } },
+                                ticks: { color: '#94a3b8' },
+                                display: false
+                            },
+                            y: {
+                                stacked: true,
+                                title: { display: true, text: 'Volume', color: '#94a3b8' },
                                 ticks: { 
                                     color: '#94a3b8',
                                     callback: function(value) {
@@ -735,38 +837,82 @@
                                     }
                                 },
                                 grid: { color: '#334155' }
+                            }
+                        },
+                        plugins: {
+                            legend: { labels: { color: '#e2e8f0' }, position: 'top' }
+                        }
+                    }
+                });
+                console.log('Volume chart created');
+
+                // Open Interest Chart (bottom)
+                const oiCtx = document.getElementById('spyOIChart');
+                charts.spyOIChart = new Chart(oiCtx, {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'Call OI',
+                                data: filteredData.map(d => ({
+                                    x: new Date(d.timestamp).getTime(),
+                                    y: d.call_oi || 0
+                                })),
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                fill: true,
+                                tension: 0.4
                             },
+                            {
+                                label: 'Put OI',
+                                data: filteredData.map(d => ({
+                                    x: new Date(d.timestamp).getTime(),
+                                    y: d.put_oi || 0
+                                })),
+                                borderColor: '#ef4444',
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        scales: {
                             x: {
-                                stacked: true,
-                                ticks: { 
-                                    color: '#94a3b8', 
-                                    maxRotation: 45, 
+                                type: 'time',
+                                time: { unit: 'hour', displayFormats: { hour: 'MMM dd HH:mm' } },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    maxRotation: 45,
                                     minRotation: 45
+                                },
+                                grid: { color: '#334155' }
+                            },
+                            y: {
+                                title: { display: true, text: 'Open Interest', color: '#94a3b8' },
+                                ticks: { 
+                                    color: '#94a3b8',
+                                    callback: function(value) {
+                                        return (value / 1000).toFixed(0) + 'K';
+                                    }
                                 },
                                 grid: { color: '#334155' }
                             }
                         },
                         plugins: {
-                            legend: { 
-                                labels: { color: '#e2e8f0' },
-                                position: 'top'
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        let label = context.dataset.label || '';
-                                        if (label) {
-                                            label += ': ';
-                                        }
-                                        label += (context.parsed.y / 1000000).toFixed(2) + 'M';
-                                        return label;
-                                    }
-                                }
-                            }
+                            legend: { labels: { color: '#e2e8f0' }, position: 'top' }
                         }
                     }
                 });
-            } catch (error) { console.error('Error updating SPY charts:', error); }
+                console.log('OI chart created');
+
+            } catch (error) { 
+                console.error('Error in updateSPYChart:', error);
+                console.error(error.stack);
+            }
         }
 
         async function updateIngestion(data) {
@@ -792,30 +938,49 @@
                 const response = await fetch('/api/ingestion-history');
                 const data = await response.json();
                 if (data.error || data.length === 0) { console.log('No ingestion history'); return; }
+
+                // Aggregate by hour
+                const hourlyData = {};
+                data.forEach(d => {
+                    const date = new Date(d.timestamp);
+                    const hourKey = new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).getTime();
+
+                    if (!hourlyData[hourKey]) {
+                        hourlyData[hourKey] = { records: 0, errors: 0 };
+                    }
+                    hourlyData[hourKey].records += (d.records_ingested || 0);
+                    hourlyData[hourKey].errors += (d.error_count || 0);
+                });
+
+                const sortedHours = Object.keys(hourlyData).sort((a, b) => a - b);
+
                 if (charts.ingestionCombined) charts.ingestionCombined.destroy();
                 const ctx = document.getElementById('ingestionCombinedChart');
                 charts.ingestionCombined = new Chart(ctx, {
-                    type: 'line',
+                    type: 'bar',
                     data: {
-                        labels: data.map(d => {
-                            const date = new Date(d.timestamp);
-                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
-                                   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                        }),
                         datasets: [
                             {
                                 label: 'Records Ingested',
-                                data: data.map(d => d.records_ingested || 0),
+                                data: sortedHours.map(hour => ({
+                                    x: parseInt(hour),
+                                    y: hourlyData[hour].records
+                                })),
+                                backgroundColor: 'rgba(96, 165, 250, 0.8)',
                                 borderColor: '#60a5fa',
-                                backgroundColor: 'rgba(96, 165, 250, 0.1)',
-                                tension: 0.4
+                                borderWidth: 1,
+                                stack: 'combined'
                             },
                             {
                                 label: 'Errors',
-                                data: data.map(d => d.error_count || 0),
+                                data: sortedHours.map(hour => ({
+                                    x: parseInt(hour),
+                                    y: hourlyData[hour].errors
+                                })),
+                                backgroundColor: 'rgba(239, 68, 68, 0.8)',
                                 borderColor: '#ef4444',
-                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                tension: 0.4
+                                borderWidth: 1,
+                                stack: 'combined'
                             }
                         ]
                     },
@@ -825,24 +990,33 @@
                         animation: false,
                         interaction: { mode: 'index', intersect: false },
                         scales: {
-                            y: {
-                                type: 'linear',
-                                display: true,
-                                title: {
-                                    display: true,
-                                    text: 'Count',
-                                    color: '#94a3b8'
+                            x: {
+                                type: 'time',
+                                stacked: true,
+                                time: {
+                                    unit: 'hour',
+                                    displayFormats: { hour: 'MM/dd HH:mm' }
                                 },
-                                ticks: { color: '#94a3b8' },
+                                ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 },
                                 grid: { color: '#334155' }
                             },
-                            x: {
-                                ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 },
+                            y: {
+                                type: 'linear',
+                                stacked: true,
+                                title: { display: true, text: 'Count per Hour', color: '#94a3b8' },
+                                ticks: { color: '#94a3b8' },
                                 grid: { color: '#334155' }
                             }
                         },
                         plugins: {
-                            legend: { labels: { color: '#e2e8f0' } }
+                            legend: { labels: { color: '#e2e8f0' } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                                    }
+                                }
+                            }
                         }
                     }
                 });
@@ -956,7 +1130,18 @@
 
         updateDashboard();
         setInterval(updateDashboard, 5000);
-        setTimeout(() => { updateUptimeChart(); updateSPYChart(); updateIngestionCharts(); }, 1000);
+        // Refresh all charts every 5 seconds
+        setInterval(() => { 
+            updateUptimeChart(); 
+            updateSPYChart(); 
+            updateIngestionCharts(); 
+        }, 5000);
+        // Initial load after 1 second
+        setTimeout(() => { 
+            updateUptimeChart(); 
+            updateSPYChart(); 
+            updateIngestionCharts(); 
+        }, 1000);
     </script>
 </body>
 </html>

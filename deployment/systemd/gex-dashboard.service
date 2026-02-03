@@ -9,7 +9,8 @@ WorkingDirectory=/opt/zerogex/monitoring
 ExecStart=/usr/bin/python3 /opt/zerogex/monitoring/dashboard.py
 Restart=always
 RestartSec=10
-MemoryLimit=128M
+MemoryMax=500M
+MemoryHigh=400M
 StandardOutput=journal
 StandardError=journal
 
