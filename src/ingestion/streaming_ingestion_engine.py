@@ -100,6 +100,11 @@ class StreamingIngestionEngine:
         # Underlying price cache
         self.underlying_prices = {}
 
+        # Heartbeat monitoring
+        self.last_heartbeat = {}  # Track per symbol
+        self.heartbeat_timeout = self.config['ingestion']['heartbeat_timeout']
+        self.reconnect_delay = self.config['ingestion']['reconnect_delay']
+
         logger.info("✅ Streaming Ingestion Engine initialized")
         logger.info(f"   Symbols: {', '.join(self.config['symbols'])}")
         logger.info(f"   Batch size: {self.batch_size}")
@@ -169,7 +174,9 @@ class StreamingIngestionEngine:
                 self.stats['last_heartbeat'] = datetime.fromisoformat(
                     data['Timestamp'].replace('Z', '+00:00')
                 )
-                logger.debug(f"💓 Heartbeat #{self.stats['heartbeats']}")
+                # Track per-symbol heartbeat
+                self.last_heartbeat[symbol] = self.stats['last_heartbeat']
+                logger.debug(f"💓 Heartbeat #{self.stats['heartbeats']} for {symbol}")
                 return
 
             # Parse option data
@@ -507,6 +514,7 @@ class StreamingIngestionEngine:
 
         logger.info(f"Symbols: {', '.join(symbols)}")
         logger.info(f"Target expiration: {target_expiration}")
+        logger.info(f"Heartbeat timeout: {self.heartbeat_timeout}s")
 
         async with TradeStationStreamingClient(
             self.ts_client_id,
@@ -534,25 +542,14 @@ class StreamingIngestionEngine:
             metrics_task = asyncio.create_task(self.log_metrics_periodically())
             tasks.append(metrics_task)
 
-            # Start streaming for each symbol
+            # Start heartbeat monitor
+            heartbeat_task = asyncio.create_task(self.monitor_heartbeats())
+            tasks.append(heartbeat_task)
+
+            # Start streaming for each symbol with auto-reconnect
             for symbol in symbols:
-                logger.info(f"🚀 Starting stream for {symbol} {expiration}")
-
-                # Create callback for this symbol using closure factory
-                def make_callback(sym, exp):
-                    async def callback(data):
-                        await self.option_update_handler(data, sym, exp)
-                    return callback
-
-                callback_func = make_callback(symbol, expiration)
-
                 stream_task = asyncio.create_task(
-                    stream_client.stream_options_chain(
-                        underlying=symbol,
-                        expiration=expiration.strftime('%Y-%m-%d'),
-                        callback=callback_func,
-                        strike_proximity=self.config['ingestion'].get('strike_proximity')
-                    )
+                    self.manage_symbol_stream(stream_client, symbol, expiration)
                 )
                 tasks.append(stream_task)
 
@@ -586,6 +583,107 @@ class StreamingIngestionEngine:
         logger.info(f"  Underlying updates: {self.stats['underlying_updates']}")
         logger.info(f"  Errors: {self.stats['errors']}")
         logger.info("="*60)
+
+    async def monitor_heartbeats(self):
+        """Monitor heartbeats and trigger reconnects if streams go stale"""
+        logger.info(f"Starting heartbeat monitor (timeout: {self.heartbeat_timeout}s)")
+
+        while True:
+            try:
+                await asyncio.sleep(30)  # Check every 30 seconds
+
+                current_time = datetime.now(timezone.utc)
+
+                for symbol in self.config['symbols']:
+                    if symbol not in self.last_heartbeat:
+                        continue
+
+                    last_hb = self.last_heartbeat[symbol]
+                    time_since_hb = (current_time - last_hb).total_seconds()
+
+                    if time_since_hb > self.heartbeat_timeout:
+                        logger.warning(
+                            f"⚠️ Stream stale for {symbol}: "
+                            f"{time_since_hb:.0f}s since last heartbeat"
+                        )
+                        # The alert will be picked up by monitor.py through ingestion_metrics
+
+            except asyncio.CancelledError:
+                logger.info("Heartbeat monitor stopped")
+                break
+            except Exception as e:
+                logger.error(f"Error in heartbeat monitor: {e}", exc_info=True)
+
+    async def manage_symbol_stream(self, stream_client, symbol: str, expiration: date):
+        """
+        Manage streaming for a symbol with auto-reconnect on stale streams
+
+        Args:
+            stream_client: TradeStationStreamingClient instance
+            symbol: Symbol to stream
+            expiration: Expiration date
+        """
+        reconnect_count = 0
+
+        while True:
+            try:
+                logger.info(f"🚀 Starting stream for {symbol} {expiration} (reconnect #{reconnect_count})")
+
+                # Create callback for this symbol
+                def make_callback(sym, exp):
+                    async def callback(data):
+                        await self.option_update_handler(data, sym, exp)
+                    return callback
+
+                callback_func = make_callback(symbol, expiration)
+
+                # Start streaming with timeout monitoring
+                stream_task = asyncio.create_task(
+                    stream_client.stream_options_chain(
+                        underlying=symbol,
+                        expiration=expiration.strftime('%Y-%m-%d'),
+                        callback=callback_func,
+                        strike_proximity=self.config['ingestion'].get('strike_proximity')
+                    )
+                )
+
+                # Monitor for stale stream
+                while not stream_task.done():
+                    await asyncio.sleep(30)
+
+                    # Check if stream is stale
+                    if symbol in self.last_heartbeat:
+                        time_since_hb = (
+                            datetime.now(timezone.utc) - self.last_heartbeat[symbol]
+                        ).total_seconds()
+
+                        if time_since_hb > self.heartbeat_timeout:
+                            logger.warning(
+                                f"⚠️ Stream stale for {symbol}: "
+                                f"{time_since_hb:.0f}s since last heartbeat. Reconnecting..."
+                            )
+                            stream_task.cancel()
+                            break
+
+                # Wait for stream to complete or be cancelled
+                try:
+                    await stream_task
+                except asyncio.CancelledError:
+                    logger.info(f"Stream cancelled for {symbol}, will reconnect")
+
+                # Increment reconnect counter
+                reconnect_count += 1
+
+                # Wait before reconnecting
+                logger.info(f"Waiting {self.reconnect_delay}s before reconnecting {symbol}...")
+                await asyncio.sleep(self.reconnect_delay)
+
+            except asyncio.CancelledError:
+                logger.info(f"Stream manager stopped for {symbol}")
+                break
+            except Exception as e:
+                logger.error(f"Error in stream manager for {symbol}: {e}", exc_info=True)
+                await asyncio.sleep(self.reconnect_delay)
 
 
 async def main():

@@ -20,7 +20,6 @@ lookback_days: 5
 # Streaming configuration
 streaming:
   enabled: true
-  reconnect_delay: 5
   max_reconnect_attempts: 10
 
 # Ingestion settings
@@ -39,6 +38,10 @@ ingestion:
   
   # How often to log ingestion metrics (seconds)
   metrics_interval: 60
+
+  # Heartbeat monitoring
+  heartbeat_timeout: 60  # Seconds without heartbeat before reconnect
+  reconnect_delay: 5     # Seconds to wait before reconnecting
 
 # Greeks calculation parameters
 greeks:
