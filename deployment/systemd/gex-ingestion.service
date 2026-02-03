@@ -15,7 +15,6 @@ ExecStart=/home/ubuntu/gex-options-platform/deployment/run/ingestion.sh
 Restart=always
 RestartSec=10
 StartLimitBurst=5
-StartLimitIntervalSec=300
 
 # Logging
 StandardOutput=journal

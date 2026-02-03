@@ -137,10 +137,10 @@ cat .ssh/id_ed25519.pub
 git clone git@github.com:zero-gex-options/gex-options-platform.git  
 cd gex-options-platform  
 git config --global --edit
+  # Add:
+  #   name = zero-gex-options
+  #    email = zerogexoptions@gmail.com
 ```
-  Add:
-    name = zero-gex-options
-    email = zerogexoptions@gmail.com
   
 3. Run deploy script  
 ```
