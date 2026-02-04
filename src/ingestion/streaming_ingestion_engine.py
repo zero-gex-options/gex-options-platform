@@ -101,7 +101,7 @@ class StreamingIngestionEngine:
         self.underlying_prices = {}
 
         # Heartbeat monitoring
-        self.last_heartbeat = {}  # Track per symbol
+        self.last_activity = {}  # Track per symbol
         self.heartbeat_timeout = self.config['ingestion']['heartbeat_timeout']
         self.reconnect_delay = self.config['ingestion']['reconnect_delay']
 
@@ -168,15 +168,21 @@ class StreamingIngestionEngine:
         self.stats['options_received'] += 1
 
         try:
+            # Update last activity time for ANY data (heartbeat OR option data)
+            self.last_activity[symbol] = datetime.now(timezone.utc)
+
             # Check for heartbeat
             if 'Heartbeat' in data:
                 self.stats['heartbeats'] = data['Heartbeat']
                 self.stats['last_heartbeat'] = datetime.fromisoformat(
                     data['Timestamp'].replace('Z', '+00:00')
                 )
-                # Track per-symbol heartbeat
-                self.last_heartbeat[symbol] = self.stats['last_heartbeat']
-                logger.debug(f"💓 Heartbeat #{self.stats['heartbeats']} for {symbol}")
+
+                # Log heartbeats (these only come when market is quiet)
+                if self.stats['heartbeats'] % 10 == 0:
+                    logger.info(f"💓 Heartbeat #{self.stats['heartbeats']} for {symbol} (no data flowing)")
+                else:
+                    logger.debug(f"💓 Heartbeat #{self.stats['heartbeats']} for {symbol}")
                 return
 
             # Parse option data
@@ -595,10 +601,10 @@ class StreamingIngestionEngine:
                 current_time = datetime.now(timezone.utc)
 
                 for symbol in self.config['symbols']:
-                    if symbol not in self.last_heartbeat:
+                    if symbol not in self.last_activity:
                         continue
 
-                    last_hb = self.last_heartbeat[symbol]
+                    last_hb = self.last_activity[symbol]
                     time_since_hb = (current_time - last_hb).total_seconds()
 
                     if time_since_hb > self.heartbeat_timeout:
@@ -627,7 +633,10 @@ class StreamingIngestionEngine:
 
         while True:
             try:
-                logger.info(f"🚀 Starting stream for {symbol} {expiration} (reconnect #{reconnect_count})")
+                logger.info(f"🚀 Starting stream for {symbol} {expiration} (attempt #{reconnect_count + 1})")
+
+                # Initialize last activity time for this symbol
+                self.last_activity[symbol] = datetime.now(timezone.utc)
 
                 # Create callback for this symbol
                 def make_callback(sym, exp):
@@ -637,7 +646,7 @@ class StreamingIngestionEngine:
 
                 callback_func = make_callback(symbol, expiration)
 
-                # Start streaming with timeout monitoring
+                # Start streaming
                 stream_task = asyncio.create_task(
                     stream_client.stream_options_chain(
                         underlying=symbol,
@@ -647,44 +656,57 @@ class StreamingIngestionEngine:
                     )
                 )
 
-                # Monitor for stale stream
+                # Monitor for stale stream - check every 30 seconds
+                check_count = 0
+
                 while not stream_task.done():
                     await asyncio.sleep(30)
+                    check_count += 1
 
-                    # Check if stream is stale
-                    if symbol in self.last_heartbeat:
-                        time_since_hb = (
-                            datetime.now(timezone.utc) - self.last_heartbeat[symbol]
+                    # Check if stream has ANY activity (data or heartbeats)
+                    if symbol in self.last_activity:
+                        time_since_activity = (
+                            datetime.now(timezone.utc) - self.last_activity[symbol]
                         ).total_seconds()
 
-                        if time_since_hb > self.heartbeat_timeout:
-                            logger.warning(
-                                f"⚠️ Stream stale for {symbol}: "
-                                f"{time_since_hb:.0f}s since last heartbeat. Reconnecting..."
+                        # Log status every 2 minutes
+                        if check_count % 4 == 0:
+                            logger.info(f"📊 Stream health for {symbol}: {time_since_activity:.0f}s since last activity")
+
+                        # If NO activity (data or heartbeat) for longer than timeout, stream is broken
+                        if time_since_activity > self.heartbeat_timeout:
+                            logger.error(
+                                f"🔴 Stream STALE for {symbol}: "
+                                f"{time_since_activity:.0f}s with NO activity (no data, no heartbeats). "
+                                f"Forcing reconnect..."
                             )
                             stream_task.cancel()
                             break
+                    else:
+                        logger.warning(f"⚠️ No activity data yet for {symbol}")
 
                 # Wait for stream to complete or be cancelled
                 try:
                     await stream_task
+                    logger.info(f"Stream task completed normally for {symbol}")
                 except asyncio.CancelledError:
-                    logger.info(f"Stream cancelled for {symbol}, will reconnect")
+                    logger.info(f"Stream task cancelled for {symbol}, will reconnect")
 
                 # Increment reconnect counter
                 reconnect_count += 1
 
                 # Wait before reconnecting
-                logger.info(f"Waiting {self.reconnect_delay}s before reconnecting {symbol}...")
+                logger.info(f"⏳ Waiting {self.reconnect_delay}s before reconnecting {symbol}... (reconnect #{reconnect_count})")
                 await asyncio.sleep(self.reconnect_delay)
 
             except asyncio.CancelledError:
                 logger.info(f"Stream manager stopped for {symbol}")
                 break
             except Exception as e:
-                logger.error(f"Error in stream manager for {symbol}: {e}", exc_info=True)
+                logger.error(f"💥 Error in stream manager for {symbol}: {e}", exc_info=True)
+                reconnect_count += 1
+                logger.info(f"⏳ Waiting {self.reconnect_delay}s before reconnecting after error...")
                 await asyncio.sleep(self.reconnect_delay)
-
 
 async def main():
     """Main entry point"""
