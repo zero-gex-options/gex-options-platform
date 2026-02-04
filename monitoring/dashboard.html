@@ -847,10 +847,10 @@
                     data: {
                         datasets: [
                             {
-                                label: 'Call OI',
+                                label: 'Call Notional Value',
                                 data: filteredData.map(d => ({
                                     x: new Date(d.timestamp).getTime(),
-                                    y: d.call_oi || 0
+                                    y: d.call_notional || 0  // Changed from call_oi
                                 })),
                                 borderColor: '#10b981',
                                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -861,10 +861,10 @@
                                 fill: true
                             },
                             {
-                                label: 'Put OI',
+                                label: 'Put Notional Value',
                                 data: filteredData.map(d => ({
                                     x: new Date(d.timestamp).getTime(),
-                                    y: d.put_oi || 0
+                                    y: d.put_notional || 0  // Changed from put_oi
                                 })),
                                 borderColor: '#ef4444',
                                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -915,16 +915,19 @@
                             },
                             y: {
                                 type: 'linear',
-                                title: { display: true, text: 'Open Interest', color: '#94a3b8' },
+                                title: { display: true, text: 'Notional Value ($)', color: '#94a3b8' },
                                 ticks: { 
                                     color: '#94a3b8',
                                     callback: function(value) {
-                                        if (value >= 1000000) {
-                                            return (value / 1000000).toFixed(1) + 'M';
-                                        } else if (value >= 1000) {
-                                            return (value / 1000).toFixed(0) + 'K';
+                                        // Format as millions or billions
+                                        if (value >= 1e9) {
+                                            return '$' + (value / 1e9).toFixed(2) + 'B';
+                                        } else if (value >= 1e6) {
+                                            return '$' + (value / 1e6).toFixed(1) + 'M';
+                                        } else if (value >= 1e3) {
+                                            return '$' + (value / 1e3).toFixed(0) + 'K';
                                         }
-                                        return value.toFixed(0);
+                                        return '$' + value.toFixed(0);
                                     }
                                 },
                                 grid: { color: '#334155' }
@@ -943,12 +946,14 @@
                                             label += ': ';
                                         }
                                         const value = context.parsed.y;
-                                        if (value >= 1000000) {
-                                            label += (value / 1000000).toFixed(2) + 'M';
-                                        } else if (value >= 1000) {
-                                            label += (value / 1000).toFixed(0) + 'K';
+                                        if (value >= 1e9) {
+                                            label += '$' + (value / 1e9).toFixed(2) + 'B';
+                                        } else if (value >= 1e6) {
+                                            label += '$' + (value / 1e6).toFixed(1) + 'M';
+                                        } else if (value >= 1e3) {
+                                            label += '$' + (value / 1e3).toFixed(0) + 'K';
                                         } else {
-                                            label += value.toFixed(0);
+                                            label += '$' + value.toFixed(0);
                                         }
                                         return label;
                                     }
@@ -957,7 +962,6 @@
                         }
                     }
                 });
-
                 console.log('OI chart created successfully');
 
                 // Update the SPY quote panel with the most recent data point from chart

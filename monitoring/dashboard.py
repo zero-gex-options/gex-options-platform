@@ -233,6 +233,7 @@ def get_table_data(table_name):
         if conn:
             return_db_connection(conn)
 
+
 @app.route('/api/spy-history')
 def get_spy_history():
     """Get SPY price history with open interest data for charts"""
@@ -246,7 +247,7 @@ def get_spy_history():
         cursor.execute("SET TIME ZONE 'America/New_York'")
         cursor.execute("SET statement_timeout = '5s'")
 
-        # Simpler, faster query - pre-aggregated to 5-minute buckets
+        # SPY query
         print("Fetching SPY aggregated data (5-min buckets)...")
         cursor.execute("""
             WITH five_min_buckets AS (
@@ -272,17 +273,22 @@ def get_spy_history():
         """)
         price_data = cursor.fetchall()
 
-        # Separate OI query - use SAME bucketing logic as price query
+        # OI query with total and notional values
         cursor.execute("""
             SELECT
-                date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') + 
+                date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') +
                 (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
+                -- Contract counts
                 SUM(CASE WHEN option_type = 'call' THEN COALESCE(open_interest, 0) ELSE 0 END) as call_oi,
                 SUM(CASE WHEN option_type = 'put' THEN COALESCE(open_interest, 0) ELSE 0 END) as put_oi,
+                -- Notional values (OI * mid price * 100 shares per contract)
+                SUM(CASE WHEN option_type = 'call' THEN COALESCE(open_interest, 0) * COALESCE(mid, 0) * 100 ELSE 0 END) as call_notional,
+                SUM(CASE WHEN option_type = 'put' THEN COALESCE(open_interest, 0) * COALESCE(mid, 0) * 100 ELSE 0 END) as put_notional,
                 COUNT(*) as quote_count
             FROM options_quotes
             WHERE symbol LIKE 'SPY%'
               AND timestamp > NOW() - INTERVAL '48 hours'
+              AND mid > 0  -- Only include options with valid mid price
             GROUP BY bucket_time
             ORDER BY bucket_time ASC
             LIMIT 600
@@ -292,18 +298,21 @@ def get_spy_history():
         print(f"OI query returned {len(oi_data)} buckets")
         if len(oi_data) > 0:
             sample = oi_data[-1]  # Most recent
-            print(f"Most recent OI bucket: time={sample['bucket_time']}, call_oi={sample['call_oi']}, put_oi={sample['put_oi']}")
+            print(f"Most recent OI bucket: time={sample['bucket_time']}, "
+                  f"call_oi={sample['call_oi']}, put_oi={sample['put_oi']}, "
+                  f"call_notional=${sample['call_notional']/1e6:.1f}M, put_notional=${sample['put_notional']/1e6:.1f}M")
 
         cursor.close()
 
         # Create OI map - use string keys for better matching
         oi_map = {}
         for row in oi_data:
-            # Use the original bucket_time without timezone conversion for the key
             ts_key = row['bucket_time']
             oi_map[ts_key] = {
                 'call_oi': int(row['call_oi'] or 0),
                 'put_oi': int(row['put_oi'] or 0),
+                'call_notional': float(row['call_notional'] or 0),
+                'put_notional': float(row['put_notional'] or 0),
                 'quote_count': int(row['quote_count'] or 0)
             }
 
@@ -321,7 +330,13 @@ def get_spy_history():
                 continue
 
             # Match OI using the original bucket_time (before timezone conversion)
-            oi_info = oi_map.get(ts, {'call_oi': 0, 'put_oi': 0, 'quote_count': 0})
+            oi_info = oi_map.get(ts, {
+                'call_oi': 0,
+                'put_oi': 0,
+                'call_notional': 0,
+                'put_notional': 0,
+                'quote_count': 0
+            })
 
             # Now convert to ET for output
             if ts.tzinfo is None:
@@ -350,12 +365,15 @@ def get_spy_history():
                 'up_volume': int(row['up_volume'] or 0),
                 'down_volume': int(row['down_volume'] or 0),
                 'call_oi': oi_info['call_oi'],
-                'put_oi': oi_info['put_oi']
+                'put_oi': oi_info['put_oi'],
+                'call_notional': oi_info['call_notional'],
+                'put_notional': oi_info['put_notional']
             })
 
         print(f"Returning {len(result)} combined data points")
         if len(result) > 0:
-            print(f"Sample result with OI: call_oi={result[0]['call_oi']}, put_oi={result[0]['put_oi']}")
+            print(f"Sample result with notional: call_notional=${result[0]['call_notional']/1e6:.1f}M, "
+                  f"put_notional=${result[0]['put_notional']/1e6:.1f}M")
 
         return jsonify(result)
 
