@@ -257,7 +257,6 @@ def get_table_data(table_name):
 
 
 @app.route('/api/spy-history')
-@cache_query(ttl_seconds=30) # Add caching
 def get_spy_history():
     """Get SPY price history with open interest data for charts"""
     conn = None
@@ -595,8 +594,8 @@ def get_market_status():
         current_time = now_et.time()
         is_weekday = now_et.weekday() < 5  # Monday=0, Friday=4
 
-        # Weekend check first
-        if not is_weekday:
+        # Weekend or 16:00-04:00 check first
+        if not is_weekday or current_time < dt_time(4, 0) or current_time >= dt_time(20, 0):
             return jsonify({
                 'status': 'closed',
                 'label': 'Market Closed',
@@ -604,91 +603,90 @@ def get_market_status():
                 'color': 'gray'
             })
 
-        # Now check time-based status (don't require fresh quotes for pre-market/after-hours)
-        if dt_time(4, 0) <= current_time < dt_time(9, 30):
+        # Check for fresh data
+        conn = None
+        quote_is_fresh = False
+        try:
+            conn = get_db_connection()
+            if not conn:
+                return jsonify({
+                    'status': 'unknown',
+                    'label': 'Status Unknown (Connection Failed)',
+                    'icon': '❓',
+                    'color': 'gray'
+                })
+
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("""
+                SELECT timestamp, close
+                FROM underlying_quotes
+                WHERE symbol = 'SPY'
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """)
+
+            latest_quote = cursor.fetchone()
+            cursor.close()
+
+            # Check quote freshness
+            if latest_quote:
+                quote_time = latest_quote['timestamp']
+                if quote_time.tzinfo is None:
+                    quote_time = pytz.utc.localize(quote_time)
+
+                seconds_ago = (datetime.now(pytz.utc) - quote_time).total_seconds()
+                quote_is_fresh = seconds_ago <= 30
+
+        finally:
+            if conn:
+                return_db_connection(conn)
+
+        # Streaming data, market must be open
+        if quote_is_fresh:
+
             # Pre-market hours
-            return jsonify({
-                'status': 'pre-market',
-                'label': 'Pre-Market',
-                'icon': '🌅',
-                'color': 'amber'
-            })
-        elif dt_time(9, 30) <= current_time <= dt_time(16, 0):
-            # Regular market hours - check for fresh data
-            conn = None
-            try:
-                conn = get_db_connection()
-                if not conn:
-                    return jsonify({
-                        'status': 'open',
-                        'label': 'Market Open',
-                        'icon': '☀️',
-                        'color': 'green'
-                    })
+            if dt_time(4, 0) >= current_time < dt_time(9, 30):
+                return jsonify({
+                    'status': 'pre-market',
+                    'label': 'Pre-Market',
+                    'icon': '🌅',
+                    'color': 'amber'
+                })
 
-                cursor = conn.cursor(cursor_factory=RealDictCursor)
-                cursor.execute("""
-                    SELECT timestamp, close
-                    FROM underlying_quotes
-                    WHERE symbol = 'SPY'
-                    ORDER BY timestamp DESC
-                    LIMIT 1
-                """)
+            # Regular market hours
+            elif dt_time(9, 30) <= current_time < dt_time(16, 0):
+                return jsonify({
+                    'status': 'open',
+                    'label': 'Market Open',
+                    'icon': '☀️',
+                    'color': 'green'
+                })
 
-                latest_quote = cursor.fetchone()
-                cursor.close()
-
-                # Check quote freshness (within 30 seconds during market hours)
-                quote_is_fresh = False
-                if latest_quote:
-                    quote_time = latest_quote['timestamp']
-                    if quote_time.tzinfo is None:
-                        quote_time = pytz.utc.localize(quote_time)
-
-                    seconds_ago = (datetime.now(pytz.utc) - quote_time).total_seconds()
-                    quote_is_fresh = seconds_ago <= 30
-
-                if quote_is_fresh:
-                    return jsonify({
-                        'status': 'open',
-                        'label': 'Market Open',
-                        'icon': '☀️',
-                        'color': 'green'
-                    })
-                else:
-                    # Market hours but no fresh data
-                    return jsonify({
-                        'status': 'open',
-                        'label': 'Market Open (No Data)',
-                        'icon': '☀️',
-                        'color': 'amber'
-                    })
-            finally:
-                if conn:
-                    return_db_connection(conn)
-        elif dt_time(16, 0) < current_time <= dt_time(20, 0):
             # After-hours
-            return jsonify({
-                'status': 'after-hours',
-                'label': 'After-Hours',
-                'icon': '🌆',
-                'color': 'amber'
-            })
+            else:
+              return jsonify({
+                  'status': 'after-hours',
+                  'label': 'After-Hours',
+                  'icon': '🌆',
+                  'color': 'amber'
+              })
+
+        # Data is stale during week, assume it is a holiday
         else:
-            # Outside all trading hours
             return jsonify({
                 'status': 'closed',
-                'label': 'Market Closed',
-                'icon': '🌙',
+                'label': 'Market Closed (Holiday)',
+                'icon': '🏖️',
                 'color': 'gray'
             })
+
 
     except Exception as e:
         print(f"Error getting market status: {e}")
         traceback.print_exc()
         return jsonify({
             'status': 'unknown',
-            'label': 'Status Unknown',
+            'label': 'Status Unknown (Error)',
             'icon': '❓',
             'color': 'gray'
         })
