@@ -40,7 +40,7 @@ ingestion:
   metrics_interval: 60
 
   # Heartbeat monitoring
-  heartbeat_timeout: 60
+  heartbeat_timeout: 120
   reconnect_delay: 5
 
 # Greeks calculation parameters

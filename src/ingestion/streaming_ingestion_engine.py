@@ -100,6 +100,9 @@ class StreamingIngestionEngine:
         # Underlying price cache
         self.underlying_prices = {}
 
+        # Track last stored timestamp per symbol to avoid duplicate writes
+        self.last_stored_timestamp = {}
+
         # Heartbeat monitoring
         self.last_activity = {}  # Track per symbol
         self.heartbeat_timeout = self.config['ingestion']['heartbeat_timeout']
@@ -385,8 +388,28 @@ class StreamingIngestionEngine:
             cursor.close()
 
     def _store_underlying_quote(self, symbol: str, quote: Dict):
-        """Store underlying price quote"""
+        """
+        Store underlying price quote (only if timestamp is new)
+
+        Args:
+            symbol: Symbol (e.g., 'SPY')
+            quote: Quote dictionary with timestamp field
+        """
         cursor = self.db_conn.cursor()
+
+        # Parse the timestamp from the quote
+        quote_timestamp_str = quote.get('timestamp')
+        if not quote_timestamp_str:
+            logger.warning(f"Quote for {symbol} has no timestamp, skipping")
+            return
+
+        # Check if this is a duplicate timestamp
+        if symbol in self.last_stored_timestamp:
+            if self.last_stored_timestamp[symbol] == quote_timestamp_str:
+                logger.debug(f"Skipping duplicate quote for {symbol} (timestamp: {quote_timestamp_str})")
+                # Still update the in-memory cache even though we're not writing to DB
+                self.underlying_prices[symbol] = quote['close']
+                return
 
         insert_query = """
             INSERT INTO underlying_quotes 
@@ -413,7 +436,10 @@ class StreamingIngestionEngine:
             # Update cache
             self.underlying_prices[symbol] = quote['close']
 
-            logger.debug(f"Stored underlying quote: {symbol} = ${quote['close']:.2f}")
+            # Store this timestamp so we don't write duplicates
+            self.last_stored_timestamp[symbol] = quote_timestamp_str
+
+            logger.debug(f"Stored underlying quote: {symbol} = ${quote['close']:.2f} (timestamp: {quote_timestamp_str})")
 
         except Exception as e:
             logger.error(f"Error storing underlying quote: {e}")
