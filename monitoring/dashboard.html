@@ -219,13 +219,19 @@
             font-size: 12px;
             font-weight: 500;
         }
-        .market-status.open {
+	.market-status.open {
             background: rgba(16, 185, 129, 0.2);
             color: #10b981;
         }
-        .market-status.closed {
+        .market-status.pre-market,
+        .market-status.after-hours {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+        .market-status.closed,
+        .market-status.unknown {
             background: rgba(148, 163, 184, 0.2);
-            color: #f54927;
+            color: #94a3b8;
         }
     </style>
 </head>
@@ -494,6 +500,17 @@
         function renderProgressBar(value) {
             const color = getProgressColor(value);
             return `<div class="progress-bar"><div class="progress-fill ${color}" style="width: ${value}%"></div></div>`;
+        }
+
+        function updateMarketStatus() {
+            fetch('/api/market-status').then(response => response.json()).then(status => {
+                const marketBadge = document.getElementById('marketStatusBadge');
+                marketBadge.innerHTML = `<span class="market-status ${status.status}">${status.icon} ${status.label}</span>`;
+            }).catch(error => {
+                console.error('Error fetching market status:', error);
+                const marketBadge = document.getElementById('marketStatusBadge');
+                marketBadge.innerHTML = '<span class="market-status unknown">❓ Status Unknown</span>';
+            });
         }
 
         function updateHome(data) {
@@ -1257,10 +1274,8 @@
 
                 document.getElementById('lastUpdate').textContent = `🚀 Updated: ${timestamp.toLocaleTimeString()}`;
 
-                const marketBadge = document.getElementById('marketStatusBadge');
-                marketBadge.innerHTML = data.market_open ? 
-                    '<span class="market-status open"><span class="status-dot"></span> Market Open</span>' : 
-                    '<span class="market-status closed"><span class="status-dot"></span> Market Closed</span>';
+                // Update market status badge separately
+                updateMarketStatus();
 
                 updateHome(data);
                 updateSystem(data);

@@ -557,6 +557,95 @@ def get_spy_change():
         if conn:
             return_db_connection(conn)
 
+@app.route('/api/market-status')
+def get_market_status():
+    """Get detailed market status based on time and recent quote freshness"""
+    import pytz
+    from datetime import time as dt_time
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'status': 'closed', 'label': 'Market Closed', 'icon': '🌙', 'color': 'gray'})
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get the most recent SPY quote
+        cursor.execute("""
+            SELECT timestamp, close
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+
+        latest_quote = cursor.fetchone()
+        cursor.close()
+
+        # Get current ET time
+        eastern = pytz.timezone('America/New_York')
+        now_et = datetime.now(eastern)
+        current_time = now_et.time()
+        is_weekday = now_et.weekday() < 5  # Monday=0, Friday=4
+
+        # Check quote freshness (within 5 seconds)
+        quote_is_fresh = False
+        if latest_quote:
+            quote_time = latest_quote['timestamp']
+            if quote_time.tzinfo is None:
+                quote_time = pytz.utc.localize(quote_time)
+
+            seconds_ago = (datetime.now(pytz.utc) - quote_time).total_seconds()
+            quote_is_fresh = seconds_ago <= 5
+
+        # Determine market status based on logic
+        if is_weekday and dt_time(9, 30) <= current_time <= dt_time(16, 0) and quote_is_fresh:
+            # Regular market hours with fresh data
+            return jsonify({
+                'status': 'open',
+                'label': 'Market Open',
+                'icon': '☀️',
+                'color': 'green'
+            })
+        elif is_weekday and dt_time(4, 0) <= current_time < dt_time(9, 30) and quote_is_fresh:
+            # Pre-market with fresh data
+            return jsonify({
+                'status': 'pre-market',
+                'label': 'Pre-Market',
+                'icon': '🌅',
+                'color': 'amber'
+            })
+        elif is_weekday and dt_time(16, 0) < current_time <= dt_time(20, 0) and quote_is_fresh:
+            # After-hours with fresh data
+            return jsonify({
+                'status': 'after-hours',
+                'label': 'After-Hours',
+                'icon': '🌆',
+                'color': 'amber'
+            })
+        else:
+            # Market closed (weekends, outside trading hours, or stale data)
+            return jsonify({
+                'status': 'closed',
+                'label': 'Market Closed',
+                'icon': '🌙',
+                'color': 'gray'
+            })
+
+    except Exception as e:
+        print(f"Error getting market status: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'status': 'unknown',
+            'label': 'Status Unknown',
+            'icon': '❓',
+            'color': 'gray'
+        })
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 @app.route('/logo')
 def get_logo():
     try:
