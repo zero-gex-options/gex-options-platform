@@ -411,11 +411,26 @@ class StreamingIngestionEngine:
                 self.underlying_prices[symbol] = quote['close']
                 return
 
+        # Calculate incremental volume (if we have a previous volume reading)
+        current_total_vol = quote['total_vol']
+        current_up_vol = quote['up_vol']
+        current_down_vol = quote['down_vol']
+
+        # Store the cumulative volumes for reference, but we'll let the DB handle this
+        # TradeStation provides cumulative daily volume, so we store as-is
+
         insert_query = """
             INSERT INTO underlying_quotes 
             (timestamp, symbol, open, close, high, low, 
              total_volume, up_volume, down_volume, source)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (timestamp, symbol) DO UPDATE SET
+                close = EXCLUDED.close,
+                high = EXCLUDED.high,
+                low = EXCLUDED.low,
+                total_volume = EXCLUDED.total_volume,
+                up_volume = EXCLUDED.up_volume,
+                down_volume = EXCLUDED.down_volume
         """
 
         try:
@@ -426,9 +441,9 @@ class StreamingIngestionEngine:
                 quote['close'],
                 quote['high'],
                 quote['low'],
-                quote['total_vol'],
-                quote['up_vol'],
-                quote['down_vol'],
+                current_total_vol,
+                current_up_vol,
+                current_down_vol,
                 'tradestation_api'
             ))
             self.db_conn.commit()
@@ -439,7 +454,7 @@ class StreamingIngestionEngine:
             # Store this timestamp so we don't write duplicates
             self.last_stored_timestamp[symbol] = quote_timestamp_str
 
-            logger.debug(f"Stored underlying quote: {symbol} = ${quote['close']:.2f} (timestamp: {quote_timestamp_str})")
+            logger.debug(f"Stored underlying quote: {symbol} = ${quote['close']:.2f}, vol={current_total_vol:,} (timestamp: {quote_timestamp_str})")
 
         except Exception as e:
             logger.error(f"Error storing underlying quote: {e}")
