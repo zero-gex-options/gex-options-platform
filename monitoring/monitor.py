@@ -614,7 +614,7 @@ def main():
     parser = argparse.ArgumentParser(description='ZeroGEX Platform Monitor')
     parser.add_argument('--interval', type=int, default=5, help='Refresh interval in seconds')
     parser.add_argument('--export', action='store_true', help='Enable metrics export to JSON')
-    parser.add_argument('--export-dir', default='/home/ubuntu/monitoring', help='Export directory')
+    parser.add_argument('--export-dir', default='/data/monitoring', help='Export directory')
     parser.add_argument('--daemon', action='store_true', help='Run as background daemon')
 
     args = parser.parse_args()
