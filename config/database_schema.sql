@@ -113,6 +113,15 @@ CREATE TABLE service_uptime_checks (
 -- Convert to hypertable
 SELECT create_hypertable('service_uptime_checks', 'timestamp');
 
+-- Performance indexes for dashboard queries
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_options_quotes_spy_timestamp_oi
+ON options_quotes(symbol, timestamp DESC, option_type, open_interest, mid)
+WHERE symbol LIKE 'SPY%' AND mid > 0;
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_underlying_quotes_spy_timestamp_agg
+ON underlying_quotes(symbol, timestamp DESC)
+WHERE symbol = 'SPY';
+
 -- Indexes for performance
 CREATE INDEX idx_options_quotes_symbol_exp ON options_quotes(symbol, expiration, timestamp DESC);
 CREATE INDEX idx_options_quotes_strike ON options_quotes(strike, timestamp DESC);

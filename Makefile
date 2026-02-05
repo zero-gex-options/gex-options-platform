@@ -206,3 +206,16 @@ logs-monitor:
 
 logs-dashboard:
 	sudo journalctl -u gex-dashboard -f
+
+# Database maintenance
+db-maintenance:
+	@echo "Running database maintenance..."
+	@./scripts/db_maintenance.sh
+
+db-vacuum:
+	@echo "Running VACUUM ANALYZE..."
+	@psql -U gex_user -d gex_db -h localhost -c "VACUUM ANALYZE;"
+
+db-slow-queries:
+	@echo "Recent slow queries (> 1s):"
+	@sudo grep "duration:" /var/log/postgresql/postgresql-*-main.log | tail -20

@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# ==============================================
+# Step 021: PostgreSQL Performance Tuning
+# ==============================================
+
+set -e
+
+log "PostgreSQL Performance Tuning"
+
+# Detect PostgreSQL version
+PG_VERSION=$(psql --version | grep -oP '\d+' | head -1)
+PG_CONF="/etc/postgresql/${PG_VERSION}/main/postgresql.conf"
+
+log "  → Configuring PostgreSQL for optimal performance..."
+
+# Backup original config
+sudo cp "$PG_CONF" "${PG_CONF}.backup-tuning"
+
+# Add performance settings
+sudo tee -a "$PG_CONF" > /dev/null << 'EOF'
+
+# ==========================================
+# ZeroGEX Performance Tuning
+# ==========================================
+
+# Connection limits
+max_connections = 20
+
+# Statement timeout (prevent runaway queries)
+statement_timeout = '10s'
+idle_in_transaction_session_timeout = '30s'
+
+# Query planning
+random_page_cost = 1.1
+effective_cache_size = 2GB
+work_mem = 16MB
+maintenance_work_mem = 256MB
+
+# Logging slow queries
+log_min_duration_statement = 1000  # Log queries taking > 1 second
+log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+log_statement = 'none'
+log_duration = off
+
+# Auto-vacuum tuning
+autovacuum_max_workers = 2
+autovacuum_naptime = 60s
+
+EOF
+
+log "  → Restarting PostgreSQL to apply tuning..."
+sudo systemctl restart postgresql
+
+log "  ✓ PostgreSQL tuned for performance"
+log ""
+log "Performance settings applied:"
+log "  • Connection limit: 20"
+log "  • Statement timeout: 10s"
+log "  • Idle transaction timeout: 30s"
+log "  • Slow query logging: > 1s"
+log ""

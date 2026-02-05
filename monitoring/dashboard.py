@@ -13,11 +13,14 @@ from psycopg2.extras import RealDictCursor
 import traceback
 from datetime import datetime
 import pytz
+import time
+from functools import wraps
 
 app = Flask(__name__)
 METRICS_FILE = Path("/data/monitoring/current_metrics.json")
 DASHBOARD_DIR = Path("/opt/zerogex/monitoring")
 CREDS_FILE = Path.home() / ".zerogex_db_creds"
+_query_cache = {}
 
 # Global connection pool
 db_pool = None
@@ -58,7 +61,7 @@ def init_db_pool():
             try:
                 db_pool = psycopg2.pool.SimpleConnectionPool(
                     minconn=1,
-                    maxconn=5,
+                    maxconn=3,
                     connect_timeout=3,
                     **db_config
                 )
@@ -89,6 +92,25 @@ def return_db_connection(conn):
             db_pool.putconn(conn)
         except Exception as e:
             print(f"Error returning connection to pool: {e}")
+
+def cache_query(ttl_seconds=30):
+    """Cache query results for ttl_seconds"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            cache_key = f"{func.__name__}:{args}:{kwargs}"
+            now = time.time()
+
+            if cache_key in _query_cache:
+                result, timestamp = _query_cache[cache_key]
+                if now - timestamp < ttl_seconds:
+                    return result
+
+            result = func(*args, **kwargs)
+            _query_cache[cache_key] = (result, now)
+            return result
+        return wrapper
+    return decorator
 
 @app.route('/')
 def dashboard():
@@ -235,6 +257,7 @@ def get_table_data(table_name):
 
 
 @app.route('/api/spy-history')
+@cache_query(ttl_seconds=30) # Add caching
 def get_spy_history():
     """Get SPY price history with open interest data for charts"""
     conn = None
@@ -389,6 +412,7 @@ def get_spy_history():
             return_db_connection(conn)
 
 @app.route('/api/ingestion-history')
+@cache_query(ttl_seconds=30) # Add caching
 def get_ingestion_history():
     """Get ingestion metrics history for charts"""
     conn = None
@@ -442,6 +466,7 @@ def get_ingestion_history():
             return_db_connection(conn)
 
 @app.route('/api/uptime-history')
+@cache_query(ttl_seconds=30) # Add caching
 def get_uptime_history():
     """Get service uptime history based on actual service checks"""
     conn = None
