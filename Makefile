@@ -219,3 +219,24 @@ db-vacuum:
 db-slow-queries:
 	@echo "Recent slow queries (> 1s):"
 	@sudo grep "duration:" /var/log/postgresql/postgresql-*-main.log | tail -20
+
+# Cache management
+cache-previous-close:
+	@echo "Caching today's close as tomorrow's previous close..."
+	@./scripts/cache_previous_close.sh
+
+cache-previous-close-date:
+	@echo "Usage: make cache-previous-close-date DATE=2026-02-05"
+	@if [ -z "$(DATE)" ]; then \
+		echo "ERROR: Please specify DATE=YYYY-MM-DD"; \
+		exit 1; \
+	fi
+	@./scripts/cache_previous_close.sh $(DATE)
+
+view-cache:
+	@echo "Current cached previous close:"
+	@cat /data/monitoring/spy_previous_close.json 2>/dev/null | jq . || echo "Cache file not found"
+
+cache-history:
+	@echo "Recent cache updates:"
+	@ls -lht /data/monitoring/spy_previous_close.json 2>/dev/null || echo "No cache file found"

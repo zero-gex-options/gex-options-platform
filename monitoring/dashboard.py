@@ -525,58 +525,112 @@ def get_uptime_history():
 
 @app.route('/api/spy-change')
 def get_spy_change():
-    """Get SPY price change from previous close"""
-    conn = None
+    """Get SPY price change from previous close (pre-cached at 4PM ET daily)"""
+    import json
+    from pathlib import Path
+
+    cache_file = Path("/data/monitoring/spy_previous_close.json")
+
     try:
+        # Read from cache
+        prev_close = None
+        if cache_file.exists():
+            with open(cache_file, 'r') as f:
+                cache_data = json.load(f)
+
+            prev_close = cache_data.get('prev_close')
+            print(f"Using cached previous close: ${prev_close:.2f}")
+
+        if prev_close is None:
+            # Cache not available - fall back to database
+            print("Cache miss, falling back to database")
+            raise Exception("Cache not available")
+
+        # Get current price from database
         conn = get_db_connection()
         if not conn:
             return jsonify({'error': 'Database connection failed'}), 500
 
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-
-        # Get current price and previous day's close
         cursor.execute("""
-            WITH latest_price AS (
-                SELECT close as current_price, timestamp
-                FROM underlying_quotes
-                WHERE symbol = 'SPY'
-                ORDER BY timestamp DESC
-                LIMIT 1
-            ),
-            previous_close AS (
-                SELECT close as prev_close
-                FROM underlying_quotes
-                WHERE symbol = 'SPY'
-                  AND timestamp < (SELECT DATE_TRUNC('day', timestamp AT TIME ZONE 'America/New_York')
-                                   FROM latest_price)
-                ORDER BY timestamp DESC
-                LIMIT 1
-            )
-            SELECT
-                lp.current_price,
-                pc.prev_close,
-                (lp.current_price - pc.prev_close) as change,
-                ((lp.current_price - pc.prev_close) / pc.prev_close * 100) as percent_change
-            FROM latest_price lp, previous_close pc
+            SELECT close as current_price
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+            ORDER BY timestamp DESC
+            LIMIT 1
         """)
 
         result = cursor.fetchone()
         cursor.close()
 
-        if result:
-            return jsonify({
-                'current_price': float(result['current_price'] or 0),
-                'prev_close': float(result['prev_close'] or 0),
-                'change': float(result['change'] or 0),
-                'percent_change': float(result['percent_change'] or 0)
-            })
-        else:
-            return jsonify({'change': 0, 'percent_change': 0})
+        if not result:
+            return jsonify({'error': 'No current price available'}), 404
+
+        current_price = float(result['current_price'])
+
+        # Calculate change
+        change = current_price - prev_close
+        percent_change = (change / prev_close * 100) if prev_close > 0 else 0
+
+        return jsonify({
+            'current_price': current_price,
+            'prev_close': prev_close,
+            'change': change,
+            'percent_change': percent_change
+        })
 
     except Exception as e:
-        print(f"Error in spy-change: {e}")
+        print(f"Error in spy-change, falling back to database: {e}")
         traceback.print_exc()
-        return jsonify({'change': 0, 'percent_change': 0})
+
+        # Full fallback to database calculation
+        conn = None
+        try:
+            conn = get_db_connection()
+            if not conn:
+                return jsonify({'change': 0, 'percent_change': 0, 'prev_close': 0})
+
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("""
+                WITH latest_price AS (
+                    SELECT close as current_price, timestamp
+                    FROM underlying_quotes
+                    WHERE symbol = 'SPY'
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                ),
+                previous_close AS (
+                    SELECT close as prev_close
+                    FROM underlying_quotes
+                    WHERE symbol = 'SPY'
+                      AND timestamp < (SELECT DATE_TRUNC('day', timestamp AT TIME ZONE 'America/New_York')
+                                       FROM latest_price)
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                )
+                SELECT
+                    lp.current_price,
+                    pc.prev_close,
+                    (lp.current_price - pc.prev_close) as change,
+                    ((lp.current_price - pc.prev_close) / pc.prev_close * 100) as percent_change
+                FROM latest_price lp, previous_close pc
+            """)
+
+            result = cursor.fetchone()
+            cursor.close()
+
+            if result:
+                return jsonify({
+                    'current_price': float(result['current_price'] or 0),
+                    'prev_close': float(result['prev_close'] or 0),
+                    'change': float(result['change'] or 0),
+                    'percent_change': float(result['percent_change'] or 0)
+                })
+            else:
+                return jsonify({'change': 0, 'percent_change': 0, 'prev_close': 0})
+        finally:
+            if conn:
+                return_db_connection(conn)
     finally:
         if conn:
             return_db_connection(conn)
