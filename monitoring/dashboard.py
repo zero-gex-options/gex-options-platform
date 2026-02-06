@@ -645,7 +645,7 @@ def get_market_status():
         if quote_is_fresh:
 
             # Pre-market hours
-            if dt_time(4, 0) >= current_time < dt_time(9, 30):
+            if dt_time(4, 0) <= current_time < dt_time(9, 30):
                 return jsonify({
                     'status': 'pre-market',
                     'label': 'Pre-Market',
