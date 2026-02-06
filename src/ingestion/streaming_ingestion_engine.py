@@ -372,7 +372,10 @@ class StreamingIngestionEngine:
                 delta = EXCLUDED.delta,
                 gamma = EXCLUDED.gamma,
                 theta = EXCLUDED.theta,
-                vega = EXCLUDED.vega
+                vega = EXCLUDED.vega,
+                rho = EXCLUDED.rho,
+                is_calculated = EXCLUDED.is_calculated,
+                spread_pct = EXCLUDED.spread_pct
         """
 
         try:
