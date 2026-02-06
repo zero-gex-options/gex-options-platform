@@ -15,6 +15,7 @@ import sys
 import yaml
 from pathlib import Path
 from typing import Dict, List
+from dateutil import parser
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -99,9 +100,6 @@ class StreamingIngestionEngine:
 
         # Underlying price cache
         self.underlying_prices = {}
-
-        # Track last stored timestamp per symbol to avoid duplicate writes
-        self.last_stored_timestamp = {}
 
         # Heartbeat monitoring
         self.last_activity = {}  # Track per symbol
@@ -389,7 +387,7 @@ class StreamingIngestionEngine:
 
     def _store_underlying_quote(self, symbol: str, quote: Dict):
         """
-        Store underlying price quote (only if timestamp is new)
+        Store underlying price quote, overwriting if same timestamp+symbol exists
 
         Args:
             symbol: Symbol (e.g., 'SPY')
@@ -403,28 +401,22 @@ class StreamingIngestionEngine:
             logger.warning(f"Quote for {symbol} has no timestamp, skipping")
             return
 
-        # Check if this is a duplicate timestamp
-        if symbol in self.last_stored_timestamp:
-            if self.last_stored_timestamp[symbol] == quote_timestamp_str:
-                logger.debug(f"Skipping duplicate quote for {symbol} (timestamp: {quote_timestamp_str})")
-                # Still update the in-memory cache even though we're not writing to DB
-                self.underlying_prices[symbol] = quote['close']
-                return
+        # Parse TradeStation timestamp to datetime object
+        # TradeStation format: "2026-02-05T20:26:05.600954Z" (ISO 8601 with Z)
+        try:
+            quote_timestamp = datetime.fromisoformat(quote_timestamp_str.replace('Z', '+00:00'))
+        except Exception as e:
+            logger.error(f"Failed to parse timestamp '{quote_timestamp_str}': {e}")
+            return
 
-        # Calculate incremental volume (if we have a previous volume reading)
-        current_total_vol = quote['total_vol']
-        current_up_vol = quote['up_vol']
-        current_down_vol = quote['down_vol']
-
-        # Store the cumulative volumes for reference, but we'll let the DB handle this
-        # TradeStation provides cumulative daily volume, so we store as-is
-
+        # Always write to database - let ON CONFLICT handle duplicates
         insert_query = """
             INSERT INTO underlying_quotes 
             (timestamp, symbol, open, close, high, low, 
              total_volume, up_volume, down_volume, source)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (timestamp, symbol) DO UPDATE SET
+                open = EXCLUDED.open,
                 close = EXCLUDED.close,
                 high = EXCLUDED.high,
                 low = EXCLUDED.low,
@@ -435,26 +427,23 @@ class StreamingIngestionEngine:
 
         try:
             cursor.execute(insert_query, (
-                datetime.now(timezone.utc),
+                quote_timestamp,  # Use TradeStation's timestamp
                 symbol,
                 quote['open'],
                 quote['close'],
                 quote['high'],
                 quote['low'],
-                current_total_vol,
-                current_up_vol,
-                current_down_vol,
+                quote['total_vol'],
+                quote['up_vol'],
+                quote['down_vol'],
                 'tradestation_api'
             ))
             self.db_conn.commit()
 
-            # Update cache
+            # Update in-memory cache
             self.underlying_prices[symbol] = quote['close']
 
-            # Store this timestamp so we don't write duplicates
-            self.last_stored_timestamp[symbol] = quote_timestamp_str
-
-            logger.debug(f"Stored underlying quote: {symbol} = ${quote['close']:.2f}, vol={current_total_vol:,} (timestamp: {quote_timestamp_str})")
+            logger.debug(f"Stored underlying quote: {symbol} = ${quote['close']:.2f}, vol={int(quote['total_vol']) if quote['total_vol'] else 0} (timestamp: {quote_timestamp_str})")
 
         except Exception as e:
             logger.error(f"Error storing underlying quote: {e}")
