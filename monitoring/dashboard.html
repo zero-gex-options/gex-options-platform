@@ -697,14 +697,14 @@
                                 label: 'SPY',
                                 data: ohlcData,
                                 borderColor: {
-                                    up: '#059669',      // darker green
-                                    down: '#dc2626',    // darker red
-                                    unchanged: '#64748b' // darker gray
+                                    up: '#059669',
+                                    down: '#dc2626',
+                                    unchanged: '#64748b'
                                 },
                                 backgroundColor: {
-                                    up: 'rgba(16, 185, 129, 0.5)',   // green fill
-                                    down: 'rgba(239, 68, 68, 0.5)',  // red fill
-                                    unchanged: 'rgba(148, 163, 184, 0.5)' // gray fill
+                                    up: 'rgba(16, 185, 129, 0.5)',
+                                    down: 'rgba(239, 68, 68, 0.5)',
+                                    unchanged: 'rgba(148, 163, 184, 0.5)'
                                 }
                             }]
                         },
@@ -750,7 +750,43 @@
                                 }
                             },
                             plugins: {
-                                legend: { display: false }
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        title: function(context) {
+                                            const date = new Date(context[0].parsed.x);
+                                            return date.toLocaleString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            });
+                                        },
+                                        label: function(context) {
+                                            const dataPoint = context.raw;
+                                            const idx = context.dataIndex;
+
+                                            // Calculate change from previous bar
+                                            let changeText = '';
+                                            if (idx > 0) {
+                                                const prevClose = ohlcData[idx - 1].c;
+                                                const currentClose = dataPoint.c;
+                                                const change = currentClose - prevClose;
+                                                const changePct = (change / prevClose) * 100;
+                                                const changeSymbol = change >= 0 ? '+' : '';
+                                                changeText = `\nChange: ${changeSymbol}$${change.toFixed(2)} (${changeSymbol}${changePct.toFixed(2)}%)`;
+                                            }
+
+                                            return [
+                                                `Open: $${dataPoint.o.toFixed(2)}`,
+                                                `High: $${dataPoint.h.toFixed(2)}`,
+                                                `Low: $${dataPoint.l.toFixed(2)}`,
+                                                `Close: $${dataPoint.c.toFixed(2)}`,
+                                                changeText
+                                            ].filter(Boolean);
+                                        }
+                                    }
+                                }
                             }
                         }
                     });
