@@ -110,6 +110,50 @@ sudo chmod 644 "$MONITOR_DIR/dashboard.html"
 sudo chmod 644 "$MONITOR_DIR/ZeroGEX.png"
 log "     ✓ Dashboard files installed"
 
+# Setup SPY previous close caching
+log "  → Setting up SPY previous close caching..."
+
+# Make cache script executable
+CACHE_SCRIPT="$APP_DIR/scripts/cache_previous_close.sh"
+if [ ! -f "$CACHE_SCRIPT" ]; then
+    log "  ✗ Cache script not found: $CACHE_SCRIPT"
+    exit 1
+fi
+
+chmod +x "$CACHE_SCRIPT"
+log "     ✓ Cache script is executable"
+
+# Run initial cache population
+log "  → Running initial cache population..."
+if sudo -u ubuntu "$CACHE_SCRIPT"; then
+    log "     ✓ Initial cache populated"
+
+    # Show what was cached
+    if [ -f "$MONITORING_DATA_DIR/spy_previous_close.json" ]; then
+        CACHED_PRICE=$(cat "$MONITORING_DATA_DIR/spy_previous_close.json" | jq -r '.prev_close' 2>/dev/null || echo "N/A")
+        CACHED_FOR_DATE=$(cat "$MONITORING_DATA_DIR/spy_previous_close.json" | jq -r '.date' 2>/dev/null || echo "N/A")
+        TRADING_DATE=$(cat "$MONITORING_DATA_DIR/spy_previous_close.json" | jq -r '.trading_date' 2>/dev/null || echo "N/A")
+        log "     Cached: \$$CACHED_PRICE from $TRADING_DATE, valid for $CACHED_FOR_DATE"
+    fi
+else
+    log "     ⚠ Initial cache population failed (will retry via cron)"
+fi
+
+# Setup cron job for daily 4:00 PM ET cache update
+log "  → Setting up cron job for daily cache update..."
+
+CRON_JOB="0 16 * * 1-5 $CACHE_SCRIPT"
+
+# Check if cron job already exists
+if crontab -l 2>/dev/null | grep -q "cache_previous_close.sh"; then
+    log "     ℹ Cron job already exists, skipping..."
+else
+    # Add cron job
+    (crontab -l 2>/dev/null; echo "# ZeroGEX SPY Previous Close Cache - Daily at 4:00 PM ET (Mon-Fri)") | crontab -
+    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+    log "     ✓ Cron job added (daily at 4:00 PM ET, weekdays only)"
+fi
+
 # Reload systemd
 log "  → Reloading systemd daemon..."
 sudo systemctl daemon-reload
@@ -160,6 +204,8 @@ log "  ✓ Web dashboard installed and running"
 log "  ✓ Firewall configured (port 8080)"
 log "  ✓ Metrics collection every 60 seconds"
 log "  ✓ Metrics stored in: $MONITORING_DATA_DIR"
+log "  ✓ SPY previous close cache initialized"
+log "  ✓ Daily cache update scheduled (4:00 PM ET, Mon-Fri)"
 log ""
 log "Dashboard Access:"
 log "  URL: http://${SERVER_IP}:8080"
@@ -168,10 +214,17 @@ log "Services:"
 log "  • gex-monitor:    Collects system, service, and database metrics"
 log "  • gex-dashboard:  Provides web-based monitoring interface"
 log ""
+log "Cache Management:"
+log "  • View cache:     make view-cache"
+log "  • Manual update:  make cache-previous-close"
+log "  • Cache location: $MONITORING_DATA_DIR/spy_previous_close.json"
+log "  • Cron schedule:  4:00 PM ET daily (weekdays)"
+log ""
 log "Useful Commands:"
 log "  • View monitoring logs:   sudo journalctl -u gex-monitor -f"
 log "  • View dashboard logs:    sudo journalctl -u gex-dashboard -f"
 log "  • Restart monitoring:     sudo systemctl restart gex-monitor"
 log "  • Check service status:   sudo systemctl status gex-monitor"
 log "  • View raw metrics:       cat $MONITORING_DATA_DIR/current_metrics.json"
+log "  • View cache:             cat $MONITORING_DATA_DIR/spy_previous_close.json"
 log ""
