@@ -716,16 +716,19 @@
                                 x: {
                                     type: 'time',
                                     time: {
-                                        unit: 'hour',
+                                        unit: 'minute',
+                                        stepSize: 30,
                                         displayFormats: { 
-                                            hour: 'MMM dd HH:mm'
+                                            minute: 'MMM dd HH:mm'
                                         }
                                     },
                                     ticks: {
                                         color: '#94a3b8',
                                         callback: function(value, index, ticks) {
                                             const date = new Date(value);
-                                            if (date.getMinutes() === 0) {
+                                            const minutes = date.getMinutes();
+                                            // Show label every 30 minutes (00 and 30)
+                                            if (minutes === 0 || minutes === 30) {
                                                 return date.toLocaleString('en-US', { 
                                                     month: 'short', 
                                                     day: 'numeric',
@@ -816,7 +819,11 @@
                             scales: {
                                 x: {
                                     type: 'time',
-                                    time: { unit: 'hour', displayFormats: { hour: 'MMM dd HH:mm' } },
+                                    time: { 
+                                        unit: 'minute',
+                                        stepSize: 30,
+                                        displayFormats: { minute: 'MMM dd HH:mm' } 
+                                    },
                                     ticks: { color: '#94a3b8' },
                                     display: false
                                 },
@@ -866,7 +873,11 @@
                             x: {
                                 type: 'time',
                                 stacked: true,
-                                time: { unit: 'hour', displayFormats: { hour: 'MMM dd HH:mm' } },
+                                time: { 
+                                    unit: 'minute',
+                                    stepSize: 30,
+                                    displayFormats: { minute: 'MMM dd HH:mm' } 
+                                },
                                 ticks: { color: '#94a3b8' },
                                 display: false
                             },
@@ -889,11 +900,14 @@
                 });
                 console.log('Volume chart created');
 
-                // Open Interest Chart (bottom)
+                // Open Interest Chart (bottom) - EXCLUDE LAST DATA POINT
                 const oiCtx = document.getElementById('spyOIChart');
 
-                console.log('Creating OI chart with data points:', filteredData.length);
-                console.log('Sample OI data:', filteredData[0]);
+                // Remove the last data point (most recent, partial data)
+                const oiData = filteredData.slice(0, -1);
+
+                console.log('Creating OI chart with data points:', oiData.length, '(excluded last point)');
+                console.log('Sample OI data:', oiData[0]);
 
                 charts.spyOIChart = new Chart(oiCtx, {
                     type: 'line',
@@ -901,9 +915,9 @@
                         datasets: [
                             {
                                 label: 'Call Notional Value',
-                                data: filteredData.map(d => ({
+                                data: oiData.map(d => ({
                                     x: new Date(d.timestamp).getTime(),
-                                    y: d.call_notional || 0  // Changed from call_oi
+                                    y: d.call_notional || 0
                                 })),
                                 borderColor: '#10b981',
                                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -915,9 +929,9 @@
                             },
                             {
                                 label: 'Put Notional Value',
-                                data: filteredData.map(d => ({
+                                data: oiData.map(d => ({
                                     x: new Date(d.timestamp).getTime(),
-                                    y: d.put_notional || 0  // Changed from put_oi
+                                    y: d.put_notional || 0
                                 })),
                                 borderColor: '#ef4444',
                                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -939,30 +953,39 @@
                             x: {
                                 type: 'time',
                                 time: {
-                                    unit: 'hour',
-                                    displayFormats: { hour: 'MMM dd HH:mm' }
+                                    unit: 'minute',
+                                    displayFormats: { 
+                                        minute: 'MMM dd HH:mm'
+                                    },
+                                    minUnit: 'minute'
                                 },
                                 ticks: {
                                     color: '#94a3b8',
                                     maxRotation: 45,
                                     minRotation: 45,
+                                    autoSkip: true,
+                                    maxTicksLimit: 20,
                                     callback: function(value, index, ticks) {
                                         const date = new Date(value);
-                                        if (date.getMinutes() === 0) {
+                                        const minutes = date.getMinutes();
+                                        // Only show labels at 00 and 30 minutes
+                                        if (minutes === 0 || minutes === 30) {
                                             return date.toLocaleString('en-US', { 
                                                 month: 'short', 
                                                 day: 'numeric',
                                                 hour: '2-digit',
-                                                minute: '2-digit'
+                                                minute: '2-digit',
+                                                hour12: false
                                             });
                                         }
-                                        return '';
+                                        return null;
                                     }
                                 },
                                 grid: { 
                                     color: function(context) {
                                         const date = new Date(context.tick.value);
-                                        return date.getMinutes() === 0 ? '#475569' : '#334155';
+                                        const minutes = date.getMinutes();
+                                        return (minutes === 0 || minutes === 30) ? '#475569' : '#334155';
                                     }
                                 }
                             },

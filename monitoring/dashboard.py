@@ -424,14 +424,30 @@ def get_ingestion_history():
         cursor.execute("SET TIME ZONE 'America/New_York'")
         cursor.execute("SET statement_timeout = '3s'")
 
+        # Get the last record of each hour to calculate differences
         cursor.execute("""
-            SELECT 
-                date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') as hour,
-                SUM(COALESCE(records_ingested, 0)) as records_ingested,
-                SUM(COALESCE(error_count, 0)) as error_count
-            FROM ingestion_metrics
-            WHERE timestamp > NOW() - INTERVAL '48 hours'
-            GROUP BY hour
+            WITH hourly_last_values AS (
+                SELECT DISTINCT ON (date_trunc('hour', timestamp AT TIME ZONE 'America/New_York'))
+                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') as hour,
+                    timestamp,
+                    records_ingested,
+                    error_count
+                FROM ingestion_metrics
+                WHERE timestamp > NOW() - INTERVAL '48 hours'
+                ORDER BY date_trunc('hour', timestamp AT TIME ZONE 'America/New_York'), timestamp DESC
+            ),
+            hourly_differences AS (
+                SELECT
+                    hour,
+                    records_ingested - LAG(records_ingested, 1, 0) OVER (ORDER BY hour) as records_this_hour,
+                    error_count - LAG(error_count, 1, 0) OVER (ORDER BY hour) as errors_this_hour
+                FROM hourly_last_values
+            )
+            SELECT
+                hour,
+                GREATEST(records_this_hour, 0) as records_ingested,
+                GREATEST(errors_this_hour, 0) as error_count
+            FROM hourly_differences
             ORDER BY hour ASC
             LIMIT 100
         """)

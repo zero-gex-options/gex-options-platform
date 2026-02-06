@@ -311,30 +311,6 @@ class MonitoringCollector:
                     'message': 'No data ingested in last 10 minutes (during market hours)'
                 })
 
-            # NEW: Check for stale stream (no heartbeat in last 2 minutes)
-            ingestion_metric = db.get('ingestion_metric')
-            if ingestion_metric and ingestion_metric.get('last_heartbeat'):
-                last_hb = ingestion_metric['last_heartbeat']
-                if isinstance(last_hb, str):
-                    last_hb = datetime.fromisoformat(last_hb.replace('Z', '+00:00'))
-
-                seconds_since_hb = (datetime.now(timezone.utc) - last_hb).total_seconds()
-
-                if seconds_since_hb > 120:  # 2 minutes
-                    alerts.append({
-                        'timestamp': timestamp,
-                        'level': 'critical',
-                        'category': 'stream',
-                        'message': f'Options stream stale: {int(seconds_since_hb)}s since last heartbeat (during market hours)'
-                    })
-                elif seconds_since_hb > 60:  # 1 minute
-                    alerts.append({
-                        'timestamp': timestamp,
-                        'level': 'warning',
-                        'category': 'stream',
-                        'message': f'Options stream may be stale: {int(seconds_since_hb)}s since last heartbeat'
-                    })
-
         return alerts
 
     def collect_all_metrics(self) -> Dict:
