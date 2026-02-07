@@ -453,6 +453,61 @@
         let globalData = {};
         let charts = {}; // Will now hold spyPriceChart, spyVolumeChart, etc.
 
+        // Add caching system
+        let chartDataCache = {
+            spy: { data: [], lastUpdate: 0 },
+            ingestion: { data: [], lastUpdate: 0 }
+        };
+
+        const CACHE_TTL = 25000; // 25 seconds (less than server-side 30s cache)
+
+        function isCacheValid(cacheKey) {
+            return (Date.now() - chartDataCache[cacheKey].lastUpdate) < CACHE_TTL;
+        }
+
+        function updateCache(cacheKey, newData) {
+            chartDataCache[cacheKey].data = newData;
+            chartDataCache[cacheKey].lastUpdate = Date.now();
+            return newData;
+        }
+
+        // Market hours background color helper
+        function getMarketStatusColor() {
+            const marketBadge = document.getElementById('marketStatusBadge');
+            if (!marketBadge) return null;
+
+            const statusText = marketBadge.textContent.toLowerCase();
+
+            if (statusText.includes('pre-market') || statusText.includes('after-hours')) {
+                return 'rgba(251, 146, 60, 0.08)'; // Slight orange hue
+            }
+            return null; // Use default chart background
+        }
+
+        // Chart.js plugin for market hours background
+        const marketHoursBackgroundPlugin = {
+            id: 'marketHoursBackground',
+            beforeDraw: (chart) => {
+                const bgColor = getMarketStatusColor();
+                if (!bgColor) return;
+
+                const ctx = chart.ctx;
+                const chartArea = chart.chartArea;
+
+                ctx.save();
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(chartArea.left, chartArea.top, 
+                            chartArea.right - chartArea.left, 
+                            chartArea.bottom - chartArea.top);
+                ctx.restore();
+            }
+        };
+
+        // Register the plugin
+        if (typeof Chart !== 'undefined') {
+            Chart.register(marketHoursBackgroundPlugin);
+        }
+
         window.showTableData = async function(tableName) {
             try {
                 const response = await fetch(`/api/table/${tableName}`);
@@ -612,20 +667,32 @@
 
         async function updateSPYChart() {
             try {
-                const response = await fetch('/api/spy-history');
-                const data = await response.json();
+                // Check cache first
+                if (isCacheValid('spy') && chartDataCache.spy.data.length > 0) {
+                    console.log('Using cached SPY data');
+                    const data = chartDataCache.spy.data;
+                    // Skip to rendering (jump to line with "Filter out weekends")
+                } else {
+                    const response = await fetch('/api/spy-history');
+                    const data = await response.json();
 
-                console.log('SPY API Response:', data);
+                    console.log('SPY API Response:', data);
 
-                if (data.error) {
-                    console.error('SPY API Error:', data.error);
-                    return;
+                    if (data.error) {
+                        console.error('SPY API Error:', data.error);
+                        return;
+                    }
+
+                    if (!data || data.length === 0) {
+                        console.log('No SPY history data available');
+                        return;
+                    }
+
+                    // Update cache
+                    updateCache('spy', data);
                 }
 
-                if (!data || data.length === 0) { 
-                    console.log('No SPY history data available'); 
-                    return; 
-                }
+                const data = chartDataCache.spy.data;
 
                 // Filter out weekends (Saturday=6, Sunday=0)
                 const filteredData = data.filter(d => {
@@ -1135,9 +1202,23 @@
 
         async function updateIngestionCharts() {
             try {
-                const response = await fetch('/api/ingestion-history');
-                const data = await response.json();
-                if (data.error || data.length === 0) { console.log('No ingestion history'); return; }
+                // Check cache first
+                if (isCacheValid('ingestion') && chartDataCache.ingestion.data.length > 0) {
+                    console.log('Using cached ingestion data');
+                    const data = chartDataCache.ingestion.data;
+                } else {
+                    const response = await fetch('/api/ingestion-history');
+                    const data = await response.json();
+                    if (data.error || data.length === 0) { 
+                        console.log('No ingestion history'); 
+                        return; 
+                    }
+
+                    // Update cache
+                    updateCache('ingestion', data);
+                }
+
+                const data = chartDataCache.ingestion.data;
 
                 // Aggregate by hour
                 const hourlyData = {};
