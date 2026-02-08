@@ -10,6 +10,7 @@ log "System Setup and Basic Configuration"
 
 # Update system
 log "  → Updating system packages..."
+export DEBIAN_FRONTEND=noninteractive
 sudo apt update && sudo apt upgrade -y
 
 # Install essential tools
