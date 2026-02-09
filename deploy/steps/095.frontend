@@ -1,0 +1,157 @@
+#!/bin/bash
+
+# ==============================================
+# Step 095: GEX Frontend Dashboard Setup
+# ==============================================
+
+set -e
+
+log "GEX Frontend Dashboard Setup"
+
+# Define paths
+APP_DIR="$HOME/gex-options-platform"
+FRONTEND_DIR="/opt/zerogex/frontend"
+DASHBOARD_SOURCE="$APP_DIR/src/dashboard"
+BRANDING="$APP_DIR/branding"
+
+# Check if application directory exists
+if [ ! -d "$APP_DIR" ]; then
+    log "  ✗ Application directory not found: $APP_DIR"
+    exit 1
+fi
+
+# Check if dashboard source exists
+if [ ! -d "$DASHBOARD_SOURCE" ]; then
+    log "  ✗ Dashboard source not found: $DASHBOARD_SOURCE"
+    log "     Expected at: src/dashboard/ in your repository"
+    exit 1
+fi
+
+# Verify required files exist
+if [ ! -f "$DASHBOARD_SOURCE/gex_frontend.py" ]; then
+    log "  ✗ Dashboard backend not found: $DASHBOARD_SOURCE/gex_frontend.py"
+    exit 1
+fi
+
+if [ ! -f "$DASHBOARD_SOURCE/gex_frontend.html" ]; then
+    log "  ✗ Dashboard frontend not found: $DASHBOARD_SOURCE/gex_frontend.html"
+    exit 1
+fi
+
+if [ ! -f "$BRANDING/ZeroGEX.png" ]; then
+    log "  ✗ ZeroGEX logo not found: $BRANDING/ZeroGEX.png"
+    exit 1
+fi
+
+# Create frontend directory
+log "  → Creating frontend directory..."
+sudo mkdir -p "$FRONTEND_DIR"
+
+# Copy dashboard files
+log "  → Installing dashboard files..."
+sudo cp "$DASHBOARD_SOURCE/gex_frontend.py" "$FRONTEND_DIR/"
+sudo cp "$DASHBOARD_SOURCE/gex_frontend.html" "$FRONTEND_DIR/"
+sudo cp "$BRANDING/ZeroGEX.png" "$FRONTEND_DIR/"
+log "     ✓ Dashboard files copied"
+
+# Set proper ownership and permissions
+log "  → Setting permissions..."
+sudo chown -R ubuntu:ubuntu "$FRONTEND_DIR"
+sudo chmod 755 "$FRONTEND_DIR"
+sudo chmod 755 "$FRONTEND_DIR/gex_frontend.py"
+sudo chmod 644 "$FRONTEND_DIR/gex_frontend.html"
+sudo chmod 644 "$FRONTEND_DIR/ZeroGEX.png"
+log "     ✓ Permissions set"
+
+# Install Python dependencies (Flask)
+log "  → Installing Flask dependency..."
+cd "$APP_DIR"
+source venv/bin/activate
+pip install -q flask
+deactivate
+
+# Install system-wide Flask (for systemd service)
+log "  → Installing system-wide Flask..."
+sudo pip3 install -q flask
+log "     ✓ Flask installed"
+
+# Copy systemd service file
+log "  → Installing systemd service file..."
+SYSTEMD_SOURCE="$APP_DIR/deployment/systemd"
+
+if [ ! -f "$SYSTEMD_SOURCE/gex-frontend.service" ]; then
+    log "  ✗ Service file not found: $SYSTEMD_SOURCE/gex-frontend.service"
+    exit 1
+fi
+
+sudo cp "$SYSTEMD_SOURCE/gex-frontend.service" /etc/systemd/system/
+log "     ✓ Service file installed"
+
+# Reload systemd
+log "  → Reloading systemd daemon..."
+sudo systemctl daemon-reload
+
+# Enable and start service
+log "  → Enabling frontend service..."
+sudo systemctl enable gex-frontend
+
+log "  → Starting frontend service..."
+sudo systemctl start gex-frontend
+
+# Add firewall rule for frontend dashboard
+log "  → Configuring firewall for frontend (port 8081)..."
+sudo ufw allow 8081/tcp comment 'ZeroGEX Frontend Dashboard'
+
+# Wait for service to initialize
+sleep 3
+
+# Check service status
+log ""
+log "  → Verifying service status..."
+FRONTEND_STATUS=$(systemctl is-active gex-frontend)
+
+if [ "$FRONTEND_STATUS" = "active" ]; then
+    log "     ✓ Frontend dashboard is running"
+else
+    log "     ✗ Frontend dashboard failed to start"
+    log ""
+    log "  Recent logs:"
+    sudo journalctl -u gex-frontend -n 20 --no-pager
+    exit 1
+fi
+
+# Get server IP
+SERVER_IP=$(hostname -I | awk '{print $1}')
+
+log ""
+log "GEX Frontend Dashboard setup complete!"
+log ""
+log "Summary:"
+log "  ✓ Frontend dashboard installed and running"
+log "  ✓ Firewall configured (port 8081)"
+log "  ✓ Service: gex-frontend"
+log ""
+log "Dashboard Access:"
+log "  Customer Frontend: http://${SERVER_IP}:8081"
+log "  Monitoring:        http://${SERVER_IP}:8080"
+log ""
+log "Dashboard Separation:"
+log "  • Port 8080: Internal monitoring dashboard (system health)"
+log "  • Port 8081: Customer-facing GEX analytics dashboard"
+log ""
+log "Features Available:"
+log "  ✓ Real-time GEX metrics (Net GEX, Total GEX, Regime)"
+log "  ✓ SPY price tracking"
+log "  ✓ Historical GEX timeline"
+log "  ✓ Strike gamma profile visualization"
+log "  ✓ Price vs Max Gamma overlay"
+log "  ✓ Key support/resistance levels"
+log "  ✓ Regime change timeline"
+log "  ✓ SPY candlestick chart"
+log ""
+log "Useful Commands:"
+log "  • View logs:        sudo journalctl -u gex-frontend -f"
+log "  • Restart service:  sudo systemctl restart gex-frontend"
+log "  • Check status:     sudo systemctl status gex-frontend"
+log "  • Test connection:  curl http://localhost:8081/api/gex/current"
+log ""

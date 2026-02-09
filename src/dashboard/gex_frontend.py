@@ -1,0 +1,589 @@
+#!/usr/bin/env python3
+"""
+ZeroGEX Customer Dashboard Backend
+Flask app serving GEX analytics and insights
+"""
+
+from flask import Flask, jsonify, send_from_directory
+import json
+from pathlib import Path
+import psycopg2
+from psycopg2 import pool
+from psycopg2.extras import RealDictCursor
+import traceback
+from datetime import datetime, date
+import pytz
+import time
+from functools import wraps
+
+app = Flask(__name__)
+DASHBOARD_DIR = Path("/opt/zerogex/frontend")
+CREDS_FILE = Path.home() / ".zerogex_db_creds"
+_query_cache = {}
+
+# Global connection pool
+db_pool = None
+
+def load_db_config():
+    """Load database configuration from ~/.zerogex_db_creds"""
+    try:
+        if not CREDS_FILE.exists():
+            print(f"Credentials file not found: {CREDS_FILE}")
+            return None
+
+        config = {}
+        with open(CREDS_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    config[key] = value
+
+        return {
+            'host': config.get('DB_HOST', 'localhost'),
+            'port': int(config.get('DB_PORT', '5432')),
+            'database': config.get('DB_NAME', 'gex_db'),
+            'user': config.get('DB_USER', 'gex_user'),
+            'password': config.get('DB_PASSWORD', ''),
+        }
+    except Exception as e:
+        print(f"Error loading DB config: {e}")
+        traceback.print_exc()
+        return None
+
+def init_db_pool():
+    """Initialize database connection pool"""
+    global db_pool
+    if db_pool is None:
+        db_config = load_db_config()
+        if db_config:
+            try:
+                db_pool = psycopg2.pool.SimpleConnectionPool(
+                    minconn=1,
+                    maxconn=5,
+                    connect_timeout=3,
+                    **db_config
+                )
+                print("Database connection pool initialized")
+            except Exception as e:
+                print(f"Error creating connection pool: {e}")
+                db_pool = None
+
+def get_db_connection():
+    """Get a connection from the pool"""
+    global db_pool
+    if db_pool is None:
+        init_db_pool()
+
+    if db_pool:
+        try:
+            return db_pool.getconn()
+        except Exception as e:
+            print(f"Error getting connection from pool: {e}")
+            return None
+    return None
+
+def return_db_connection(conn):
+    """Return a connection to the pool"""
+    global db_pool
+    if db_pool and conn:
+        try:
+            db_pool.putconn(conn)
+        except Exception as e:
+            print(f"Error returning connection to pool: {e}")
+
+def cache_query(ttl_seconds=30):
+    """Cache query results for ttl_seconds"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            cache_key = f"{func.__name__}:{args}:{kwargs}"
+            now = time.time()
+
+            if cache_key in _query_cache:
+                result, timestamp = _query_cache[cache_key]
+                if now - timestamp < ttl_seconds:
+                    return result
+
+            result = func(*args, **kwargs)
+            _query_cache[cache_key] = (result, now)
+            return result
+        return wrapper
+    return decorator
+
+@app.route('/')
+def dashboard():
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'gex_frontend.html')
+    except Exception as e:
+        print(f"Error serving dashboard: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/gex/current')
+@cache_query(ttl_seconds=10)
+def get_current_gex():
+    """Get current GEX metrics"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get latest GEX metrics for today's expiration
+        cursor.execute("""
+            SELECT 
+                timestamp,
+                symbol,
+                expiration,
+                underlying_price,
+                total_gamma_exposure,
+                call_gamma,
+                put_gamma,
+                net_gex,
+                call_volume,
+                put_volume,
+                call_oi,
+                put_oi,
+                total_contracts,
+                max_gamma_strike,
+                max_gamma_value,
+                gamma_flip_point,
+                put_call_ratio,
+                vanna_exposure,
+                charm_exposure
+            FROM gex_metrics
+            WHERE symbol = 'SPY'
+                AND expiration = CURRENT_DATE
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+
+        row = cursor.fetchone()
+        cursor.close()
+
+        if not row:
+            return jsonify({'error': 'No GEX data available'}), 404
+
+        # Convert to millions and add derived fields
+        result = dict(row)
+        result['total_gex_millions'] = result['total_gamma_exposure'] / 1e6
+        result['net_gex_millions'] = result['net_gex'] / 1e6
+        result['call_gamma_millions'] = result['call_gamma'] / 1e6
+        result['put_gamma_millions'] = result['put_gamma'] / 1e6
+        result['gamma_regime'] = 'Positive (Stabilizing)' if result['net_gex'] > 0 else 'Negative (Destabilizing)'
+        result['regime_color'] = '#10b981' if result['net_gex'] > 0 else '#ef4444'
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in get_current_gex: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/gex/history')
+@cache_query(ttl_seconds=30)
+def get_gex_history():
+    """Get historical GEX metrics"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+
+        # Get last 48 hours of GEX data
+        cursor.execute("""
+            SELECT 
+                timestamp,
+                underlying_price,
+                total_gamma_exposure / 1e6 as total_gex_millions,
+                net_gex / 1e6 as net_gex_millions,
+                call_gamma / 1e6 as call_gamma_millions,
+                put_gamma / 1e6 as put_gamma_millions,
+                max_gamma_strike,
+                gamma_flip_point,
+                put_call_ratio
+            FROM gex_metrics
+            WHERE symbol = 'SPY'
+                AND timestamp > NOW() - INTERVAL '48 hours'
+            ORDER BY timestamp ASC
+        """)
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        eastern = pytz.timezone('America/New_York')
+        result = []
+        for row in rows:
+            ts = row['timestamp']
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            data = dict(row)
+            data['timestamp'] = ts.isoformat()
+            result.append(data)
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in get_gex_history: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/gex/strike-profile')
+@cache_query(ttl_seconds=10)
+def get_strike_profile():
+    """Get gamma exposure by strike price"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get latest underlying price
+        cursor.execute("""
+            SELECT close as spot_price
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+        spot_result = cursor.fetchone()
+        spot_price = float(spot_result['spot_price']) if spot_result else 600.0
+
+        # Get options data for today's expiration
+        cursor.execute("""
+            SELECT DISTINCT ON (strike, option_type)
+                strike,
+                option_type,
+                gamma,
+                open_interest,
+                underlying_price
+            FROM options_quotes
+            WHERE symbol LIKE 'SPY%'
+                AND DATE(expiration) = CURRENT_DATE
+                AND timestamp > NOW() - INTERVAL '30 minutes'
+                AND gamma IS NOT NULL
+                AND gamma > 0
+            ORDER BY strike, option_type, timestamp DESC
+        """)
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        if not rows:
+            return jsonify({'error': 'No options data available'}), 404
+
+        # Calculate gamma exposure by strike
+        strike_data = {}
+        for row in rows:
+            strike = float(row['strike'])
+            opt_type = row['option_type']
+            gamma = float(row['gamma'])
+            oi = int(row['open_interest'])
+
+            # Gamma exposure = gamma * OI * 100 * spot price
+            gamma_exp = gamma * oi * 100 * spot_price
+
+            if strike not in strike_data:
+                strike_data[strike] = {
+                    'strike': strike,
+                    'call_gamma': 0,
+                    'put_gamma': 0,
+                    'call_oi': 0,
+                    'put_oi': 0
+                }
+
+            if opt_type == 'call':
+                strike_data[strike]['call_gamma'] += gamma_exp
+                strike_data[strike]['call_oi'] += oi
+            else:
+                strike_data[strike]['put_gamma'] += gamma_exp
+                strike_data[strike]['put_oi'] += oi
+
+        # Convert to list and add derived fields
+        result = []
+        for strike, data in sorted(strike_data.items()):
+            data['total_gamma'] = data['call_gamma'] + data['put_gamma']
+            data['net_gamma'] = data['call_gamma'] - data['put_gamma']
+            data['total_gamma_millions'] = data['total_gamma'] / 1e6
+            data['net_gamma_millions'] = data['net_gamma'] / 1e6
+            data['call_gamma_millions'] = data['call_gamma'] / 1e6
+            data['put_gamma_millions'] = data['put_gamma'] / 1e6
+            result.append(data)
+
+        return jsonify({
+            'spot_price': spot_price,
+            'strikes': result
+        })
+
+    except Exception as e:
+        print(f"Error in get_strike_profile: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/gex/regime-changes')
+@cache_query(ttl_seconds=60)
+def get_regime_changes():
+    """Get gamma regime changes over time"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+
+        # Get regime changes (when net_gex crosses zero)
+        cursor.execute("""
+            WITH gex_with_regime AS (
+                SELECT 
+                    timestamp,
+                    underlying_price,
+                    net_gex,
+                    CASE WHEN net_gex > 0 THEN 'positive' ELSE 'negative' END as regime
+                FROM gex_metrics
+                WHERE symbol = 'SPY'
+                    AND timestamp > NOW() - INTERVAL '7 days'
+                ORDER BY timestamp ASC
+            ),
+            regime_changes AS (
+                SELECT 
+                    timestamp,
+                    underlying_price,
+                    net_gex,
+                    regime,
+                    LAG(regime) OVER (ORDER BY timestamp) as prev_regime
+                FROM gex_with_regime
+            )
+            SELECT 
+                timestamp,
+                underlying_price,
+                net_gex / 1e6 as net_gex_millions,
+                prev_regime as from_regime,
+                regime as to_regime
+            FROM regime_changes
+            WHERE regime != prev_regime
+            ORDER BY timestamp DESC
+            LIMIT 20
+        """)
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        eastern = pytz.timezone('America/New_York')
+        result = []
+        for row in rows:
+            ts = row['timestamp']
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            data = dict(row)
+            data['timestamp'] = ts.isoformat()
+            result.append(data)
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in get_regime_changes: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/gex/key-levels')
+@cache_query(ttl_seconds=30)
+def get_key_levels():
+    """Get key support/resistance levels based on gamma"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get spot price
+        cursor.execute("""
+            SELECT close as spot_price
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+        spot_result = cursor.fetchone()
+        spot_price = float(spot_result['spot_price']) if spot_result else 600.0
+
+        # Get options with significant gamma
+        cursor.execute("""
+            SELECT DISTINCT ON (strike, option_type)
+                strike,
+                option_type,
+                gamma,
+                open_interest
+            FROM options_quotes
+            WHERE symbol LIKE 'SPY%'
+                AND DATE(expiration) = CURRENT_DATE
+                AND timestamp > NOW() - INTERVAL '30 minutes'
+                AND gamma IS NOT NULL
+            ORDER BY strike, option_type, timestamp DESC
+        """)
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        # Calculate gamma by strike
+        strike_gamma = {}
+        for row in rows:
+            strike = float(row['strike'])
+            opt_type = row['option_type']
+            gamma = float(row['gamma'])
+            oi = int(row['open_interest'])
+
+            gamma_exp = gamma * oi * 100 * spot_price / 1e6  # In millions
+
+            if strike not in strike_gamma:
+                strike_gamma[strike] = {'call': 0, 'put': 0}
+
+            if opt_type == 'call':
+                strike_gamma[strike]['call'] += gamma_exp
+            else:
+                strike_gamma[strike]['put'] += gamma_exp
+
+        # Find significant levels (threshold: 50M gamma)
+        threshold = 50.0
+        support_levels = []
+        resistance_levels = []
+
+        for strike, gamma in strike_gamma.items():
+            if gamma['put'] >= threshold and strike <= spot_price:
+                support_levels.append({
+                    'strike': strike,
+                    'gamma_millions': gamma['put']
+                })
+
+            if gamma['call'] >= threshold and strike >= spot_price:
+                resistance_levels.append({
+                    'strike': strike,
+                    'gamma_millions': gamma['call']
+                })
+
+        return jsonify({
+            'spot_price': spot_price,
+            'support': sorted(support_levels, key=lambda x: x['strike'], reverse=True)[:5],
+            'resistance': sorted(resistance_levels, key=lambda x: x['strike'])[:5]
+        })
+
+    except Exception as e:
+        print(f"Error in get_key_levels: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+# Reuse SPY endpoints from monitoring dashboard
+@app.route('/api/spy-history')
+def get_spy_history():
+    """Get SPY price history - reuse from monitoring dashboard"""
+    # Import the function from dashboard.py or duplicate code here
+    # For now, I'll create a simplified version
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+
+        cursor.execute("""
+            WITH five_min_buckets AS (
+                SELECT
+                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') +
+                    (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
+                    (array_agg(open ORDER BY timestamp))[1] as open,
+                    MAX(high) as high,
+                    MIN(low) as low,
+                    (array_agg(close ORDER BY timestamp DESC))[1] as close,
+                    MAX(timestamp) as actual_timestamp,
+                    SUM(COALESCE(total_volume, 0)) as volume
+                FROM underlying_quotes
+                WHERE symbol = 'SPY'
+                  AND timestamp > NOW() - INTERVAL '48 hours'
+                GROUP BY bucket_time
+            )
+            SELECT * FROM five_min_buckets
+            ORDER BY bucket_time ASC
+            LIMIT 600
+        """)
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        eastern = pytz.timezone('America/New_York')
+        result = []
+        for row in rows:
+            ts = row['bucket_time']
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            result.append({
+                'timestamp': ts.isoformat(),
+                'open': float(row['open'] or row['close'] or 0),
+                'high': float(row['high'] or row['close'] or 0),
+                'low': float(row['low'] or row['close'] or 0),
+                'close': float(row['close'] or 0),
+                'volume': int(row['volume'] or 0)
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in spy-history: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/logo')
+def get_logo():
+    try:
+        return send_from_directory('/opt/zerogex/frontend', 'ZeroGEX.png')
+    except Exception as e:
+        print(f"Error serving logo: {e}")
+        return jsonify({'error': str(e)}), 500
+
+if __name__ == '__main__':
+    print("Starting GEX Dashboard on port 8081...")
+    print(f"Dashboard directory: {DASHBOARD_DIR}")
+    print(f"Credentials file: {CREDS_FILE}")
+
+    # Initialize connection pool on startup
+    init_db_pool()
+
+    app.run(host='0.0.0.0', port=8081, debug=False, threaded=True)

@@ -121,7 +121,7 @@ class GEXCalculator:
                 expiration,
                 timestamp
             FROM options_quotes
-            WHERE symbol = %s
+            WHERE symbol LIKE %s
                 AND DATE(expiration) = %s
                 AND gamma IS NOT NULL
                 AND gamma > 0
@@ -129,7 +129,7 @@ class GEXCalculator:
         """
         
         try:
-            cursor.execute(query, (symbol, expiration))
+            cursor.execute(query, (f"{symbol}%", expiration))
             rows = cursor.fetchall()
             
             if not rows:

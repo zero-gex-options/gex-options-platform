@@ -1,0 +1,21 @@
+[Unit]
+Description=ZeroGEX Customer Frontend Dashboard
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/zerogex/frontend
+ExecStart=/usr/bin/python3 /opt/zerogex/frontend/gex_frontend.py
+Restart=always
+RestartSec=10
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

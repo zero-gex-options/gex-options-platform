@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ZeroGEX™ | Gamma Exposure Analytics</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid #334155;
+            padding: 20px 32px;
+        }
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-left {
+            flex: 1;
+            display: flex;
+            align-items: center;
+        }
+        .header-center {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .header-right {
+            flex: 1;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 32px;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+	.header-text h1 {
+            font-size: 28px;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+        }
+        .header-subtitle {
+            color: #94a3b8;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .status-badge.positive {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .status-badge.negative {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+	.market-bias-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            border-radius: 12px;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid #334155;
+        }
+        .bias-label {
+            font-size: 12px;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }
+        .bias-value {
+            font-size: 20px;
+            font-weight: 700;
+        }
+        .bias-bullish { color: #10b981; }
+        .bias-bearish { color: #ef4444; }
+        .bias-neutral { color: #94a3b8; }
+        .bias-score {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+        .grid {
+            display: grid;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .grid-2 {
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+        .grid-3 {
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+        .card {
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .card h3 {
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #94a3b8;
+            margin-bottom: 16px;
+        }
+        .metric-large {
+            font-size: 48px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        .metric-medium {
+            font-size: 32px;
+            font-weight: 600;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        .metric-label {
+            color: #94a3b8;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .positive { color: #10b981; }
+        .negative { color: #ef4444; }
+        .neutral { color: #60a5fa; }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 16px;
+        }
+        .level-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #0f172a;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .level-strike {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .level-gamma {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+        .regime-timeline-item {
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+            background: #0f172a;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 3px solid;
+        }
+        .regime-timeline-item.positive-regime {
+            border-left-color: #10b981;
+        }
+        .regime-timeline-item.negative-regime {
+            border-left-color: #ef4444;
+        }
+        .regime-time {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+        .regime-change {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 4px 0;
+        }
+        .regime-price {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #ef4444;
+        }
+        .last-update {
+            text-align: center;
+            color: #64748b;
+            font-size: 12px;
+            padding: 16px 0;
+        }
+	.tooltip {
+            position: relative;
+            display: inline-block;
+        }
+	.tooltip .tooltiptext {
+            visibility: hidden;
+            opacity: 0;
+            width: 300px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+            text-align: left;
+            border-radius: 8px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            top: 100%;  /* Changed from bottom: 125% */
+            left: 50%;
+            margin-left: -150px;
+            margin-top: 10px;  /* Add some space below the badge */
+            transition: opacity 0.3s;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            bottom: 100%;  /* Arrow points up */
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent #1e293b transparent;  /* Arrow points down to tooltip */
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .info-icon {
+            cursor: help;
+            color: #64748b;
+            font-size: 16px;
+        }
+	.footer {
+            background: #1e293b;
+            border-top: 1px solid #334155;
+            padding: 24px 32px;
+            margin-top: 48px;
+        }
+        .footer-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .footer-logo {
+            height: 400px;
+            width: auto;
+            margin-bottom: 12px;
+            opacity: 0.8;
+        }
+        .footer-text {
+            color: #64748b;
+            font-size: 13px;
+        }
+        .footer-tagline {
+            color: #94a3b8;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="header-text">
+                    <h1>ZeroGEX™</h1>
+                    <div class="header-subtitle">Real-Time Gamma Exposure Analytics</div>
+                </div>
+            </div>
+            <div class="header-center">
+                <div class="market-bias-indicator tooltip">
+                    <div>
+                        <div class="bias-label">Market Bias</div>
+                        <div id="biasValue" class="bias-value bias-neutral">--</div>
+                        <div id="biasScore" class="bias-score">--</div>
+                    </div>
+                    <span class="tooltiptext">
+                        <strong>Overall Market Bias Score</strong><br><br>
+                        Composite score (-100 to +100) based on:<br>
+                        • Net GEX (±30 pts)<br>
+                        • Position vs Gamma Flip (±25 pts)<br>
+                        • Put/Call Ratio (±20 pts)<br>
+                        • Position vs Max Gamma (±15 pts)<br><br>
+                        <strong>>25:</strong> Bullish bias<br>
+                        <strong>-25 to 25:</strong> Neutral<br>
+                        <strong><-25:</strong> Bearish bias
+                    </span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div id="regimeBadge" class="status-badge tooltip">
+                    <span class="status-dot"></span>
+		    <span class="badge-text">Loading...</span>
+                    <span class="tooltiptext">
+                        <strong>Gamma Regime</strong><br><br>
+                        <strong>Positive (Stabilizing):</strong> Net GEX > 0. Dealers buy dips and sell rallies, dampening volatility.<br><br>
+                        <strong>Negative (Destabilizing):</strong> Net GEX < 0. Dealers sell dips and buy rallies, amplifying moves and increasing volatility.
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Key Metrics -->
+        <div class="grid grid-3">
+            <div class="card">
+		<h3>
+                    Net Gamma Exposure
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Net GEX (Call - Put Gamma)</strong><br><br>
+                            <strong>Positive (Green):</strong> Dealers are net long gamma. They hedge by buying dips and selling rallies, creating a stabilizing force. <strong>Bullish bias.</strong><br><br>
+                            <strong>Negative (Red):</strong> Dealers are net short gamma. They amplify moves by selling dips and buying rallies, creating volatility. <strong>Bearish bias.</strong>
+                        </span>
+                    </span>
+                </h3>
+                <div id="netGEX" class="metric-large">--</div>
+                <div class="metric-label">Dealer Position</div>
+            </div>
+            <div class="card">
+                <h3>
+                    Total Gamma Exposure
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Total GEX (Calls + Puts)</strong><br><br>
+                            Absolute gamma exposure in the market. Higher values indicate more hedging activity and potential price stickiness around key strikes. <strong>Neutral indicator</strong> - magnitude matters more than direction.
+                        </span>
+                    </span>
+                </h3>
+                <div id="totalGEX" class="metric-large neutral">--</div>
+                <div class="metric-label">Absolute Exposure</div>
+            </div>
+            <div class="card">
+                <h3>
+                    SPY Price
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Current SPY Price</strong><br><br>
+                            Real-time underlying price. Compare to Max Gamma Strike and Gamma Flip Point to gauge dealer positioning impact.
+                        </span>
+                    </span>
+                </h3>
+                <div id="spyPrice" class="metric-large neutral">--</div>
+                <div class="metric-label" id="spyTimestamp">--</div>
+            </div>
+        </div>
+
+        <!-- Secondary Metrics -->
+        <div class="grid grid-3">
+            <div class="card">
+                <h3>
+                    Max Gamma Strike
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Maximum Gamma Strike</strong><br><br>
+                            The strike with the highest total gamma acts as a "price magnet" - especially near expiration. Price tends to gravitate toward this level as dealers hedge.<br><br>
+                            <strong>Above Max Gamma:</strong> Slight bearish pull<br>
+                            <strong>Below Max Gamma:</strong> Slight bullish pull
+                        </span>
+                    </span>
+                </h3>
+                <div id="maxGammaStrike" class="metric-medium neutral">--</div>
+                <div class="metric-label">Price Magnet</div>
+            </div>
+            <div class="card">
+                <h3>
+                    Gamma Flip Point
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Zero-Gamma Level</strong><br><br>
+                            The price where net GEX crosses zero. Critical inflection point:<br><br>
+                            <strong>Above Flip:</strong> Positive gamma regime (stabilizing). <strong>Bullish.</strong><br>
+                            <strong>Below Flip:</strong> Negative gamma regime (destabilizing). <strong>Bearish.</strong>
+                        </span>
+                    </span>
+                </h3>
+                <div id="gammaFlip" class="metric-medium neutral">--</div>
+                <div class="metric-label">Zero-Gamma Level</div>
+            </div>
+            <div class="card">
+                <h3>
+                    Put/Call Ratio
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Put/Call Open Interest Ratio</strong><br><br>
+                            Ratio of put to call open interest.<br><br>
+                            <strong>High (>1.0):</strong> More puts than calls - can indicate hedging/fear. <strong>Bearish tilt.</strong><br>
+                            <strong>Low (<0.7):</strong> More calls than puts - bullish positioning. <strong>Bullish tilt.</strong><br>
+                            <strong>~0.7-1.0:</strong> Balanced positioning.
+                        </span>
+                    </span>
+                </h3>
+                <div id="putCallRatio" class="metric-medium neutral">--</div>
+                <div class="metric-label">Open Interest Ratio</div>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="grid grid-2">
+            <div class="card">
+                <h3>Historical Net GEX</h3>
+                <div class="chart-container">
+                    <canvas id="gexHistoryChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h3>SPY Price vs Max Gamma</h3>
+                <div class="chart-container">
+                    <canvas id="priceVsGammaChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strike Profile Chart -->
+        <div class="card">
+            <h3>Gamma Exposure by Strike</h3>
+            <div class="chart-container" style="height: 500px;">
+                <canvas id="strikeProfileChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Key Levels and Regime Changes -->
+        <div class="grid grid-2">
+            <div class="card">
+                <h3>Key Support & Resistance Levels</h3>
+                <div id="keyLevels">
+                    <div class="loading">Loading levels...</div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Recent Regime Changes</h3>
+                <div id="regimeChanges">
+                    <div class="loading">Loading changes...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SPY Price Chart -->
+        <div class="card">
+            <h3>SPY Price Action (48 Hours)</h3>
+            <div class="chart-container" style="height: 400px;">
+                <canvas id="spyCandlestickChart"></canvas>
+            </div>
+        </div>
+
+        <div class="last-update" id="lastUpdate">Last updated: --</div>
+    </div>
+
+    <script>
+        let charts = {};
+
+        function formatNumber(num) {
+            return new Intl.NumberFormat().format(num);
+        }
+
+        function updateCurrentGEX() {
+            fetch('/api/gex/current')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('GEX error:', data.error);
+                        return;
+                    }
+
+                    // Update regime badge
+                    const badge = document.getElementById('regimeBadge');
+                    const isPositive = data.net_gex > 0;
+                    badge.classList.remove('positive', 'negative');
+                    badge.classList.add(isPositive ? 'positive' : 'negative');
+
+
+                    // Update only the text, not the entire innerHTML (to preserve tooltip)
+                    const badgeText = badge.querySelector('.badge-text');
+                    badgeText.textContent = data.gamma_regime;
+                    if (badgeText) {
+                        badgeText.textContent = data.gamma_regime;
+                    }
+
+                    // Update metrics
+                    document.getElementById('netGEX').textContent = `${data.net_gex_millions >= 0 ? '+' : ''}${data.net_gex_millions.toFixed(1)}M`;
+                    document.getElementById('netGEX').className = `metric-large ${isPositive ? 'positive' : 'negative'}`;
+
+                    document.getElementById('totalGEX').textContent = `$${data.total_gex_millions.toFixed(1)}M`;
+                    document.getElementById('spyPrice').textContent = `$${data.underlying_price.toFixed(2)}`;
+
+                    const timestamp = new Date(data.timestamp);
+                    document.getElementById('spyTimestamp').textContent = timestamp.toLocaleTimeString();
+
+                    document.getElementById('maxGammaStrike').textContent = `$${data.max_gamma_strike.toFixed(2)}`;
+                    document.getElementById('gammaFlip').textContent = data.gamma_flip_point ? `$${data.gamma_flip_point.toFixed(2)}` : 'N/A';
+                    document.getElementById('putCallRatio').textContent = data.put_call_ratio.toFixed(2);
+
+                    document.getElementById('lastUpdate').textContent = `Last updated: ${timestamp.toLocaleString()}`;
+
+                    // Calculate market bias
+                    const biasResult = calculateMarketBias(data);
+                    document.getElementById('biasValue').textContent = biasResult.bias;
+                    document.getElementById('biasValue').className = `bias-value ${biasResult.cssClass}`;
+                    document.getElementById('biasScore').textContent = `Score: ${biasResult.score}/100`;
+                })
+                .catch(error => console.error('Error fetching current GEX:', error));
+        }
+
+        function updateGEXHistory() {
+            fetch('/api/gex/history')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error || data.length === 0) return;
+
+                    if (charts.gexHistory) charts.gexHistory.destroy();
+
+                    const ctx = document.getElementById('gexHistoryChart');
+                    charts.gexHistory = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            datasets: [{
+                                label: 'Net GEX',
+                                data: data.map(d => ({
+                                    x: new Date(d.timestamp).getTime(),
+                                    y: d.net_gex_millions
+                                })),
+                                borderColor: '#60a5fa',
+                                backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                pointHoverRadius: 5,
+                                tension: 0.4,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'hour',
+                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    },
+                                    ticks: { color: '#94a3b8' },
+                                    grid: { color: '#334155' }
+                                },
+                                y: {
+                                    title: { display: true, text: 'Net GEX (Millions)', color: '#94a3b8' },
+                                    ticks: { 
+                                        color: '#94a3b8',
+                                        callback: function(value) {
+                                            return (value >= 0 ? '+' : '') + value + 'M';
+                                        }
+                                    },
+                                    grid: { color: '#334155' }
+                                }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return 'Net GEX: ' + (context.parsed.y >= 0 ? '+' : '') + context.parsed.y.toFixed(1) + 'M';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error fetching GEX history:', error));
+        }
+
+        function updatePriceVsGamma() {
+            fetch('/api/gex/history')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error || data.length === 0) return;
+
+                    if (charts.priceVsGamma) charts.priceVsGamma.destroy();
+
+                    const ctx = document.getElementById('priceVsGammaChart');
+                    charts.priceVsGamma = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            datasets: [
+                                {
+                                    label: 'SPY Price',
+                                    data: data.map(d => ({
+                                        x: new Date(d.timestamp).getTime(),
+                                        y: d.underlying_price
+                                    })),
+                                    borderColor: '#60a5fa',
+                                    backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                                    borderWidth: 2,
+                                    pointRadius: 0,
+                                    yAxisID: 'y'
+                                },
+                                {
+                                    label: 'Max Gamma Strike',
+                                    data: data.map(d => ({
+                                        x: new Date(d.timestamp).getTime(),
+                                        y: d.max_gamma_strike
+                                    })),
+                                    borderColor: '#f59e0b',
+                                    borderWidth: 2,
+                                    borderDash: [5, 5],
+                                    pointRadius: 0,
+                                    yAxisID: 'y'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'hour',
+                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    },
+                                    ticks: { color: '#94a3b8' },
+                                    grid: { color: '#334155' }
+                                },
+                                y: {
+                                    title: { display: true, text: 'Price ($)', color: '#94a3b8' },
+                                    ticks: { color: '#94a3b8' },
+                                    grid: { color: '#334155' }
+                                }
+                            },
+                            plugins: {
+                                legend: { 
+                                    labels: { color: '#e2e8f0' },
+                                    position: 'top'
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error fetching price vs gamma:', error));
+        }
+
+        function updateStrikeProfile() {
+            fetch('/api/gex/strike-profile')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) return;
+
+                    const strikes = data.strikes;
+                    const spotPrice = data.spot_price;
+
+                    if (charts.strikeProfile) charts.strikeProfile.destroy();
+
+                    const ctx = document.getElementById('strikeProfileChart');
+                    charts.strikeProfile = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: strikes.map(s => s.strike),
+                            datasets: [
+                                {
+                                    label: 'Call Gamma',
+                                    data: strikes.map(s => s.call_gamma_millions),
+                                    backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                                    borderColor: '#10b981',
+                                    borderWidth: 1,
+                                    stack: 'stack0'
+                                },
+                                {
+                                    label: 'Put Gamma',
+                                    data: strikes.map(s => -s.put_gamma_millions),
+                                    backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                                    borderColor: '#ef4444',
+                                    borderWidth: 1,
+                                    stack: 'stack0'
+                                },
+                                {
+                                    label: 'Total Gamma Exposure',
+                                    data: strikes.map(s => s.total_gamma_millions),
+                                    type: 'line',
+                                    borderColor: '#60a5fa',
+                                    backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                                    borderWidth: 3,
+                                    pointRadius: 0,
+                                    pointHoverRadius: 5,
+                                    tension: 0.4,
+                                    fill: false,
+                                    yAxisID: 'y1',
+                                    order: 0
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            scales: {
+                                x: {
+                                    stacked: false,  // Keep this false so bars align
+                                    title: { display: true, text: 'Strike Price', color: '#94a3b8' },
+                                    ticks: { 
+                                        color: '#94a3b8',
+                                        callback: function(value, index) {
+                                            const strike = strikes[index].strike;
+                                            if (Math.abs(strike - spotPrice) < 5) {
+                                                return '$' + strike + ' ◄';
+                                            }
+                                            return '$' + strike;
+                                        }
+                                    },
+                                    grid: { color: '#334155' }
+                                },
+                                y: {
+                                    title: { display: true, text: 'Call/Put Gamma (Millions)', color: '#94a3b8' },
+                                    ticks: { 
+                                        color: '#94a3b8',
+                                        callback: function(value) {
+                                            return (value >= 0 ? '+' : '') + value.toFixed(0) + 'M';
+                                        }
+                                    },
+                                    grid: { color: '#334155' },
+                                    position: 'left'
+                                },
+                                y1: {
+                                    title: { display: true, text: 'Total Gamma (Millions)', color: '#60a5fa' },
+                                    ticks: { 
+                                        color: '#60a5fa',
+                                        callback: function(value) {
+                                            return value.toFixed(0) + 'M';
+                                        }
+                                    },
+                                    grid: { display: false },
+                                    position: 'right'
+                                }
+                            },
+                            plugins: {
+                                legend: { 
+                                    labels: { color: '#e2e8f0' },
+                                    position: 'top'
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        title: function(context) {
+                                            const strike = strikes[context[0].dataIndex].strike;
+                                            return 'Strike: $' + strike.toFixed(2);
+                                        },
+                                        label: function(context) {
+                                            const label = context.dataset.label || '';
+                                            const value = Math.abs(context.parsed.y);
+                                            return label + ': ' + value.toFixed(1) + 'M';
+                                        },
+                                        footer: function(context) {
+                                            const idx = context[0].dataIndex;
+                                            const net = strikes[idx].net_gamma_millions;
+                                            return 'Net: ' + (net >= 0 ? '+' : '') + net.toFixed(1) + 'M';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error fetching strike profile:', error));
+        }
+
+        function updateKeyLevels() {
+            fetch('/api/gex/key-levels')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) return;
+
+                    let html = '';
+
+                    if (data.support.length > 0) {
+                        html += '<div style="margin-bottom: 16px;"><div style="color: #10b981; font-weight: 600; margin-bottom: 8px;">SUPPORT (High Put Gamma)</div>';
+                        data.support.forEach(level => {
+                            html += `<div class="level-item">
+                                <span class="level-strike positive">$${level.strike.toFixed(2)}</span>
+                                <span class="level-gamma">${level.gamma_millions.toFixed(1)}M</span>
+                            </div>`;
+                        });
+                        html += '</div>';
+                    }
+
+                    if (data.resistance.length > 0) {
+                        html += '<div><div style="color: #ef4444; font-weight: 600; margin-bottom: 8px;">RESISTANCE (High Call Gamma)</div>';
+                        data.resistance.forEach(level => {
+                            html += `<div class="level-item">
+                                <span class="level-strike negative">$${level.strike.toFixed(2)}</span>
+                                <span class="level-gamma">${level.gamma_millions.toFixed(1)}M</span>
+                            </div>`;
+                        });
+                        html += '</div>';
+                    }
+
+                    if (html === '') {
+                        html = '<div class="loading">No significant levels found</div>';
+                    }
+
+                    document.getElementById('keyLevels').innerHTML = html;
+                })
+                .catch(error => console.error('Error fetching key levels:', error));
+        }
+
+        function updateRegimeChanges() {
+            fetch('/api/gex/regime-changes')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error || data.length === 0) {
+                        document.getElementById('regimeChanges').innerHTML = '<div class="loading">No recent regime changes</div>';
+                        return;
+                    }
+
+                    let html = '';
+                    data.forEach(change => {
+                        const timestamp = new Date(change.timestamp);
+                        const cssClass = change.to_regime === 'positive' ? 'positive-regime' : 'negative-regime';
+
+                        html += `<div class="regime-timeline-item ${cssClass}">
+                            <div style="flex: 1;">
+                                <div class="regime-time">${timestamp.toLocaleString()}</div>
+                                <div class="regime-change">${change.from_regime.toUpperCase()} → ${change.to_regime.toUpperCase()}</div>
+                                <div class="regime-price">Price: $${change.underlying_price.toFixed(2)} | Net GEX: ${change.net_gex_millions >= 0 ? '+' : ''}${change.net_gex_millions.toFixed(1)}M</div>
+                            </div>
+                        </div>`;
+                    });
+
+                    document.getElementById('regimeChanges').innerHTML = html;
+                })
+                .catch(error => console.error('Error fetching regime changes:', error));
+        }
+
+        function updateSPYChart() {
+            fetch('/api/spy-history')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error || data.length === 0) return;
+
+                    // Filter weekends
+                    const filteredData = data.filter(d => {
+                        const date = new Date(d.timestamp);
+                        const day = date.getDay();
+                        return day !== 0 && day !== 6;
+                    });
+
+                    if (charts.spyPrice) charts.spyPrice.destroy();
+
+                    const ohlcData = filteredData.map(d => ({
+                        x: new Date(d.timestamp).getTime(),
+                        o: d.open,
+                        h: d.high,
+                        l: d.low,
+                        c: d.close
+                    }));
+
+                    const ctx = document.getElementById('spyCandlestickChart');
+                    charts.spyPrice = new Chart(ctx, {
+                        type: 'candlestick',
+                        data: {
+                            datasets: [{
+                                label: 'SPY',
+                                data: ohlcData,
+                                borderColor: {
+                                    up: '#059669',
+                                    down: '#dc2626',
+                                    unchanged: '#64748b'
+                                },
+                                backgroundColor: {
+                                    up: 'rgba(16, 185, 129, 0.5)',
+                                    down: 'rgba(239, 68, 68, 0.5)',
+                                    unchanged: 'rgba(148, 163, 184, 0.5)'
+                                }
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'hour',
+                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    },
+                                    ticks: { color: '#94a3b8' },
+                                    grid: { color: '#334155' }
+                                },
+                                y: {
+                                    title: { display: true, text: 'Price ($)', color: '#94a3b8' },
+                                    ticks: { 
+                                        color: '#94a3b8',
+                                        callback: function(value) {
+                                            return '$' + value.toFixed(2);
+                                        }
+                                    },
+                                    grid: { color: '#334155' }
+                                }
+                            },
+                            plugins: {
+                                legend: { display: false }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error fetching SPY history:', error));
+        }
+
+        function calculateMarketBias(data) {
+            let score = 0;
+
+            // Factor 1: Net GEX (+/- 30 points)
+            if (data.net_gex > 0) {
+                score += Math.min(30, (data.net_gex / 1e9) * 30);
+            } else {
+                score += Math.max(-30, (data.net_gex / 1e9) * 30);
+            }
+
+            // Factor 2: Position vs Gamma Flip (+/- 25 points)
+            if (data.gamma_flip_point) {
+                const flipDistance = ((data.underlying_price - data.gamma_flip_point) / data.underlying_price) * 100;
+                score += Math.max(-25, Math.min(25, flipDistance * 5));
+            }
+
+            // Factor 3: Put/Call Ratio (+/- 20 points)
+            score += Math.max(-20, Math.min(20, (1 - data.put_call_ratio) * 20));
+
+            // Factor 4: Position vs Max Gamma (+/- 15 points)
+            const gammaDistance = ((data.underlying_price - data.max_gamma_strike) / data.underlying_price) * 100;
+            score += -Math.max(-15, Math.min(15, gammaDistance * 3));
+
+            // Determine bias
+            let bias, cssClass;
+            if (score > 25) {
+                bias = 'BULLISH';
+                cssClass = 'bias-bullish';
+            } else if (score < -25) {
+                bias = 'BEARISH';
+                cssClass = 'bias-bearish';
+            } else {
+                bias = 'NEUTRAL';
+                cssClass = 'bias-neutral';
+            }
+
+            return { bias, score: score.toFixed(0), cssClass };
+        }
+
+        // Initial load
+        updateCurrentGEX();
+        updateGEXHistory();
+        updatePriceVsGamma();
+        updateStrikeProfile();
+        updateKeyLevels();
+        updateRegimeChanges();
+        updateSPYChart();
+
+        // Auto-refresh every 10 seconds
+        setInterval(updateCurrentGEX, 10000);
+        setInterval(updateGEXHistory, 30000);
+        setInterval(updatePriceVsGamma, 30000);
+        setInterval(updateStrikeProfile, 30000);
+        setInterval(updateKeyLevels, 60000);
+        setInterval(updateRegimeChanges, 60000);
+        setInterval(updateSPYChart, 30000);
+    </script>
+    <div class="footer">
+        <div class="footer-content">
+            <img src="/logo" alt="ZeroGEX" class="footer-logo">
+	    <div class="footer-text"><i>Trading involves substantial risk. Past performance is not indicative of future results.</i></div>
+            <div class="footer-tagline">© 2026 ZeroGEX, LLC. All rights reserved.</div>
+        </div>
+    </div>
+</body>
+</html>

@@ -153,14 +153,14 @@ class GEXAnalyzer:
                 open_interest,
                 underlying_price
             FROM options_quotes
-            WHERE symbol = %s
+            WHERE symbol LIKE %s
                 AND timestamp > NOW() - INTERVAL '30 minutes'
                 AND gamma IS NOT NULL
             ORDER BY strike, option_type, timestamp DESC
         """
         
         try:
-            cursor.execute(query, (symbol,))
+            cursor.execute(query, (f"{symbol}%",))
             rows = cursor.fetchall()
             
             if not rows:
