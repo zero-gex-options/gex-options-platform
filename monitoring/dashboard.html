@@ -471,34 +471,94 @@
             return newData;
         }
 
-        // Market hours background color helper
-        function getMarketStatusColor() {
-            const marketBadge = document.getElementById('marketStatusBadge');
-            if (!marketBadge) return null;
-
-            const statusText = marketBadge.textContent.toLowerCase();
-
-            if (statusText.includes('pre-market') || statusText.includes('after-hours')) {
-                return 'rgba(251, 146, 60, 0.08)'; // Slight orange hue
-            }
-            return null; // Use default chart background
-        }
-
-        // Chart.js plugin for market hours background
+        // Market hours background zones plugin
         const marketHoursBackgroundPlugin = {
             id: 'marketHoursBackground',
-            beforeDraw: (chart) => {
-                const bgColor = getMarketStatusColor();
-                if (!bgColor) return;
-
+            beforeDatasetsDraw: (chart) => {
                 const ctx = chart.ctx;
                 const chartArea = chart.chartArea;
+                const xScale = chart.scales.x;
+
+                if (!xScale || !chartArea) return;
 
                 ctx.save();
-                ctx.fillStyle = bgColor;
-                ctx.fillRect(chartArea.left, chartArea.top, 
-                            chartArea.right - chartArea.left, 
-                            chartArea.bottom - chartArea.top);
+
+                // Define market hour zones (Eastern Time)
+                const zones = [
+                    { start: 4, end: 9.5, color: 'rgba(251, 146, 60, 0.08)' },    // Pre-market
+                    { start: 9.5, end: 16, color: 'transparent' },                 // Regular hours
+                    { start: 16, end: 20, color: 'rgba(251, 146, 60, 0.08)' }     // After-hours
+                ];
+
+                // Get visible time range
+                const minTime = xScale.min;
+                const maxTime = xScale.max;
+
+                // Iterate through each visible data point's day
+                const dataPoints = chart.data.datasets[0]?.data || [];
+                if (dataPoints.length === 0) return;
+
+                // Group data points by day
+                const dayGroups = {};
+                dataPoints.forEach(point => {
+                    const date = new Date(point.x);
+                    const dayKey = date.toLocaleDateString('en-US', { 
+                        timeZone: 'America/New_York',
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                    });
+
+                    if (!dayGroups[dayKey]) {
+                        dayGroups[dayKey] = [];
+                    }
+                    dayGroups[dayKey].push(date);
+                });
+
+                // For each day, draw the zones
+                Object.keys(dayGroups).forEach(dayKey => {
+                    const dayDate = new Date(dayGroups[dayKey][0]);
+
+                    // Set to midnight ET for this day
+                    const midnightET = new Date(dayDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+                    midnightET.setHours(0, 0, 0, 0);
+
+                    zones.forEach(zone => {
+                        // Calculate start and end times for this zone
+                        const zoneStart = new Date(midnightET);
+                        const startHours = Math.floor(zone.start);
+                        const startMinutes = (zone.start % 1) * 60;
+                        zoneStart.setHours(startHours, startMinutes, 0, 0);
+
+                        const zoneEnd = new Date(midnightET);
+                        const endHours = Math.floor(zone.end);
+                        const endMinutes = (zone.end % 1) * 60;
+                        zoneEnd.setHours(endHours, endMinutes, 0, 0);
+
+                        // Convert to timestamps
+                        const zoneStartTime = zoneStart.getTime();
+                        const zoneEndTime = zoneEnd.getTime();
+
+                        // Check if zone is in visible range
+                        if (zoneEndTime < minTime || zoneStartTime > maxTime) return;
+
+                        // Calculate pixel positions
+                        const startX = xScale.getPixelForValue(Math.max(zoneStartTime, minTime));
+                        const endX = xScale.getPixelForValue(Math.min(zoneEndTime, maxTime));
+
+                        // Draw the zone
+                        if (zone.color !== 'transparent' && endX > startX) {
+                            ctx.fillStyle = zone.color;
+                            ctx.fillRect(
+                                startX,
+                                chartArea.top,
+                                endX - startX,
+                                chartArea.bottom - chartArea.top
+                            );
+                        }
+                    });
+                });
+
                 ctx.restore();
             }
         };
