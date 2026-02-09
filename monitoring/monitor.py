@@ -340,6 +340,9 @@ class MonitoringCollector:
             print(f"Market open: {metrics.get('market_open', False)}")
             print(f"Number of alerts: {len(alerts)}")
 
+        # Track service uptime
+        self.track_service_uptime()
+
         # Calculate uptime percentage for current hour
         metrics['uptime_current_hour'] = self.calculate_uptime_current_hour()
 
@@ -619,9 +622,6 @@ def main():
         try:
             while True:
                 metrics = collector.collect_all_metrics()
-
-                # Track service uptime
-                collector.track_service_uptime()
 
                 if exporter:
                     exporter.export_metrics(metrics)

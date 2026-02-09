@@ -1394,62 +1394,124 @@
         }
 
         async function updateUptimeChart() {
-            try {
-                const response = await fetch('/api/uptime-history');
-                const data = await response.json();
-                if (data.error || data.length === 0) { console.log('No uptime history'); return; }
-                if (charts.uptime) charts.uptime.destroy();
-                const ctx = document.getElementById('uptimeChart');
-                charts.uptime = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: data.map(d => { 
-                            const date = new Date(d.timestamp); 
-                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + 
-                                   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); 
-                        }),
-                        datasets: [{
-                            label: 'Uptime %',
-                            data: data.map(d => d.uptime_percent),
-                            backgroundColor: 'rgba(96, 165, 250, 0.8)',
-                            borderColor: '#60a5fa',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true, 
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: { 
-                                min: 0, 
-                                max: 100, 
-                                title: { 
-                                    display: true, 
-                                    text: 'Uptime %', 
-                                    color: '#94a3b8' 
-                                }, 
-                                ticks: { color: '#94a3b8' }, 
-                                grid: { color: '#334155' } 
-                            },
-                            x: { 
-                                ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 }, 
-                                grid: { color: '#334155' } 
-                            }
-                        },
-                        plugins: { 
-                            legend: { labels: { color: '#e2e8f0' } }, 
-                            tooltip: { 
-                                callbacks: { 
-                                    label: function(context) { 
-                                        return context.parsed.y.toFixed(1) + '% uptime'; 
-                                    } 
-                                } 
-                            } 
-                        }
-                    }
-                });
-            } catch (error) { console.error('Error updating uptime chart:', error); }
-        }
+          try {
+              const response = await fetch('/api/uptime-history');
+              const data = await response.json();
+              if (data.error || data.length === 0) { 
+                  console.log('No uptime history'); 
+                  return; 
+              }
+
+              if (charts.uptime) charts.uptime.destroy();
+              const ctx = document.getElementById('uptimeChart');
+
+              // Prepare data with colors based on uptime percentage
+              const chartData = data.map(d => ({
+                  x: new Date(d.timestamp).getTime(),
+                  y: d.uptime_percent,
+                  checks: d.total_checks,
+                  up: d.up_checks
+              }));
+
+              charts.uptime = new Chart(ctx, {
+                  type: 'bar',
+                  data: {
+                      datasets: [{
+                          label: 'Uptime %',
+                          data: chartData,
+                          backgroundColor: chartData.map(d => {
+                              if (d.y === 0) return 'rgba(239, 68, 68, 0.8)';  // Red - down
+                              if (d.y < 50) return 'rgba(251, 146, 60, 0.8)';  // Orange - poor
+                              if (d.y < 90) return 'rgba(250, 204, 21, 0.8)';  // Yellow - degraded
+                              return 'rgba(16, 185, 129, 0.8)';  // Green - good
+                          }),
+                          borderColor: chartData.map(d => {
+                              if (d.y === 0) return '#ef4444';
+                              if (d.y < 50) return '#fb923c';
+                              if (d.y < 90) return '#facc15';
+                              return '#10b981';
+                          }),
+                          borderWidth: 1
+                      }]
+                  },
+                  options: {
+                      responsive: true, 
+                      maintainAspectRatio: false,
+                      animation: false,
+                      scales: {
+                          x: {
+                              type: 'time',
+                              time: {
+                                  unit: 'hour',
+                                  displayFormats: { 
+                                      hour: 'MM/dd HH:mm'
+                                  },
+                                  tooltipFormat: 'MMM dd HH:mm'
+                              },
+                              min: Date.now() - (48 * 60 * 60 * 1000), // Exactly 48 hours ago
+                              max: Date.now(),
+                              ticks: { 
+                                  color: '#94a3b8',
+                                  maxRotation: 45,
+                                  minRotation: 45,
+                                  autoSkip: true,
+                                  maxTicksLimit: 16
+                              },
+                              grid: { color: '#334155' }
+                          },
+                          y: { 
+                              min: 0, 
+                              max: 100,
+                              title: { 
+                                  display: true, 
+                                  text: 'Uptime %', 
+                                  color: '#94a3b8' 
+                              }, 
+                              ticks: { 
+                                  color: '#94a3b8',
+                                  callback: function(value) {
+                                      return value + '%';
+                                  }
+                              }, 
+                              grid: { color: '#334155' } 
+                          }
+                      },
+                      plugins: { 
+                          legend: { 
+                              display: false
+                          },
+                          tooltip: { 
+                              callbacks: { 
+                                  title: function(context) {
+                                      const date = new Date(context[0].parsed.x);
+                                      return date.toLocaleString('en-US', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          timeZone: 'America/New_York',
+                                          timeZoneName: 'short'
+                                      });
+                                  },
+                                  label: function(context) {
+                                      const dataPoint = chartData[context.dataIndex];
+                                      return [
+                                          `Uptime: ${context.parsed.y.toFixed(1)}%`,
+                                          `Up: ${dataPoint.up} / ${dataPoint.checks} checks`,
+                                          dataPoint.checks === 0 ? 'No data for this hour' : ''
+                                      ].filter(Boolean);
+                                  }
+                              } 
+                          } 
+                      }
+                  }
+              });
+
+              console.log('Uptime chart updated with', data.length, 'hourly buckets');
+          } catch (error) { 
+              console.error('Error updating uptime chart:', error); 
+          }
+      }
 
         function updateDashboard() {
             fetch('/api/metrics').then(response => response.json()).then(data => {

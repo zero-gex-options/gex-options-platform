@@ -483,7 +483,7 @@ def get_ingestion_history():
 @app.route('/api/uptime-history')
 @cache_query(ttl_seconds=30) # Add caching
 def get_uptime_history():
-    """Get service uptime history based on actual service checks"""
+    """Get service uptime history for exactly 48 hours with hourly buckets"""
     conn = None
     try:
         conn = get_db_connection()
@@ -494,22 +494,37 @@ def get_uptime_history():
         cursor.execute("SET TIME ZONE 'America/New_York'")
         cursor.execute("SET statement_timeout = '3s'")
 
+        # Generate exactly 48 hours of hourly buckets
         cursor.execute("""
-            WITH hourly_checks AS (
+            WITH RECURSIVE hour_series AS (
+                -- Start from 48 hours ago, rounded to the hour
+                SELECT date_trunc('hour', NOW() - INTERVAL '48 hours') AS hour_bucket
+                UNION ALL
+                SELECT hour_bucket + INTERVAL '1 hour'
+                FROM hour_series
+                WHERE hour_bucket < date_trunc('hour', NOW())
+            ),
+            hourly_uptime AS (
                 SELECT
                     date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') as hour,
-                    AVG(CASE WHEN is_up = 1 THEN 100.0 ELSE 0.0 END) as uptime_percent
+                    COUNT(*) as total_checks,
+                    SUM(CASE WHEN is_up = 1 THEN 1 ELSE 0 END) as up_checks
                 FROM service_uptime_checks
                 WHERE service_name = 'gex-ingestion'
                   AND timestamp > NOW() - INTERVAL '48 hours'
                 GROUP BY date_trunc('hour', timestamp AT TIME ZONE 'America/New_York')
             )
             SELECT
-                hour,
-                ROUND(uptime_percent::numeric, 1) as uptime_percent
-            FROM hourly_checks
-            ORDER BY hour ASC
-            LIMIT 100
+                hs.hour_bucket as hour,
+                COALESCE(hu.up_checks, 0) as up_checks,
+                COALESCE(hu.total_checks, 0) as total_checks,
+                CASE
+                    WHEN COALESCE(hu.total_checks, 0) = 0 THEN 0
+                    ELSE ROUND((COALESCE(hu.up_checks, 0)::numeric / hu.total_checks * 100), 1)
+                END as uptime_percent
+            FROM hour_series hs
+            LEFT JOIN hourly_uptime hu ON hs.hour_bucket = hu.hour
+            ORDER BY hs.hour_bucket ASC
         """)
 
         rows = cursor.fetchall()
@@ -525,8 +540,10 @@ def get_uptime_history():
                 ts = ts.astimezone(eastern)
 
             result.append({
-                'timestamp': int(ts.timestamp() * 1000),
-                'uptime_percent': float(row['uptime_percent'] or 0)
+                'timestamp': ts.isoformat(),
+                'uptime_percent': float(row['uptime_percent'] or 0),
+                'up_checks': int(row['up_checks'] or 0),
+                'total_checks': int(row['total_checks'] or 0)
             })
 
         return jsonify(result)
