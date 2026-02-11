@@ -119,12 +119,15 @@ class GEXScheduler:
             logger.debug(f"Market closed: Weekend ({now_et.strftime('%A')})")
             return False
 
-        # Market hours: 9:30 AM - 4:00 PM ET
-        market_open = dt_time(9, 30)
-        market_close = dt_time(16, 0)
+        # Market hours (ET):
+        # 04:00 AM - 09:30 AM: Pre-Market
+        # 09:30 AM - 04:00 PM: Regular
+        # 04:00 PM - 08:00 PM: After-Hours
+        market_open = dt_time(4, 0)
+        market_close = dt_time(20, 0)
         current_time = now_et.time()
 
-        is_open = market_open <= current_time <= market_close
+        is_open = market_open <= current_time < market_close
 
         logger.debug(f"Market check: {now_et.strftime('%H:%M %Z')} - "
                     f"{'OPEN' if is_open else 'CLOSED'}")
