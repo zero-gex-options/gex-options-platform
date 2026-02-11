@@ -1,56 +1,93 @@
-<style>
-    .nav-bar {
-        background: #1e293b;
-        border-bottom: 1px solid #334155;
-        padding: 0;
-    }
-    .nav-container {
-        max-width: 1400px;
-        margin: 0 auto;
-        display: flex;
-        align-items: center;
-    }
-    .nav-item {
-        padding: 16px 24px;
-        color: #94a3b8;
-        text-decoration: none;
-        display: inline-block;
-        border-bottom: 3px solid transparent;
-        transition: all 0.2s;
-    }
-    .nav-item:hover {
-        color: #e2e8f0;
-        background: rgba(255, 255, 255, 0.05);
-    }
-    .nav-item.active {
-        color: #60a5fa;
-        border-bottom-color: #60a5fa;
-    }
-</style>
-
-<nav class="nav-bar">
-    <div class="nav-container">
-        <a href="/gamma" class="nav-item" id="nav-gamma">Gamma Exposure</a>
-        <a href="/put-call" class="nav-item" id="nav-put-call">Put/Call Ratio</a>
-        <a href="/flows" class="nav-item" id="nav-flows">Option Flows</a>
-        <a href="/spy-price" class="nav-item" id="nav-spy">SPY Price</a>
-        <a href="/market-bias" class="nav-item" id="nav-bias">Market Bias</a>
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid #334155;
+            padding: 20px 32px;
+        }
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header h1 {
+            font-size: 32px;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+        }
+        .header-subtitle {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        .nav-bar {
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+        }
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+        }
+        .nav-item {
+            padding: 16px 24px;
+            color: #94a3b8;
+            text-decoration: none;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .nav-item:hover {
+            color: #e2e8f0;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .nav-item.active {
+            color: #60a5fa;
+            border-bottom-color: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>ZeroGEX™</h1>
+            <div class="header-subtitle">Real-Time Gamma Exposure Analytics</div>
+        </div>
     </div>
-</nav>
 
-<script>
-    // Highlight active page
-    const currentPath = window.location.pathname;
-    const navItems = {
-        '/gamma': 'nav-gamma',
-        '/put-call': 'nav-put-call',
-        '/flows': 'nav-flows',
-        '/spy-price': 'nav-spy',
-        '/market-bias': 'nav-bias'
-    };
-    
-    const activeId = navItems[currentPath];
-    if (activeId) {
-        document.getElementById(activeId).classList.add('active');
-    }
-</script>
+    <nav class="nav-bar">
+        <div class="nav-container">
+            <a href="/" class="nav-item" data-page="home">Dashboard</a>
+            <a href="/gamma" class="nav-item" data-page="gamma">Gamma Exposure</a>
+            <a href="/put-call" class="nav-item" data-page="put-call">Put/Call Ratio</a>
+            <a href="/flows" class="nav-item" data-page="flows">Option Flows</a>
+            <a href="/spy-price" class="nav-item" data-page="spy-price">SPY Price</a>
+            <a href="/market-bias" class="nav-item" data-page="market-bias">Market Bias</a>
+        </div>
+    </nav>
+
+    <script>
+        // Auto-highlight active page based on current URL
+        const currentPath = window.location.pathname;
+        const pathMap = {
+            '/': 'home',
+            '/gamma': 'gamma',
+            '/put-call': 'put-call',
+            '/flows': 'flows',
+            '/spy-price': 'spy-price',
+            '/market-bias': 'market-bias'
+        };
+        
+        const activePage = pathMap[currentPath];
+        if (activePage) {
+            const activeLink = document.querySelector(`[data-page="${activePage}"]`);
+            if (activeLink) {
+                activeLink.classList.add('active');
+            }
+        }
+    </script>
+</body>
+</html>

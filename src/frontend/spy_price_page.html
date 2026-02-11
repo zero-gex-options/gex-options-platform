@@ -82,8 +82,7 @@
     </style>
 </head>
 <body>
-    <!-- Navigation will be injected here -->
-    <div id="navigation-placeholder"></div>
+    <div id="nav-placeholder"></div>
 
     <div class="container">
         <!-- SPY Latest Quote Panel -->
@@ -108,17 +107,13 @@
     </div>
 
     <script>
-        // Load navigation - same as other pages
+        // Load shared navigation
         fetch('/_navigation.html')
             .then(response => response.text())
             .then(html => {
-                document.getElementById('navigation-placeholder').innerHTML = html;
-                // Set active page
-                const spyLink = document.querySelector('a[href="/spy-price"]');
-                if (spyLink) {
-                    spyLink.classList.add('active');
-                }
-            });
+                document.getElementById('nav-placeholder').innerHTML = html;
+            })
+            .catch(error => console.error('Error loading navigation:', error));
 
         let charts = {};
 

@@ -14,17 +14,6 @@
             background: #0f172a;
             color: #e2e8f0;
         }
-        .header {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            border-bottom: 1px solid #334155;
-            padding: 20px 32px;
-        }
-        .header h1 {
-            font-size: 32px;
-            background: linear-gradient(135deg, #60a5fa, #3b82f6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -59,20 +48,7 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>ZeroGEX™ - Market Bias Indicator</h1>
-    </div>
-
-    <!-- NAVIGATION -->
-    <div style="background: #1e293b; border-bottom: 1px solid #334155;">
-        <div style="max-width: 1400px; margin: 0 auto; display: flex;">
-            <a href="/gamma" style="padding: 16px 24px; color: #94a3b8; text-decoration: none;">Gamma Exposure</a>
-            <a href="/put-call" style="padding: 16px 24px; color: #94a3b8; text-decoration: none;">Put/Call Ratio</a>
-            <a href="/flows" style="padding: 16px 24px; color: #94a3b8; text-decoration: none;">Option Flows</a>
-            <a href="/spy-price" style="padding: 16px 24px; color: #94a3b8; text-decoration: none;">SPY Price</a>
-            <a href="/market-bias" style="padding: 16px 24px; color: #60a5fa; text-decoration: none; border-bottom: 3px solid #60a5fa;">Market Bias</a>
-        </div>
-    </div>
+    <div id="nav-placeholder"></div>
 
     <div class="container">
         <!-- Current Bias -->
@@ -91,6 +67,14 @@
     </div>
 
     <script>
+        // Load shared navigation
+        fetch('/_navigation.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('nav-placeholder').innerHTML = html;
+            })
+            .catch(error => console.error('Error loading navigation:', error));
+
         let chart = null;
 
         function biasToNumber(bias) {

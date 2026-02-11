@@ -16,108 +16,6 @@
             color: #e2e8f0;
             overflow-x: hidden;
         }
-        .header {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            border-bottom: 1px solid #334155;
-            padding: 20px 32px;
-        }
-        .header-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .header-left {
-            flex: 1;
-            display: flex;
-            align-items: center;
-        }
-        .header-center {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .header-right {
-            flex: 1;
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-        }
-        .header h1 {
-            font-size: 32px;
-            background: linear-gradient(135deg, #60a5fa, #3b82f6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-	.header-text h1 {
-            font-size: 28px;
-            background: linear-gradient(135deg, #60a5fa, #3b82f6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin: 0;
-        }
-        .header-subtitle {
-            color: #94a3b8;
-            font-size: 12px;
-            margin-top: 4px;
-        }
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        .status-badge.positive {
-            background: rgba(16, 185, 129, 0.2);
-            color: #10b981;
-        }
-        .status-badge.negative {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-        }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: currentColor;
-            animation: pulse 2s infinite;
-        }
-	.market-bias-indicator {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 20px;
-            border-radius: 12px;
-            background: rgba(30, 41, 59, 0.5);
-            border: 1px solid #334155;
-        }
-        .bias-label {
-            font-size: 12px;
-            color: #94a3b8;
-            text-transform: uppercase;
-        }
-        .bias-value {
-            font-size: 20px;
-            font-weight: 700;
-        }
-        .bias-bullish { color: #10b981; }
-        .bias-bearish { color: #ef4444; }
-        .bias-neutral { color: #94a3b8; }
-        .bias-score {
-            font-size: 12px;
-            color: #94a3b8;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -228,11 +126,6 @@
             padding: 40px;
             color: #94a3b8;
         }
-        .error {
-            text-align: center;
-            padding: 40px;
-            color: #ef4444;
-        }
         .last-update {
             text-align: center;
             color: #64748b;
@@ -254,10 +147,10 @@
             padding: 12px;
             position: absolute;
             z-index: 1000;
-            top: 100%;  /* Changed from bottom: 125% */
+            top: 100%;
             left: 50%;
             margin-left: -150px;
-            margin-top: 10px;  /* Add some space below the badge */
+            margin-top: 10px;
             transition: opacity 0.3s;
             border: 1px solid #334155;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -267,12 +160,12 @@
         .tooltip .tooltiptext::after {
             content: "";
             position: absolute;
-            bottom: 100%;  /* Arrow points up */
+            bottom: 100%;
             left: 50%;
             margin-left: -5px;
             border-width: 5px;
             border-style: solid;
-            border-color: transparent transparent #1e293b transparent;  /* Arrow points down to tooltip */
+            border-color: transparent transparent #1e293b transparent;
         }
         .tooltip:hover .tooltiptext {
             visibility: visible;
@@ -312,56 +205,7 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="header-content">
-            <div class="header-left">
-                <div class="header-text">
-                    <h1>ZeroGEX™</h1>
-                    <div class="header-subtitle">Real-Time Gamma Exposure Analytics</div>
-                </div>
-            </div>
-            <div class="header-center">
-                <div class="market-bias-indicator tooltip">
-                    <div>
-                        <div class="bias-label">Market Bias</div>
-                        <div id="biasValue" class="bias-value bias-neutral">--</div>
-                        <div id="biasScore" class="bias-score">--</div>
-                    </div>
-                    <span class="tooltiptext">
-                        <strong>Overall Market Bias Score</strong><br><br>
-                        Composite score (-100 to +100) based on:<br>
-                        • Net GEX (±30 pts)<br>
-                        • Position vs Gamma Flip (±25 pts)<br>
-                        • Put/Call Ratio (±20 pts)<br>
-                        • Position vs Max Gamma (±15 pts)<br><br>
-                        <strong>>25:</strong> Bullish bias<br>
-                        <strong>-25 to 25:</strong> Neutral<br>
-                        <strong><-25:</strong> Bearish bias
-                    </span>
-                </div>
-            </div>
-            <div class="header-right">
-                <div id="regimeBadge" class="status-badge tooltip">
-                    <span class="status-dot"></span>
-		    <span class="badge-text">Loading...</span>
-                    <span class="tooltiptext">
-                        <strong>Gamma Regime</strong><br><br>
-                        <strong>Positive (Stabilizing):</strong> Net GEX > 0. Dealers buy dips and sell rallies, dampening volatility.<br><br>
-                        <strong>Negative (Destabilizing):</strong> Net GEX < 0. Dealers sell dips and buy rallies, amplifying moves and increasing volatility.
-                    </span>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div style="background: #1e293b; border-bottom: 1px solid #334155;">
-        <div style="max-width: 1400px; margin: 0 auto; display: flex;">
-            <a href="/gamma" style="padding: 16px 24px; color: #60a5fa; text-decoration: none; border-bottom: 3px solid #60a5fa;">Gamma Exposure</a>
-            <a href="/put-call" style="padding: 16px 24px; color: #94a3b8; text-decoration: none; border-bottom: 3px solid transparent;">Put/Call Ratio</a>
-            <a href="/flows" style="padding: 16px 24px; color: #94a3b8; text-decoration: none; border-bottom: 3px solid transparent;">Option Flows</a>
-            <a href="/spy-price" style="padding: 16px 24px; color: #94a3b8; text-decoration: none; border-bottom: 3px solid transparent;">SPY Price</a>
-            <a href="/market-bias" style="padding: 16px 24px; color: #94a3b8; text-decoration: none; border-bottom: 3px solid transparent;">Market Bias</a>
-        </div>
-    </div>
+    <div id="nav-placeholder"></div>
 
     <div class="container">
         <!-- Key Metrics -->
@@ -515,7 +359,23 @@
         <div class="last-update" id="lastUpdate">Last updated: --</div>
     </div>
 
+    <div class="footer">
+        <div class="footer-content">
+            <img src="/logo" alt="ZeroGEX" class="footer-logo">
+	    <div class="footer-text"><i>Trading involves substantial risk. Past performance is not indicative of future results.</i></div>
+            <div class="footer-tagline">© 2026 ZeroGEX, LLC. All rights reserved.</div>
+        </div>
+    </div>
+
     <script>
+        // Load shared navigation
+        fetch('/_navigation.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('nav-placeholder').innerHTML = html;
+            })
+            .catch(error => console.error('Error loading navigation:', error));
+
         let charts = {};
 
         function formatNumber(num) {
@@ -531,21 +391,8 @@
                         return;
                     }
 
-                    // Update regime badge
-                    const badge = document.getElementById('regimeBadge');
                     const isPositive = data.net_gex > 0;
-                    badge.classList.remove('positive', 'negative');
-                    badge.classList.add(isPositive ? 'positive' : 'negative');
 
-
-                    // Update only the text, not the entire innerHTML (to preserve tooltip)
-                    const badgeText = badge.querySelector('.badge-text');
-                    badgeText.textContent = data.gamma_regime;
-                    if (badgeText) {
-                        badgeText.textContent = data.gamma_regime;
-                    }
-
-                    // Update metrics
                     document.getElementById('netGEX').textContent = `${data.net_gex_millions >= 0 ? '+' : ''}${data.net_gex_millions.toFixed(1)}M`;
                     document.getElementById('netGEX').className = `metric-large ${isPositive ? 'positive' : 'negative'}`;
 
@@ -560,12 +407,6 @@
                     document.getElementById('putCallRatio').textContent = data.put_call_ratio.toFixed(2);
 
                     document.getElementById('lastUpdate').textContent = `Last updated: ${timestamp.toLocaleString()}`;
-
-                    // Calculate market bias
-                    const biasResult = calculateMarketBias(data);
-                    document.getElementById('biasValue').textContent = biasResult.bias;
-                    document.getElementById('biasValue').className = `bias-value ${biasResult.cssClass}`;
-                    document.getElementById('biasScore').textContent = `Score: ${biasResult.score}/100`;
                 })
                 .catch(error => console.error('Error fetching current GEX:', error));
         }
@@ -764,7 +605,7 @@
                             animation: false,
                             scales: {
                                 x: {
-                                    stacked: false,  // Keep this false so bars align
+                                    stacked: false,
                                     title: { display: true, text: 'Strike Price', color: '#94a3b8' },
                                     ticks: { 
                                         color: '#94a3b8',
@@ -904,7 +745,6 @@
                 .then(data => {
                     if (data.error || data.length === 0) return;
 
-                    // Filter weekends
                     const filteredData = data.filter(d => {
                         const date = new Date(d.timestamp);
                         const day = date.getDay();
@@ -974,45 +814,6 @@
                 .catch(error => console.error('Error fetching SPY history:', error));
         }
 
-        function calculateMarketBias(data) {
-            let score = 0;
-
-            // Factor 1: Net GEX (+/- 30 points)
-            if (data.net_gex > 0) {
-                score += Math.min(30, (data.net_gex / 1e9) * 30);
-            } else {
-                score += Math.max(-30, (data.net_gex / 1e9) * 30);
-            }
-
-            // Factor 2: Position vs Gamma Flip (+/- 25 points)
-            if (data.gamma_flip_point) {
-                const flipDistance = ((data.underlying_price - data.gamma_flip_point) / data.underlying_price) * 100;
-                score += Math.max(-25, Math.min(25, flipDistance * 5));
-            }
-
-            // Factor 3: Put/Call Ratio (+/- 20 points)
-            score += Math.max(-20, Math.min(20, (1 - data.put_call_ratio) * 20));
-
-            // Factor 4: Position vs Max Gamma (+/- 15 points)
-            const gammaDistance = ((data.underlying_price - data.max_gamma_strike) / data.underlying_price) * 100;
-            score += -Math.max(-15, Math.min(15, gammaDistance * 3));
-
-            // Determine bias
-            let bias, cssClass;
-            if (score > 25) {
-                bias = 'BULLISH';
-                cssClass = 'bias-bullish';
-            } else if (score < -25) {
-                bias = 'BEARISH';
-                cssClass = 'bias-bearish';
-            } else {
-                bias = 'NEUTRAL';
-                cssClass = 'bias-neutral';
-            }
-
-            return { bias, score: score.toFixed(0), cssClass };
-        }
-
         // Initial load
         updateCurrentGEX();
         updateGEXHistory();
@@ -1031,12 +832,5 @@
         setInterval(updateRegimeChanges, 60000);
         setInterval(updateSPYChart, 30000);
     </script>
-    <div class="footer">
-        <div class="footer-content">
-            <img src="/logo" alt="ZeroGEX" class="footer-logo">
-	    <div class="footer-text"><i>Trading involves substantial risk. Past performance is not indicative of future results.</i></div>
-            <div class="footer-tagline">© 2026 ZeroGEX, LLC. All rights reserved.</div>
-        </div>
-    </div>
 </body>
 </html>

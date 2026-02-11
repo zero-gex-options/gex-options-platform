@@ -29,6 +29,7 @@ fi
 
 # Verify required files exist
 REQUIRED_FILES=(
+    "index.html"
     "gex_frontend.py"
     "_navigation.html"
     "flows_page.html"

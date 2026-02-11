@@ -113,9 +113,12 @@ def cache_query(ttl_seconds=30):
 
 @app.route('/')
 def index():
-    """Redirect to gamma exposure page"""
-    from flask import redirect
-    return redirect('/gamma')
+    """Serve homepage dashboard"""
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'index.html')
+    except Exception as e:
+        print(f"Error serving index: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/gamma')
 def gamma_page():
@@ -155,6 +158,15 @@ def market_bias_page():
         return send_from_directory(DASHBOARD_DIR, 'market_bias_page.html')
     except Exception as e:
         print(f"Error serving market bias page: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/_navigation.html')
+def serve_navigation():
+    """Serve navigation HTML fragment"""
+    try:
+        return send_from_directory(DASHBOARD_DIR, '_navigation.html')
+    except Exception as e:
+        print(f"Error serving navigation: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/spy')
@@ -782,6 +794,7 @@ def get_spy_market_history():
 
             result.append({
                 'timestamp': ts.isoformat(),
+                'actual_timestamp': row['actual_timestamp'].isoformat() if row['actual_timestamp'] else ts.isoformat(),
                 'open': float(row['open'] or row['close'] or 0),
                 'high': float(row['high'] or row['close'] or 0),
                 'low': float(row['low'] or row['close'] or 0),
