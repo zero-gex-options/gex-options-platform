@@ -1,0 +1,56 @@
+<style>
+    .nav-bar {
+        background: #1e293b;
+        border-bottom: 1px solid #334155;
+        padding: 0;
+    }
+    .nav-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+    }
+    .nav-item {
+        padding: 16px 24px;
+        color: #94a3b8;
+        text-decoration: none;
+        display: inline-block;
+        border-bottom: 3px solid transparent;
+        transition: all 0.2s;
+    }
+    .nav-item:hover {
+        color: #e2e8f0;
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .nav-item.active {
+        color: #60a5fa;
+        border-bottom-color: #60a5fa;
+    }
+</style>
+
+<nav class="nav-bar">
+    <div class="nav-container">
+        <a href="/gamma" class="nav-item" id="nav-gamma">Gamma Exposure</a>
+        <a href="/put-call" class="nav-item" id="nav-put-call">Put/Call Ratio</a>
+        <a href="/flows" class="nav-item" id="nav-flows">Option Flows</a>
+        <a href="/spy-price" class="nav-item" id="nav-spy">SPY Price</a>
+        <a href="/market-bias" class="nav-item" id="nav-bias">Market Bias</a>
+    </div>
+</nav>
+
+<script>
+    // Highlight active page
+    const currentPath = window.location.pathname;
+    const navItems = {
+        '/gamma': 'nav-gamma',
+        '/put-call': 'nav-put-call',
+        '/flows': 'nav-flows',
+        '/spy-price': 'nav-spy',
+        '/market-bias': 'nav-bias'
+    };
+    
+    const activeId = navItems[currentPath];
+    if (activeId) {
+        document.getElementById(activeId).classList.add('active');
+    }
+</script>

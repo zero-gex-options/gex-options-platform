@@ -11,7 +11,7 @@ log "GEX Frontend Dashboard Setup"
 # Define paths
 APP_DIR="$HOME/gex-options-platform"
 FRONTEND_DIR="/opt/zerogex/frontend"
-DASHBOARD_SOURCE="$APP_DIR/src/dashboard"
+DASHBOARD_SOURCE="$APP_DIR/src/frontend"
 BRANDING="$APP_DIR/branding"
 
 # Check if application directory exists
@@ -20,60 +20,86 @@ if [ ! -d "$APP_DIR" ]; then
     exit 1
 fi
 
-# Check if dashboard source exists
+# Check if frontend source exists
 if [ ! -d "$DASHBOARD_SOURCE" ]; then
     log "  ✗ Dashboard source not found: $DASHBOARD_SOURCE"
-    log "     Expected at: src/dashboard/ in your repository"
+    log "     Expected at: src/frontend/ in your repository"
     exit 1
 fi
 
 # Verify required files exist
-if [ ! -f "$DASHBOARD_SOURCE/gex_frontend.py" ]; then
-    log "  ✗ Dashboard backend not found: $DASHBOARD_SOURCE/gex_frontend.py"
-    exit 1
-fi
+REQUIRED_FILES=(
+    "gex_frontend.py"
+    "_navigation.html"
+    "flows_page.html"
+    "gamma_page.html"
+    "market_bias_page.html"
+    "put_call_page.html"
+    "spy_price_page.html"
+)
 
-if [ ! -f "$DASHBOARD_SOURCE/gex_frontend.html" ]; then
-    log "  ✗ Dashboard frontend not found: $DASHBOARD_SOURCE/gex_frontend.html"
-    exit 1
-fi
+log "  → Verifying required frontend files..."
+for file in "${REQUIRED_FILES[@]}"; do
+    if [ ! -f "$DASHBOARD_SOURCE/$file" ]; then
+        log "  ✗ Missing required file: $DASHBOARD_SOURCE/$file"
+        exit 1
+    fi
+done
+log "     ✓ All required files found"
 
+# Verify branding
 if [ ! -f "$BRANDING/ZeroGEX.png" ]; then
     log "  ✗ ZeroGEX logo not found: $BRANDING/ZeroGEX.png"
     exit 1
 fi
 
-# Create frontend directory
-log "  → Creating frontend directory..."
+# Create frontend directory structure
+log "  → Creating frontend directory structure..."
 sudo mkdir -p "$FRONTEND_DIR"
+sudo mkdir -p "$FRONTEND_DIR/templates"
+sudo mkdir -p "$FRONTEND_DIR/static"
 
-# Copy dashboard files
-log "  → Installing dashboard files..."
+# Copy backend (Flask app)
+log "  → Installing backend application..."
 sudo cp "$DASHBOARD_SOURCE/gex_frontend.py" "$FRONTEND_DIR/"
-sudo cp "$DASHBOARD_SOURCE/gex_frontend.html" "$FRONTEND_DIR/"
-sudo cp "$BRANDING/ZeroGEX.png" "$FRONTEND_DIR/"
-log "     ✓ Dashboard files copied"
+log "     ✓ Backend copied"
+
+# Copy all HTML templates
+log "  → Installing HTML templates..."
+for file in "${REQUIRED_FILES[@]}"; do
+    if [[ "$file" == *.html ]]; then
+        sudo cp "$DASHBOARD_SOURCE/$file" "$FRONTEND_DIR/templates/"
+        log "     ✓ $file"
+    fi
+done
+
+# Copy branding assets
+log "  → Installing branding assets..."
+sudo cp "$BRANDING/ZeroGEX.png" "$FRONTEND_DIR/static/"
+log "     ✓ Logo copied to static/"
 
 # Set proper ownership and permissions
 log "  → Setting permissions..."
 sudo chown -R ubuntu:ubuntu "$FRONTEND_DIR"
 sudo chmod 755 "$FRONTEND_DIR"
 sudo chmod 755 "$FRONTEND_DIR/gex_frontend.py"
-sudo chmod 644 "$FRONTEND_DIR/gex_frontend.html"
-sudo chmod 644 "$FRONTEND_DIR/ZeroGEX.png"
+sudo chmod 755 "$FRONTEND_DIR/templates"
+sudo chmod 644 "$FRONTEND_DIR/templates"/*.html
+sudo chmod 755 "$FRONTEND_DIR/static"
+sudo chmod 644 "$FRONTEND_DIR/static"/*.png
 log "     ✓ Permissions set"
 
-# Install Python dependencies (Flask)
-log "  → Installing Flask dependency..."
+# Install Python dependencies
+log "  → Installing Python dependencies..."
 cd "$APP_DIR"
 source venv/bin/activate
-pip install -q flask
+pip install -q flask python-dotenv psycopg2-binary
 deactivate
 
-# Install system-wide Flask (for systemd service)
-log "  → Installing system-wide Flask..."
-sudo pip3 install -q flask
-log "     ✓ Flask installed"
+# Install system-wide dependencies (for systemd service)
+log "  → Installing system-wide Python dependencies..."
+sudo pip3 install -q flask python-dotenv psycopg2-binary
+log "     ✓ Dependencies installed"
 
 # Copy systemd service file
 log "  → Installing systemd service file..."
@@ -127,31 +153,43 @@ log ""
 log "GEX Frontend Dashboard setup complete!"
 log ""
 log "Summary:"
-log "  ✓ Frontend dashboard installed and running"
+log "  ✓ Multi-page dashboard installed and running"
 log "  ✓ Firewall configured (port 8081)"
 log "  ✓ Service: gex-frontend"
 log ""
+log "Dashboard Structure:"
+log "  Backend:    /opt/zerogex/frontend/gex_frontend.py"
+log "  Templates:  /opt/zerogex/frontend/templates/"
+log "  Static:     /opt/zerogex/frontend/static/"
+log ""
 log "Dashboard Access:"
-log "  Customer Frontend: http://${SERVER_IP}:8081"
-log "  Monitoring:        http://${SERVER_IP}:8080"
+log "  Main URL: http://${SERVER_IP}:8081"
 log ""
-log "Dashboard Separation:"
-log "  • Port 8080: Internal monitoring dashboard (system health)"
-log "  • Port 8081: Customer-facing GEX analytics dashboard"
+log "Available Pages:"
+log "  • /                    - SPY Price (default)"
+log "  • /spy-price           - Real-time SPY price tracking"
+log "  • /gamma               - Gamma exposure analysis"
+log "  • /flows               - Options flow tracking"
+log "  • /put-call            - Put/Call ratio analysis"
+log "  • /market-bias         - Market bias indicators"
 log ""
-log "Features Available:"
-log "  ✓ Real-time GEX metrics (Net GEX, Total GEX, Regime)"
-log "  ✓ SPY price tracking"
-log "  ✓ Historical GEX timeline"
-log "  ✓ Strike gamma profile visualization"
-log "  ✓ Price vs Max Gamma overlay"
-log "  ✓ Key support/resistance levels"
-log "  ✓ Regime change timeline"
-log "  ✓ SPY candlestick chart"
+log "Monitoring Dashboard:"
+log "  Internal: http://${SERVER_IP}:8080"
+log ""
+log "API Endpoints:"
+log "  • GET /api/spy/current           - Current SPY data"
+log "  • GET /api/spy/intraday          - Intraday price history"
+log "  • GET /api/gex/current           - Current GEX metrics"
+log "  • GET /api/gex/history           - GEX history"
+log "  • GET /api/gex/strikes           - Strike-level data"
+log "  • GET /api/flows/recent          - Recent options flows"
+log "  • GET /api/put-call/current      - Put/call ratios"
+log "  • GET /api/market-bias/current   - Market bias metrics"
 log ""
 log "Useful Commands:"
 log "  • View logs:        sudo journalctl -u gex-frontend -f"
 log "  • Restart service:  sudo systemctl restart gex-frontend"
 log "  • Check status:     sudo systemctl status gex-frontend"
-log "  • Test connection:  curl http://localhost:8081/api/gex/current"
+log "  • Test API:         curl http://localhost:8081/api/spy/current | jq"
+log "  • Test page:        curl http://localhost:8081/"
 log ""

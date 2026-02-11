@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPY Price - ZeroGEX</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #0a0e27;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid #334155;
+            margin-bottom: 20px;
+        }
+
+        .metric-label {
+            color: #94a3b8;
+            font-size: 12px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 0;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #334155;
+        }
+
+        .chart-container.volume {
+            height: 300px;
+            margin-top: 16px;
+            border-bottom: none;
+            padding-bottom: 24px;
+        }
+
+        .volume-breakdown {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .volume-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        .arrow {
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation will be injected here -->
+    <div id="navigation-placeholder"></div>
+
+    <div class="container">
+        <!-- SPY Latest Quote Panel -->
+        <div class="card" style="padding: 16px;">
+            <div id="spyLatest">Loading...</div>
+        </div>
+
+        <!-- Charts -->
+        <div class="card" style="padding: 24px 24px 0 24px;">
+            <h3 style="margin-bottom: 16px; color: #60a5fa; font-size: 16px;">SPY Price & Volume</h3>
+
+            <!-- Candlestick Chart -->
+            <div class="chart-container">
+                <canvas id="spyCandlestickChart"></canvas>
+            </div>
+
+            <!-- Volume Chart (with x-axis labels) -->
+            <div class="chart-container volume">
+                <canvas id="spyVolumeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load navigation - same as other pages
+        fetch('/_navigation.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('navigation-placeholder').innerHTML = html;
+                // Set active page
+                const spyLink = document.querySelector('a[href="/spy-price"]');
+                if (spyLink) {
+                    spyLink.classList.add('active');
+                }
+            });
+
+        let charts = {};
+
+        // Market hours background zones plugin (index-based)
+        const marketHoursBackgroundPlugin = {
+            id: 'marketHoursBackground',
+            beforeDatasetsDraw: (chart) => {
+                const ctx = chart.ctx;
+                const chartArea = chart.chartArea;
+                const xScale = chart.scales.x;
+
+                if (!xScale || !chartArea || !chart.data.labels) return;
+
+                ctx.save();
+
+                const labels = chart.data.labels;
+                let currentZone = null;
+                let zoneStartIdx = null;
+
+                labels.forEach((label, idx) => {
+                    const date = new Date(label.timestamp);
+                    const hour = date.getHours();
+                    const minute = date.getMinutes();
+                    const timeInMinutes = hour * 60 + minute;
+
+                    // Determine zone
+                    let zone = 'regular';
+                    if (timeInMinutes >= 240 && timeInMinutes < 570) {
+                        zone = 'pre-market';
+                    } else if (timeInMinutes >= 960 && timeInMinutes <= 1195) {
+                        zone = 'after-hours';
+                    }
+
+                    // Check for zone change
+                    if (zone !== currentZone) {
+                        // Draw previous zone if it was pre/after market
+                        if (currentZone && currentZone !== 'regular' && zoneStartIdx !== null) {
+                            const startX = xScale.getPixelForValue(zoneStartIdx);
+                            const endX = xScale.getPixelForValue(idx - 1);
+
+                            ctx.fillStyle = 'rgba(251, 146, 60, 0.08)';
+                            ctx.fillRect(startX, chartArea.top, endX - startX, chartArea.bottom - chartArea.top);
+                        }
+
+                        currentZone = zone;
+                        zoneStartIdx = idx;
+                    }
+                });
+
+                // Draw final zone if needed
+                if (currentZone && currentZone !== 'regular' && zoneStartIdx !== null) {
+                    const startX = xScale.getPixelForValue(zoneStartIdx);
+                    const endX = xScale.getPixelForValue(labels.length - 1);
+
+                    ctx.fillStyle = 'rgba(251, 146, 60, 0.08)';
+                    ctx.fillRect(startX, chartArea.top, endX - startX, chartArea.bottom - chartArea.top);
+                }
+
+                ctx.restore();
+            }
+        };
+
+        if (typeof Chart !== 'undefined') {
+            Chart.register(marketHoursBackgroundPlugin);
+        }
+
+        function formatNumber(num) {
+            return new Intl.NumberFormat().format(num);
+        }
+
+        async function updateSPYChart() {
+            try {
+                const response = await fetch('/api/market/SPY/history');
+                const data = await response.json();
+
+                if (data.error || data.length === 0) {
+                    console.log('No SPY data available');
+                    document.getElementById('spyLatest').innerHTML = '<div style="color: #ef4444; text-align: center;">No data available</div>';
+                    return;
+                }
+
+                // Filter: Keep 4:00 AM - 7:55 PM (exclude 8:00 PM+), no weekends
+                const filteredData = data.filter(d => {
+                    const date = new Date(d.timestamp);
+                    const day = date.getDay();
+                    if (day === 0 || day === 6) return false;
+
+                    const hour = date.getHours();
+                    const minute = date.getMinutes();
+                    const timeInMinutes = hour * 60 + minute;
+
+                    // 240 = 4:00 AM, 1195 = 7:55 PM (include 19:55, exclude 20:00)
+                    return timeInMinutes >= 240 && timeInMinutes <= 1195;
+                });
+
+                if (filteredData.length === 0) {
+                    document.getElementById('spyLatest').innerHTML = '<div style="color: #ef4444; text-align: center;">No data available</div>';
+                    return;
+                }
+
+                // Destroy old charts
+                if (charts.spyPriceChart) charts.spyPriceChart.destroy();
+                if (charts.spyVolumeChart) charts.spyVolumeChart.destroy();
+
+                // Create labels (index-based with NO GAPS - bars are adjacent)
+                const labels = filteredData.map((d, idx) => ({
+                    index: idx,
+                    timestamp: d.timestamp,
+                    date: new Date(d.timestamp)
+                }));
+
+                // OHLC data
+                const ohlcData = filteredData.map((d, idx) => ({
+                    x: idx,
+                    o: d.open || d.close,
+                    h: d.high || d.close,
+                    l: d.low || d.close,
+                    c: d.close,
+                    timestamp: d.timestamp
+                }));
+
+                // Find ALL hourly indices (where minute === 0)
+                const hourlyIndices = [];
+                labels.forEach((label, idx) => {
+                    if (label.date.getMinutes() === 0) {
+                        hourlyIndices.push(idx);
+                    }
+                });
+
+                console.log(`Total data points: ${labels.length}, Hourly labels: ${hourlyIndices.length}`);
+
+                // Common scale config for PERFECT alignment
+                const xScaleConfig = {
+                    type: 'linear',
+                    min: 0,
+                    max: labels.length - 1,
+                    grid: { 
+                        color: '#334155',
+                        drawBorder: false
+                    }
+                };
+
+                // Candlestick Chart
+                const candlestickCtx = document.getElementById('spyCandlestickChart');
+                charts.spyPriceChart = new Chart(candlestickCtx, {
+                    type: 'candlestick',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'SPY',
+                            data: ohlcData,
+                            borderColor: {
+                                up: '#059669',
+                                down: '#dc2626',
+                                unchanged: '#64748b'
+                            },
+                            backgroundColor: {
+                                up: 'rgba(16, 185, 129, 0.5)',
+                                down: 'rgba(239, 68, 68, 0.5)',
+                                unchanged: 'rgba(148, 163, 184, 0.5)'
+                            }
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        scales: {
+                            x: {
+                                ...xScaleConfig,
+                                display: false
+                            },
+                            y: {
+                                position: 'left',
+                                title: { display: true, text: 'Price ($)', color: '#94a3b8' },
+                                ticks: { 
+                                    color: '#94a3b8',
+                                    callback: function(value) {
+                                        return '$' + value.toFixed(2);
+                                    }
+                                },
+                                grid: { color: '#334155', drawBorder: false }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        const dataPoint = context[0].raw;
+                                        const date = new Date(dataPoint.timestamp);
+                                        return date.toLocaleString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                        });
+                                    },
+                                    label: function(context) {
+                                        const dataPoint = context.raw;
+                                        const idx = context.dataIndex;
+
+                                        let changeText = '';
+                                        if (idx > 0) {
+                                            const prevClose = ohlcData[idx - 1].c;
+                                            const currentClose = dataPoint.c;
+                                            const change = currentClose - prevClose;
+                                            const changePct = (change / prevClose) * 100;
+                                            const changeSymbol = change >= 0 ? '+' : '';
+                                            changeText = `\nChange: ${changeSymbol}$${change.toFixed(2)} (${changeSymbol}${changePct.toFixed(2)}%)`;
+                                        }
+
+                                        return [
+                                            `Open: $${dataPoint.o.toFixed(2)}`,
+                                            `High: $${dataPoint.h.toFixed(2)}`,
+                                            `Low: $${dataPoint.l.toFixed(2)}`,
+                                            `Close: $${dataPoint.c.toFixed(2)}`,
+                                            changeText
+                                        ].filter(Boolean);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Volume data
+                const volumeUpData = filteredData.map((d, idx) => ({ x: idx, y: d.up_volume || 0, timestamp: d.timestamp }));
+                const volumeDownData = filteredData.map((d, idx) => ({ x: idx, y: d.down_volume || 0, timestamp: d.timestamp }));
+
+                // Volume Chart
+                const volumeCtx = document.getElementById('spyVolumeChart');
+                charts.spyVolumeChart = new Chart(volumeCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Down Volume',
+                                data: volumeDownData,
+                                backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                                stack: 'volume'
+                            },
+                            {
+                                label: 'Up Volume',
+                                data: volumeUpData,
+                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                                stack: 'volume'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        layout: {
+                            padding: { bottom: 30 }
+                        },
+                        scales: {
+                            x: {
+                                ...xScaleConfig,
+                                stacked: true,
+                                ticks: { 
+                                    color: '#94a3b8',
+                                    maxRotation: 90,
+                                    minRotation: 90,
+                                    autoSkip: false,
+                                    callback: function(value, index) {
+                                        // Show label ONLY at hourly indices
+                                        if (hourlyIndices.includes(value)) {
+                                            const label = labels[value];
+                                            return label.date.toLocaleString('en-US', { 
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                hour12: false
+                                            });
+                                        }
+                                        return '';
+                                    }
+                                }
+                            },
+                            y: {
+                                position: 'left',
+                                stacked: true,
+                                title: { display: true, text: 'Volume', color: '#94a3b8' },
+                                ticks: { 
+                                    color: '#94a3b8',
+                                    callback: function(value) {
+                                        return (value / 1000000).toFixed(1) + 'M';
+                                    }
+                                },
+                                grid: { color: '#334155', drawBorder: false }
+                            }
+                        },
+                        plugins: {
+                            legend: { labels: { color: '#e2e8f0' }, position: 'top' },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        const dataPoint = context[0].raw;
+                                        const date = new Date(dataPoint.timestamp);
+                                        return date.toLocaleString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    plugins: [{
+                        id: 'dateLabels',
+                        afterDraw: (chart) => {
+                            const ctx = chart.ctx;
+                            const xAxis = chart.scales.x;
+
+                            ctx.save();
+                            ctx.textAlign = 'center';
+                            ctx.fillStyle = '#94a3b8';
+                            ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+
+                            let lastDate = null;
+                            hourlyIndices.forEach(idx => {
+                                const label = labels[idx];
+                                const dateStr = label.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                                if (dateStr !== lastDate) {
+                                    const x = xAxis.getPixelForValue(idx);
+                                    const y = chart.chartArea.bottom + 55;
+                                    ctx.fillText(dateStr, x, y);
+                                    lastDate = dateStr;
+                                }
+                            });
+
+                            ctx.restore();
+                        }
+                    }]
+                });
+
+                // Update quote panel
+                const latestData = filteredData[filteredData.length - 1];
+                const latestTime = new Date(latestData.actual_timestamp || latestData.timestamp);
+
+                // Fetch price change from API
+                try {
+                    const changeResponse = await fetch('/api/spy-change');
+                    const changeData = await changeResponse.json();
+
+                    const priceChange = changeData.change || 0;
+                    const percentChange = changeData.percent_change || 0;
+                    const changeColor = priceChange >= 0 ? '#10b981' : '#ef4444';
+                    const changeSymbol = priceChange >= 0 ? '+' : '';
+
+                    const upVolume = latestData.up_volume || 0;
+                    const downVolume = latestData.down_volume || 0;
+                    const totalVolume = latestData.volume || 0;
+
+                    document.getElementById('spyLatest').innerHTML = `
+                        <div style="display: flex; justify-content: space-around; align-items: center; padding: 8px;">
+                            <div style="text-align: center;">
+                                <div class="metric-label">SPY PRICE</div>
+                                <div style="display: flex; align-items: baseline; justify-content: center; gap: 12px;">
+                                    <div class="metric-value" style="font-size: 32px;">$${latestData.close.toFixed(2)}</div>
+                                    <div style="color: ${changeColor}; font-size: 18px; font-weight: 600;">
+                                        ${changeSymbol}$${Math.abs(priceChange).toFixed(2)} (${changeSymbol}${percentChange.toFixed(2)}%)
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div class="metric-label">VOLUME</div>
+                                <div class="metric-value" style="font-size: 20px;">${formatNumber(totalVolume)}</div>
+                                <div class="volume-breakdown" style="margin-top: 8px; justify-content: center;">
+                                    <div class="volume-item" style="color: #10b981;">
+                                        <span class="arrow">▲</span>
+                                        <span>${formatNumber(upVolume)}</span>
+                                    </div>
+                                    <div class="volume-item" style="color: #ef4444;">
+                                        <span class="arrow">▼</span>
+                                        <span>${formatNumber(downVolume)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div class="metric-label">DATA AS OF</div>
+                                <div class="metric-value" style="font-size: 14px;">${latestTime.toLocaleString('en-US', { 
+                                    month: 'short', 
+                                    day: 'numeric', 
+                                    hour: '2-digit', 
+                                    minute: '2-digit',
+                                    second: '2-digit'
+                                })}</div>
+                            </div>
+                        </div>`;
+                } catch (error) {
+                    console.error('Error fetching change data:', error);
+                    document.getElementById('spyLatest').innerHTML = '<div style="color: #ef4444; text-align: center;">Error loading price change</div>';
+                }
+
+            } catch (error) {
+                console.error('Error in updateSPYChart:', error);
+                document.getElementById('spyLatest').innerHTML = '<div style="color: #ef4444; text-align: center;">Error loading data</div>';
+            }
+        }
+
+        // Initial load
+        updateSPYChart();
+
+        // Refresh every 30 seconds
+        setInterval(updateSPYChart, 30000);
+    </script>
+</body>
+</html>

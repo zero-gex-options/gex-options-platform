@@ -17,7 +17,7 @@ import time
 from functools import wraps
 
 app = Flask(__name__)
-DASHBOARD_DIR = Path("/opt/zerogex/frontend")
+DASHBOARD_DIR = Path("/opt/zerogex/frontend/templates")
 CREDS_FILE = Path.home() / ".zerogex_db_creds"
 _query_cache = {}
 
@@ -112,11 +112,57 @@ def cache_query(ttl_seconds=30):
     return decorator
 
 @app.route('/')
-def dashboard():
+def index():
+    """Redirect to gamma exposure page"""
+    from flask import redirect
+    return redirect('/gamma')
+
+@app.route('/gamma')
+def gamma_page():
     try:
-        return send_from_directory(DASHBOARD_DIR, 'gex_frontend.html')
+        return send_from_directory(DASHBOARD_DIR, 'gamma_page.html')
     except Exception as e:
-        print(f"Error serving dashboard: {e}")
+        print(f"Error serving gamma page: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/put-call')
+def put_call_page():
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'put_call_page.html')
+    except Exception as e:
+        print(f"Error serving put/call page: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/flows')
+def flows_page():
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'flows_page.html')
+    except Exception as e:
+        print(f"Error serving flows page: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/spy-price')
+def spy_price_page():
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'spy_price_page.html')
+    except Exception as e:
+        print(f"Error serving SPY price page: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/market-bias')
+def market_bias_page():
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'market_bias_page.html')
+    except Exception as e:
+        print(f"Error serving market bias page: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/spy')
+def spy_page():
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'spy_frontend.html')
+    except Exception as e:
+        print(f"Error serving SPY page: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/gex/current')
@@ -503,12 +549,192 @@ def get_key_levels():
         if conn:
             return_db_connection(conn)
 
-# Reuse SPY endpoints from monitoring dashboard
-@app.route('/api/spy-history')
-def get_spy_history():
-    """Get SPY price history - reuse from monitoring dashboard"""
-    # Import the function from dashboard.py or duplicate code here
-    # For now, I'll create a simplified version
+@app.route('/api/gex/put-call-history')
+@cache_query(ttl_seconds=30)
+def get_put_call_history():
+    """Get historical put/call ratio data"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+
+        cursor.execute("""
+            SELECT 
+                timestamp,
+                put_call_ratio
+            FROM gex_metrics
+            WHERE symbol = 'SPY'
+                AND timestamp > NOW() - INTERVAL '48 hours'
+            ORDER BY timestamp ASC
+        """)
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        import pytz
+        eastern = pytz.timezone('America/New_York')
+        result = []
+        for row in rows:
+            ts = row['timestamp']
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            result.append({
+                'timestamp': ts.isoformat(),
+                'put_call_ratio': float(row['put_call_ratio']) if row['put_call_ratio'] else 0
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in get_put_call_history: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.route('/api/flows/history')
+@cache_query(ttl_seconds=30)
+def get_flows_history():
+    """Get historical option flow data"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+
+        # Get latest underlying price for calculations
+        cursor.execute("""
+            SELECT close as spy_price
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+        spy_result = cursor.fetchone()
+        spy_price = float(spy_result['spy_price']) if spy_result else 600.0
+
+        # Query for trades with time aggregation
+        cursor.execute("""
+            WITH five_min_buckets AS (
+                SELECT 
+                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') +
+                    (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
+                    SUM(last * volume * 100) as premium_spent,
+                    SUM(
+                        volume * 
+                        COALESCE(delta, 0) * 
+                        %s * 
+                        CASE 
+                            WHEN option_type = 'call' THEN 1 
+                            WHEN option_type = 'put' THEN -1 
+                            ELSE 0 
+                        END
+                    ) as delta_weighted_flow_interval
+                FROM options_quotes
+                WHERE symbol LIKE 'SPY%%'
+                    AND timestamp > NOW() - INTERVAL '48 hours'
+                GROUP BY bucket_time
+                ORDER BY bucket_time
+            )
+            SELECT 
+                bucket_time as timestamp,
+                premium_spent,
+                SUM(delta_weighted_flow_interval) OVER (ORDER BY bucket_time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as delta_weighted_flow
+            FROM five_min_buckets
+            ORDER BY bucket_time
+        """, (spy_price,))
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        import pytz
+        eastern = pytz.timezone('America/New_York')
+        result = []
+        for row in rows:
+            ts = row['timestamp']
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            result.append({
+                'timestamp': ts.isoformat(),
+                'premium_spent': float(row['premium_spent']) if row['premium_spent'] else 0,
+                'delta_weighted_flow': float(row['delta_weighted_flow']) if row['delta_weighted_flow'] else 0
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in get_flows_history: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.route('/api/market/SPY/current')
+@cache_query(ttl_seconds=5)
+def get_spy_current():
+    """Get current SPY market data"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT 
+                timestamp,
+                symbol,
+                close as last_price,
+                open,
+                high,
+                low,
+                total_volume as volume,
+                up_volume,
+                down_volume
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+
+        row = cursor.fetchone()
+        cursor.close()
+
+        if not row:
+            return jsonify({'error': 'No current data available'}), 404
+
+        return jsonify(dict(row))
+
+    except Exception as e:
+        print(f"Error in get_spy_current: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.route('/api/market/SPY/history')
+@cache_query(ttl_seconds=30)
+def get_spy_market_history():
+    """Get SPY market history for charts"""
     conn = None
     try:
         conn = get_db_connection()
@@ -528,7 +754,9 @@ def get_spy_history():
                     MIN(low) as low,
                     (array_agg(close ORDER BY timestamp DESC))[1] as close,
                     MAX(timestamp) as actual_timestamp,
-                    SUM(COALESCE(total_volume, 0)) as volume
+                    SUM(COALESCE(total_volume, 0)) as volume,
+                    SUM(COALESCE(up_volume, 0)) as up_volume,
+                    SUM(COALESCE(down_volume, 0)) as down_volume
                 FROM underlying_quotes
                 WHERE symbol = 'SPY'
                   AND timestamp > NOW() - INTERVAL '48 hours'
@@ -542,6 +770,7 @@ def get_spy_history():
         rows = cursor.fetchall()
         cursor.close()
 
+        import pytz
         eastern = pytz.timezone('America/New_York')
         result = []
         for row in rows:
@@ -557,13 +786,175 @@ def get_spy_history():
                 'high': float(row['high'] or row['close'] or 0),
                 'low': float(row['low'] or row['close'] or 0),
                 'close': float(row['close'] or 0),
-                'volume': int(row['volume'] or 0)
+                'volume': int(row['volume'] or 0),
+                'up_volume': int(row['up_volume'] or 0),
+                'down_volume': int(row['down_volume'] or 0)
             })
 
         return jsonify(result)
 
     except Exception as e:
-        print(f"Error in spy-history: {e}")
+        print(f"Error in get_spy_market_history: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.route('/api/market/bias/history')
+@cache_query(ttl_seconds=30)
+def get_bias_history():
+    """Get historical market bias data"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+
+        cursor.execute("""
+            WITH gex_data AS (
+                SELECT 
+                    timestamp,
+                    net_gex,
+                    gamma_flip_point,
+                    underlying_price,
+                    put_call_ratio,
+                    max_gamma_strike
+                FROM gex_metrics
+                WHERE symbol = 'SPY'
+                    AND timestamp > NOW() - INTERVAL '48 hours'
+            )
+            SELECT 
+                timestamp,
+                net_gex,
+                gamma_flip_point,
+                underlying_price,
+                put_call_ratio,
+                max_gamma_strike,
+                CASE 
+                    WHEN net_gex > 0 AND underlying_price > COALESCE(gamma_flip_point, underlying_price) THEN 'Bullish'
+                    WHEN net_gex < 0 AND underlying_price < COALESCE(gamma_flip_point, underlying_price) THEN 'Bearish'
+                    ELSE 'Neutral'
+                END as market_bias
+            FROM gex_data
+            ORDER BY timestamp;
+        """)
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        import pytz
+        eastern = pytz.timezone('America/New_York')
+        result = []
+        for row in rows:
+            ts = row['timestamp']
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            result.append({
+                'timestamp': ts.isoformat(),
+                'market_bias': row['market_bias'],
+                'net_gex': float(row['net_gex']) if row['net_gex'] else 0,
+                'gamma_flip_point': float(row['gamma_flip_point']) if row['gamma_flip_point'] else None,
+                'underlying_price': float(row['underlying_price']) if row['underlying_price'] else 0,
+                'put_call_ratio': float(row['put_call_ratio']) if row['put_call_ratio'] else 0,
+                'max_gamma_strike': float(row['max_gamma_strike']) if row['max_gamma_strike'] else 0
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in get_bias_history: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/spy-change')
+def get_spy_change():
+    """Get SPY price change from previous close"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Try to get from monitoring cache first
+        try:
+            import json
+            from pathlib import Path
+            cache_file = Path("/data/monitoring/spy_previous_close.json")
+            if cache_file.exists():
+                with open(cache_file, 'r') as f:
+                    cache_data = json.load(f)
+                prev_close = cache_data.get('prev_close')
+            else:
+                prev_close = None
+        except:
+            prev_close = None
+
+        # Get current price
+        cursor.execute("""
+            SELECT close as current_price
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+        result = cursor.fetchone()
+
+        if not result:
+            return jsonify({'error': 'No current price'}), 404
+
+        current_price = float(result['current_price'])
+
+        # If no cache, calculate from database
+        if not prev_close:
+            cursor.execute("""
+                WITH latest_price AS (
+                    SELECT timestamp
+                    FROM underlying_quotes
+                    WHERE symbol = 'SPY'
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                ),
+                previous_close AS (
+                    SELECT close as prev_close
+                    FROM underlying_quotes
+                    WHERE symbol = 'SPY'
+                      AND timestamp < (SELECT DATE_TRUNC('day', timestamp AT TIME ZONE 'America/New_York')
+                                       FROM latest_price)
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                )
+                SELECT prev_close FROM previous_close
+            """)
+            prev_result = cursor.fetchone()
+            prev_close = float(prev_result['prev_close']) if prev_result else current_price
+
+        cursor.close()
+
+        change = current_price - prev_close
+        percent_change = (change / prev_close * 100) if prev_close > 0 else 0
+
+        return jsonify({
+            'current_price': current_price,
+            'prev_close': prev_close,
+            'change': change,
+            'percent_change': percent_change
+        })
+
+    except Exception as e:
+        print(f"Error in get_spy_change: {e}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
@@ -573,7 +964,7 @@ def get_spy_history():
 @app.route('/logo')
 def get_logo():
     try:
-        return send_from_directory('/opt/zerogex/frontend', 'ZeroGEX.png')
+        return send_from_directory('/opt/zerogex/monitoring', 'ZeroGEX.png')
     except Exception as e:
         print(f"Error serving logo: {e}")
         return jsonify({'error': str(e)}), 500

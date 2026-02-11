@@ -34,17 +34,19 @@ Examples:
   ./deploy.sh --start-from monitoring # Start from monitoring step
 
 Available Steps:
-  010.setup          - System setup and configuration
-  015.data_volume    - Data volume setup (/data mount and structure)
-  020.database       - PostgreSQL + TimescaleDB setup (uses /data/postgresql)
-  030.application    - Application setup and dependencies
-  040.tokens         - TradeStation token initialization
-  050.security       - Security hardening (firewall, SSH)
-  060.backups        - Automated database backups (uses /data/backups)
-  070.systemd        - Systemd services configuration
-  072.gex_cli_tools  - GEX CLI tools installation
-  080.validation     - Deployment validation
-  090.monitoring     - Monitoring system setup (uses /data/monitoring)
+  010.setup           - System setup and configuration
+  015.data_volume     - Data volume setup (/data mount and structure)
+  020.database        - PostgreSQL + TimescaleDB setup (uses /data/postgresql)
+  021.database_tuning - PostgreSQL performance tuning (uses /data/postgresql)
+  030.application     - Application setup and dependencies
+  040.tokens          - TradeStation token initialization
+  050.security        - Security hardening (firewall, SSH)
+  060.backups         - Automated database backups (uses /data/backups)
+  070.systemd         - Systemd services configuration
+  075.gex_cli_tools   - GEX CLI tools installation
+  080.validation      - Deployment validation
+  090.monitoring      - Monitoring system setup (uses /data/monitoring)
+  095.frontend        - GEX customer-facing website
 
 Deployment Flow:
   1. System packages and timezone setup
@@ -58,6 +60,7 @@ Deployment Flow:
   9. Install GEX CLI tools
   10. Validate deployment
   11. Setup monitoring dashboard
+  12. Install GEX customer-facing website
 
 Data Storage:
   /data/postgresql   - PostgreSQL database files

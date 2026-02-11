@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ZeroGEX™ | Option Flows</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid #334155;
+            padding: 20px 32px;
+        }
+        .header h1 {
+            font-size: 32px;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid #334155;
+        }
+        .metric-large {
+            font-size: 48px;
+            font-weight: 700;
+        }
+        .metric-label {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 16px;
+        }
+        .positive { color: #10b981; }
+        .negative { color: #ef4444; }
+        .neutral { color: #60a5fa; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ZeroGEX™ - Option Flows</h1>
+    </div>
+
+    <!-- NAVIGATION -->
+    <div style="background: #1e293b; border-bottom: 1px solid #334155;">
+        <div style="max-width: 1400px; margin: 0 auto; display: flex;">
+            <a href="/gamma" style="padding: 16px 24px; color: #94a3b8; text-decoration: none;">Gamma Exposure</a>
+            <a href="/put-call" style="padding: 16px 24px; color: #94a3b8; text-decoration: none;">Put/Call Ratio</a>
+            <a href="/flows" style="padding: 16px 24px; color: #60a5fa; text-decoration: none; border-bottom: 3px solid #60a5fa;">Option Flows</a>
+            <a href="/spy-price" style="padding: 16px 24px; color: #94a3b8; text-decoration: none;">SPY Price</a>
+            <a href="/market-bias" style="padding: 16px 24px; color: #94a3b8; text-decoration: none;">Market Bias</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Current Metrics -->
+        <div class="grid">
+            <div class="card">
+                <div class="metric-label">Premium Spent</div>
+                <div id="currentPremium" class="metric-large positive">--</div>
+            </div>
+            <div class="card">
+                <div class="metric-label">Delta-Weighted Flow</div>
+                <div id="currentDeltaFlow" class="metric-large">--</div>
+            </div>
+        </div>
+
+        <!-- Premium Chart -->
+        <div class="card" style="margin-bottom: 24px;">
+            <h3 style="color: #94a3b8; margin-bottom: 16px;">Premium Spent - 48 Hours</h3>
+            <div class="chart-container">
+                <canvas id="premiumChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Delta Flow Chart -->
+        <div class="card">
+            <h3 style="color: #94a3b8; margin-bottom: 16px;">Delta-Weighted Flow - 48 Hours</h3>
+            <div class="chart-container">
+                <canvas id="deltaFlowChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let charts = {};
+
+        function formatCurrency(value) {
+            if (value >= 1e9) {
+                return '$' + (value / 1e9).toFixed(2) + 'B';
+            } else if (value >= 1e6) {
+                return '$' + (value / 1e6).toFixed(1) + 'M';
+            } else if (value >= 1e3) {
+                return '$' + (value / 1e3).toFixed(0) + 'K';
+            }
+            return '$' + value.toFixed(0);
+        }
+
+        function updateCurrentMetrics() {
+            fetch('/api/flows/history')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error || data.length === 0) return;
+
+                    const latest = data[data.length - 1];
+
+                    document.getElementById('currentPremium').textContent = formatCurrency(latest.premium_spent);
+
+                    const deltaFlowEl = document.getElementById('currentDeltaFlow');
+                    deltaFlowEl.textContent = formatCurrency(Math.abs(latest.delta_weighted_flow));
+                    deltaFlowEl.className = 'metric-large ' + (latest.delta_weighted_flow >= 0 ? 'positive' : 'negative');
+                })
+                .catch(error => console.error('Error fetching current metrics:', error));
+
+        function updateCharts() {
+            fetch('/api/flows/history')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error || data.length === 0) return;                // Premium Chart
+                    if (charts.premium) charts.premium.destroy();
+                    const premiumCtx = document.getElementById('premiumChart');
+                    charts.premium = new Chart(premiumCtx, {
+                        type: 'line',
+                        data: {
+                            datasets: [{
+                                label: 'Premium Spent',
+                                data: data.map(d => ({
+                                    x: new Date(d.timestamp).getTime(),
+                                    y: d.premium_spent
+                                })),
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'hour',
+                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    },
+                                    ticks: { color: '#94a3b8' },
+                                    grid: { color: '#334155' }
+                                },
+                                y: {
+                                    title: { display: true, text: 'Premium ($)', color: '#94a3b8' },
+                                    ticks: { 
+                                        color: '#94a3b8',
+                                        callback: function(value) {
+                                            return formatCurrency(value);
+                                        }
+                                    },
+                                    grid: { color: '#334155' }
+                                }
+                            },
+                            plugins: {
+                                legend: { display: false }
+                            }
+                        }
+                    });                // Delta Flow Chart
+                    if (charts.deltaFlow) charts.deltaFlow.destroy();
+                    const deltaFlowCtx = document.getElementById('deltaFlowChart');
+                    charts.deltaFlow = new Chart(deltaFlowCtx, {
+                        type: 'line',
+                        data: {
+                            datasets: [{
+                                label: 'Delta-Weighted Flow',
+                                data: data.map(d => ({
+                                    x: new Date(d.timestamp).getTime(),
+                                    y: d.delta_weighted_flow
+                                })),
+                                borderColor: '#a855f7',
+                                backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'hour',
+                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    },
+                                    ticks: { color: '#94a3b8' },
+                                    grid: { color: '#334155' }
+                                },
+                                y: {
+                                    title: { display: true, text: 'Delta Flow ($)', color: '#94a3b8' },
+                                    ticks: { 
+                                        color: '#94a3b8',
+                                        callback: function(value) {
+                                            return formatCurrency(value);
+                                        }
+                                    },
+                                    grid: { color: '#334155' }
+                                }
+                            },
+                            plugins: {
+                                legend: { display: false }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error fetching chart data:', error));
+        }    // Initial load
+        updateCurrentMetrics();
+        updateCharts();    // Auto-refresh
+        setInterval(updateCurrentMetrics, 10000);
+        setInterval(updateCharts, 30000);
+    </script>
+</body>
+</html>

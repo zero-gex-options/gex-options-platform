@@ -10,8 +10,9 @@ ExecStart=/usr/bin/python3 /opt/zerogex/frontend/gex_frontend.py
 Restart=always
 RestartSec=10
 
-# Environment
+# Environment - ensure it can find .zerogex_db_creds and templates
 Environment="PYTHONUNBUFFERED=1"
+Environment="HOME=/home/ubuntu"
 
 # Security
 NoNewPrivileges=true
