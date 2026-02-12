@@ -143,7 +143,7 @@
                     let zone = 'regular';
                     if (timeInMinutes >= 240 && timeInMinutes < 570) {
                         zone = 'pre-market';
-                    } else if (timeInMinutes >= 960 && timeInMinutes <= 1195) {
+                    } else if (timeInMinutes >= 960 && timeInMinutes <= 1200) {
                         zone = 'after-hours';
                     }
 
@@ -176,8 +176,26 @@
             }
         };
 
+	// Grid lines at hourly intervals plugin
+        const hourlyGridPlugin = {
+            id: 'hourlyGrid',
+            afterTickToLabelConversion: (chart) => {
+                const xAxis = chart.scales.x;
+                if (!xAxis || !chart.config.options.hourlyIndices) return;
+                
+                const hourlyIndices = chart.config.options.hourlyIndices;
+                
+                // Replace all ticks with only hourly ones
+                xAxis.ticks = hourlyIndices.map(value => ({
+                    value: value,
+                    label: value
+                }));
+            }
+        };
+        
         if (typeof Chart !== 'undefined') {
             Chart.register(marketHoursBackgroundPlugin);
+            Chart.register(hourlyGridPlugin);
         }
 
         function formatNumber(num) {
@@ -195,7 +213,7 @@
                     return;
                 }
 
-                // Filter: Keep 4:00 AM - 7:55 PM (exclude 8:00 PM+), no weekends
+                // Filter: Keep 4:00 AM - 08:00 PM, no weekends
                 const filteredData = data.filter(d => {
                     const date = new Date(d.timestamp);
                     const day = date.getDay();
@@ -205,8 +223,8 @@
                     const minute = date.getMinutes();
                     const timeInMinutes = hour * 60 + minute;
 
-                    // 240 = 4:00 AM, 1195 = 7:55 PM (include 19:55, exclude 20:00)
-                    return timeInMinutes >= 240 && timeInMinutes <= 1195;
+                    // 240 = 4:00 AM, 1200 = 8:00 PM
+                    return timeInMinutes >= 240 && timeInMinutes <= 1200;
                 });
 
                 if (filteredData.length === 0) {
@@ -250,9 +268,13 @@
                     type: 'linear',
                     min: 0,
                     max: labels.length - 1,
-                    grid: { 
+                    grid: {
                         color: '#334155',
                         drawBorder: false
+                    },
+                    afterBuildTicks: function(axis) {
+                        // Override: Only keep ticks at hourly indices
+                        axis.ticks = hourlyIndices.map(idx => ({ value: idx }));
                     }
                 };
 
@@ -278,28 +300,25 @@
                         }]
                     },
                     options: {
+                        hourlyIndices: hourlyIndices,
                         responsive: true,
                         maintainAspectRatio: false,
                         animation: false,
                         scales: {
                             x: {
                                 ...xScaleConfig,
-                                ticks: { 
+                                offset: false,
+                                afterBuildTicks: function(axis) {
+                                    // Override: Only keep ticks at hourly indices
+                                    axis.ticks = hourlyIndices.map(idx => ({ value: idx }));
+                                },
+                                ticks: {
                                     color: '#94a3b8',
                                     maxRotation: 90,
                                     minRotation: 90,
                                     autoSkip: false,
-                                    callback: function(value, index) {
-                                        // Show label at every hourly index
-                                        if (hourlyIndices.includes(value)) {
-                                            const label = labels[value];
-                                            return label.date.toLocaleString('en-US', { 
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                                hour12: false
-                                            });
-                                        }
-                                        return '';
+                                    callback: function(value, index, ticks) {
+                                        return '';  // No labels
                                     }
                                 }
                             },
@@ -308,11 +327,13 @@
                                 title: { display: true, text: 'Price ($)', color: '#94a3b8' },
                                 ticks: { 
                                     color: '#94a3b8',
+                                    padding: 8,
                                     callback: function(value) {
                                         return '$' + Math.round(value);
                                     }
                                 },
-                                grid: { color: '#334155', drawBorder: false }
+                                grid: { color: '#334155', drawBorder: false },
+                                border: { display: false }
                             }
                         },
                         plugins: {
@@ -383,6 +404,7 @@
                         ]
                     },
                     options: {
+                        hourlyIndices: hourlyIndices,
                         responsive: true,
                         maintainAspectRatio: false,
                         animation: false,
@@ -393,16 +415,20 @@
                             x: {
                                 ...xScaleConfig,
                                 stacked: true,
-                                ticks: { 
+                                offset: false,
+                                afterBuildTicks: function(axis) {
+                                    // Override: Only keep ticks at hourly indices
+                                    axis.ticks = hourlyIndices.map(idx => ({ value: idx }));
+                                },
+                                ticks: {
                                     color: '#94a3b8',
                                     maxRotation: 90,
                                     minRotation: 90,
                                     autoSkip: false,
-                                    callback: function(value, index) {
-                                        // Show label ONLY at hourly indices
+                                    callback: function(value, index, ticks) {
                                         if (hourlyIndices.includes(value)) {
                                             const label = labels[value];
-                                            return label.date.toLocaleString('en-US', { 
+                                            return label.date.toLocaleString('en-US', {
                                                 hour: '2-digit',
                                                 minute: '2-digit',
                                                 hour12: false
@@ -418,11 +444,13 @@
                                 title: { display: true, text: 'Volume', color: '#94a3b8' },
                                 ticks: { 
                                     color: '#94a3b8',
+                                    padding: 8,
                                     callback: function(value) {
                                         return (value / 1000000).toFixed(1) + 'M';
                                     }
                                 },
-                                grid: { color: '#334155', drawBorder: false }
+                                grid: { color: '#334155', drawBorder: false },
+                                border: { display: false }
                             }
                         },
                         plugins: {
@@ -540,8 +568,8 @@
         // Initial load
         updateSPYChart();
 
-        // Refresh every 30 seconds
-        setInterval(updateSPYChart, 30000);
+        // Refresh every 2 seconds
+        setInterval(updateSPYChart, 2000);
     </script>
 </body>
 </html>
