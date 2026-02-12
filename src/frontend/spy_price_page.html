@@ -284,15 +284,32 @@
                         scales: {
                             x: {
                                 ...xScaleConfig,
-                                display: false
+                                ticks: { 
+                                    color: '#94a3b8',
+                                    maxRotation: 90,
+                                    minRotation: 90,
+                                    autoSkip: false,
+                                    callback: function(value, index) {
+                                        // Show label at every hourly index
+                                        if (hourlyIndices.includes(value)) {
+                                            const label = labels[value];
+                                            return label.date.toLocaleString('en-US', { 
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                hour12: false
+                                            });
+                                        }
+                                        return '';
+                                    }
+                                }
                             },
                             y: {
-                                position: 'left',
+                                position: 'right',
                                 title: { display: true, text: 'Price ($)', color: '#94a3b8' },
                                 ticks: { 
                                     color: '#94a3b8',
                                     callback: function(value) {
-                                        return '$' + value.toFixed(2);
+                                        return '$' + Math.round(value);
                                     }
                                 },
                                 grid: { color: '#334155', drawBorder: false }
@@ -396,7 +413,7 @@
                                 }
                             },
                             y: {
-                                position: 'left',
+                                position: 'right',
                                 stacked: true,
                                 title: { display: true, text: 'Volume', color: '#94a3b8' },
                                 ticks: { 
