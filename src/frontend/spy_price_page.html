@@ -79,15 +79,174 @@
         .arrow {
             font-size: 16px;
         }
+
+	/* Enhanced SPY Banner */
+        .spy-banner {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-radius: 16px;
+            padding: 32px;
+            border: 1px solid #334155;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .banner-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .banner-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .banner-title h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+
+        .market-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .market-status-badge.open {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .market-status-badge.pre-market,
+        .market-status-badge.after-hours {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .market-status-badge.closed,
+        .market-status-badge.unknown {
+            background: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .banner-timestamp {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .banner-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 24px;
+        }
+
+        .metric-box {
+            background: rgba(15, 23, 42, 0.5);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+
+        .metric-label {
+            color: #94a3b8;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .metric-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #e2e8f0;
+            line-height: 1;
+        }
+
+        .metric-change {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .metric-change.positive {
+            color: #10b981;
+        }
+
+        .metric-change.negative {
+            color: #ef4444;
+        }
+
+        .change-arrow {
+            font-size: 12px;
+        }
+
+        .volume-breakdown {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .volume-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        .volume-item.up {
+            color: #10b981;
+        }
+
+        .volume-item.down {
+            color: #ef4444;
+        }
+
+        .volume-arrow {
+            font-size: 14px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <div id="nav-placeholder"></div>
 
     <div class="container">
-        <!-- SPY Latest Quote Panel -->
-        <div class="card" style="padding: 16px;">
-            <div id="spyLatest">Loading...</div>
+        <!-- Enhanced SPY Banner -->
+        <div class="spy-banner">
+            <div class="banner-header">
+                <div class="banner-title">
+                    <h2>SPY Price & Volume</h2>
+                    <div id="marketStatusBadge" class="market-status-badge unknown">
+                        <span>Loading...</span>
+                    </div>
+                </div>
+                <div id="bannerTimestamp" class="banner-timestamp">Last updated: --</div>
+            </div>
+
+            <div id="spyBannerContent" class="banner-metrics">
+                <div class="loading">Loading market data...</div>
+            </div>
         </div>
 
         <!-- Charts -->
@@ -182,9 +341,9 @@
             afterTickToLabelConversion: (chart) => {
                 const xAxis = chart.scales.x;
                 if (!xAxis || !chart.config.options.hourlyIndices) return;
-                
+
                 const hourlyIndices = chart.config.options.hourlyIndices;
-                
+
                 // Replace all ticks with only hourly ones
                 xAxis.ticks = hourlyIndices.map(value => ({
                     value: value,
@@ -192,7 +351,7 @@
                 }));
             }
         };
-        
+
         if (typeof Chart !== 'undefined') {
             Chart.register(marketHoursBackgroundPlugin);
             Chart.register(hourlyGridPlugin);
@@ -200,6 +359,86 @@
 
         function formatNumber(num) {
             return new Intl.NumberFormat().format(num);
+        }
+
+        function updateMarketStatus() {
+            fetch('/api/market-status')
+                .then(response => response.json())
+                .then(status => {
+                    const badge = document.getElementById('marketStatusBadge');
+                    badge.className = `market-status-badge ${status.status}`;
+                    badge.innerHTML = `<span>${status.icon} ${status.label}</span>`;
+                })
+                .catch(error => {
+                    console.error('Error fetching market status:', error);
+                    const badge = document.getElementById('marketStatusBadge');
+                    badge.className = 'market-status-badge unknown';
+                    badge.innerHTML = '<span>❓ Status Unknown</span>';
+                });
+        }
+
+        function updateSPYBanner(latestData, changeData) {
+            const latestTime = new Date(latestData.actual_timestamp || latestData.timestamp);
+
+            const priceChange = changeData.change || 0;
+            const percentChange = changeData.percent_change || 0;
+            const changeClass = priceChange >= 0 ? 'positive' : 'negative';
+            const changeSymbol = priceChange >= 0 ? '+' : '';
+            const changeArrow = priceChange >= 0 ? '▲' : '▼';
+
+            const upVolume = latestData.up_volume || 0;
+            const downVolume = latestData.down_volume || 0;
+            const totalVolume = latestData.volume || 0;
+
+            document.getElementById('bannerTimestamp').textContent = 
+                `Last updated: ${latestTime.toLocaleString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    second: '2-digit'
+                })}`;
+
+            document.getElementById('spyBannerContent').innerHTML = `
+                <div class="metric-box">
+                    <div class="metric-label">SPY Price</div>
+                    <div class="metric-value">$${latestData.close.toFixed(2)}</div>
+                    <div class="metric-change ${changeClass}">
+                        <span class="change-arrow">${changeArrow}</span>
+                        <span>${changeSymbol}$${Math.abs(priceChange).toFixed(2)} (${changeSymbol}${percentChange.toFixed(2)}%)</span>
+                    </div>
+                </div>
+
+                <div class="metric-box">
+                    <div class="metric-label">Total Volume</div>
+                    <div class="metric-value">${formatNumber(totalVolume)}</div>
+                    <div class="volume-breakdown">
+                        <div class="volume-item up">
+                            <span class="volume-arrow">▲</span>
+                            <span>${formatNumber(upVolume)}</span>
+                        </div>
+                        <div class="volume-item down">
+                            <span class="volume-arrow">▼</span>
+                            <span>${formatNumber(downVolume)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metric-box">
+                    <div class="metric-label">Day's Range</div>
+                    <div class="metric-value" style="font-size: 18px;">
+                        $${latestData.low.toFixed(2)} - $${latestData.high.toFixed(2)}
+                    </div>
+                    <div style="margin-top: 8px; color: #64748b; font-size: 12px;">
+                        Spread: $${(latestData.high - latestData.low).toFixed(2)}
+                    </div>
+                </div>
+
+                <div class="metric-box">
+                    <div class="metric-label">Open</div>
+                    <div class="metric-value" style="font-size: 20px;">$${latestData.open.toFixed(2)}</div>
+                </div>
+            `;
         }
 
         async function updateSPYChart() {
@@ -503,6 +742,14 @@
                 // Update quote panel
                 const latestData = filteredData[filteredData.length - 1];
                 const latestTime = new Date(latestData.actual_timestamp || latestData.timestamp);
+                try {
+                    const changeResponse = await fetch('/api/spy-change');
+                    const changeData = await changeResponse.json();
+                    updateSPYBanner(latestData, changeData);
+                } catch (error) {
+                    console.error('Error fetching change data:', error);
+                    updateSPYBanner(latestData, { change: 0, percent_change: 0 });
+                }
 
                 // Fetch price change from API
                 try {
@@ -566,10 +813,14 @@
         }
 
         // Initial load
+        updateMarketStatus();
         updateSPYChart();
 
         // Refresh every 2 seconds
-        setInterval(updateSPYChart, 2000);
+        setInterval(() => {
+            updateMarketStatus();
+            updateSPYChart();
+        }, 2000);
     </script>
 </body>
 </html>
