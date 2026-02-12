@@ -40,6 +40,9 @@
             margin-bottom: 4px;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .metric-value {
@@ -226,6 +229,51 @@
             font-size: 14px;
             font-weight: bold;
         }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            opacity: 0;
+            width: 280px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+            text-align: left;
+            border-radius: 8px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            top: 100%;
+            left: 50%;
+            margin-left: -140px;
+            margin-top: 10px;
+            transition: opacity 0.3s;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent #1e293b transparent;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .info-icon {
+            cursor: help;
+            color: #64748b;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -251,7 +299,17 @@
 
         <!-- Charts -->
         <div class="card" style="padding: 24px 24px 0 24px;">
-            <h3 style="margin-bottom: 16px; color: #60a5fa; font-size: 16px;">SPY Price & Volume</h3>
+            <h3 style="margin-bottom: 16px; color: #60a5fa; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                SPY Price & Volume
+                <span class="tooltip">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="tooltiptext">
+                        <strong>SPY Candlestick Chart</strong><br><br>
+                        Shows SPY price action with 5-minute candles. Green candles indicate price increases, red indicates decreases.<br><br>
+                        Volume bars show buying (green) vs selling (red) pressure.
+                    </span>
+                </span>
+            </h3>
 
             <!-- Candlestick Chart -->
             <div class="chart-container">
@@ -448,7 +506,6 @@
 
                 if (data.error || data.length === 0) {
                     console.log('No SPY data available');
-                    document.getElementById('spyLatest').innerHTML = '<div style="color: #ef4444; text-align: center;">No data available</div>';
                     return;
                 }
 
@@ -467,7 +524,6 @@
                 });
 
                 if (filteredData.length === 0) {
-                    document.getElementById('spyLatest').innerHTML = '<div style="color: #ef4444; text-align: center;">No data available</div>';
                     return;
                 }
 
@@ -739,9 +795,8 @@
                     }]
                 });
 
-                // Update quote panel
+                // Update banner
                 const latestData = filteredData[filteredData.length - 1];
-                const latestTime = new Date(latestData.actual_timestamp || latestData.timestamp);
                 try {
                     const changeResponse = await fetch('/api/spy-change');
                     const changeData = await changeResponse.json();
@@ -751,64 +806,8 @@
                     updateSPYBanner(latestData, { change: 0, percent_change: 0 });
                 }
 
-                // Fetch price change from API
-                try {
-                    const changeResponse = await fetch('/api/spy-change');
-                    const changeData = await changeResponse.json();
-
-                    const priceChange = changeData.change || 0;
-                    const percentChange = changeData.percent_change || 0;
-                    const changeColor = priceChange >= 0 ? '#10b981' : '#ef4444';
-                    const changeSymbol = priceChange >= 0 ? '+' : '';
-
-                    const upVolume = latestData.up_volume || 0;
-                    const downVolume = latestData.down_volume || 0;
-                    const totalVolume = latestData.volume || 0;
-
-                    document.getElementById('spyLatest').innerHTML = `
-                        <div style="display: flex; justify-content: space-around; align-items: center; padding: 8px;">
-                            <div style="text-align: center;">
-                                <div class="metric-label">SPY PRICE</div>
-                                <div style="display: flex; align-items: baseline; justify-content: center; gap: 12px;">
-                                    <div class="metric-value" style="font-size: 32px;">$${latestData.close.toFixed(2)}</div>
-                                    <div style="color: ${changeColor}; font-size: 18px; font-weight: 600;">
-                                        ${changeSymbol}$${Math.abs(priceChange).toFixed(2)} (${changeSymbol}${percentChange.toFixed(2)}%)
-                                    </div>
-                                </div>
-                            </div>
-                            <div style="text-align: center;">
-                                <div class="metric-label">VOLUME</div>
-                                <div class="metric-value" style="font-size: 20px;">${formatNumber(totalVolume)}</div>
-                                <div class="volume-breakdown" style="margin-top: 8px; justify-content: center;">
-                                    <div class="volume-item" style="color: #10b981;">
-                                        <span class="arrow">▲</span>
-                                        <span>${formatNumber(upVolume)}</span>
-                                    </div>
-                                    <div class="volume-item" style="color: #ef4444;">
-                                        <span class="arrow">▼</span>
-                                        <span>${formatNumber(downVolume)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div style="text-align: center;">
-                                <div class="metric-label">DATA AS OF</div>
-                                <div class="metric-value" style="font-size: 14px;">${latestTime.toLocaleString('en-US', { 
-                                    month: 'short', 
-                                    day: 'numeric', 
-                                    hour: '2-digit', 
-                                    minute: '2-digit',
-                                    second: '2-digit'
-                                })}</div>
-                            </div>
-                        </div>`;
-                } catch (error) {
-                    console.error('Error fetching change data:', error);
-                    document.getElementById('spyLatest').innerHTML = '<div style="color: #ef4444; text-align: center;">Error loading price change</div>';
-                }
-
             } catch (error) {
                 console.error('Error in updateSPYChart:', error);
-                document.getElementById('spyLatest').innerHTML = '<div style="color: #ef4444; text-align: center;">Error loading data</div>';
             }
         }
 

@@ -37,11 +37,58 @@
             margin-bottom: 8px;
             text-transform: uppercase;
             font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .chart-container {
             position: relative;
             height: 400px;
             margin-top: 16px;
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            opacity: 0;
+            width: 300px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+            text-align: left;
+            border-radius: 8px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            top: 100%;
+            left: 50%;
+            margin-left: -150px;
+            margin-top: 10px;
+            transition: opacity 0.3s;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent #1e293b transparent;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .info-icon {
+            cursor: help;
+            color: #64748b;
+            font-size: 16px;
         }
     </style>
 </head>
@@ -51,7 +98,19 @@
     <div class="container">
         <!-- Current Ratio -->
         <div class="card">
-            <div class="metric-label">Current Put/Call Ratio</div>
+            <div class="metric-label">
+                Current Put/Call Ratio
+                <span class="tooltip">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="tooltiptext">
+                        <strong>Put/Call Open Interest Ratio</strong><br><br>
+                        Ratio of put to call open interest in SPY options.<br><br>
+                        <strong>High (>1.0):</strong> More puts than calls - indicates hedging, protection buying, or fear. <strong>Bearish tilt.</strong><br><br>
+                        <strong>Low (<0.7):</strong> More calls than puts - indicates bullish positioning. <strong>Bullish tilt.</strong><br><br>
+                        <strong>~0.7-1.0:</strong> Balanced market positioning.
+                    </span>
+                </span>
+            </div>
             <div id="currentRatio" class="metric-large">--</div>
         </div>
 

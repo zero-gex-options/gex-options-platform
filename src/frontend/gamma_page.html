@@ -20,6 +20,7 @@
             max-width: 1400px;
             margin: 0 auto;
             padding: 32px;
+            padding-bottom: 48px;
         }
         .grid {
             display: grid;
@@ -176,32 +177,6 @@
             color: #64748b;
             font-size: 16px;
         }
-	.footer {
-            background: #1e293b;
-            border-top: 1px solid #334155;
-            padding: 24px 32px;
-            margin-top: 48px;
-        }
-        .footer-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        .footer-logo {
-            height: 400px;
-            width: auto;
-            margin-bottom: 12px;
-            opacity: 0.8;
-        }
-        .footer-text {
-            color: #64748b;
-            font-size: 13px;
-        }
-        .footer-tagline {
-            color: #94a3b8;
-            font-size: 12px;
-            margin-top: 8px;
-        }
     </style>
 </head>
 <body>
@@ -348,23 +323,7 @@
             </div>
         </div>
 
-        <!-- SPY Price Chart -->
-        <div class="card">
-            <h3>SPY Price Action (48 Hours)</h3>
-            <div class="chart-container" style="height: 400px;">
-                <canvas id="spyCandlestickChart"></canvas>
-            </div>
-        </div>
-
         <div class="last-update" id="lastUpdate">Last updated: --</div>
-    </div>
-
-    <div class="footer">
-        <div class="footer-content">
-            <img src="/logo" alt="ZeroGEX" class="footer-logo">
-	    <div class="footer-text"><i>Trading involves substantial risk. Past performance is not indicative of future results.</i></div>
-            <div class="footer-tagline">© 2026 ZeroGEX, LLC. All rights reserved.</div>
-        </div>
     </div>
 
     <script>
@@ -739,81 +698,6 @@
                 .catch(error => console.error('Error fetching regime changes:', error));
         }
 
-        function updateSPYChart() {
-            fetch('/api/spy-history')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error || data.length === 0) return;
-
-                    const filteredData = data.filter(d => {
-                        const date = new Date(d.timestamp);
-                        const day = date.getDay();
-                        return day !== 0 && day !== 6;
-                    });
-
-                    if (charts.spyPrice) charts.spyPrice.destroy();
-
-                    const ohlcData = filteredData.map(d => ({
-                        x: new Date(d.timestamp).getTime(),
-                        o: d.open,
-                        h: d.high,
-                        l: d.low,
-                        c: d.close
-                    }));
-
-                    const ctx = document.getElementById('spyCandlestickChart');
-                    charts.spyPrice = new Chart(ctx, {
-                        type: 'candlestick',
-                        data: {
-                            datasets: [{
-                                label: 'SPY',
-                                data: ohlcData,
-                                borderColor: {
-                                    up: '#059669',
-                                    down: '#dc2626',
-                                    unchanged: '#64748b'
-                                },
-                                backgroundColor: {
-                                    up: 'rgba(16, 185, 129, 0.5)',
-                                    down: 'rgba(239, 68, 68, 0.5)',
-                                    unchanged: 'rgba(148, 163, 184, 0.5)'
-                                }
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            animation: false,
-                            scales: {
-                                x: {
-                                    type: 'time',
-                                    time: {
-                                        unit: 'hour',
-                                        displayFormats: { hour: 'MMM dd HH:mm' }
-                                    },
-                                    ticks: { color: '#94a3b8' },
-                                    grid: { color: '#334155' }
-                                },
-                                y: {
-                                    title: { display: true, text: 'Price ($)', color: '#94a3b8' },
-                                    ticks: { 
-                                        color: '#94a3b8',
-                                        callback: function(value) {
-                                            return '$' + value.toFixed(2);
-                                        }
-                                    },
-                                    grid: { color: '#334155' }
-                                }
-                            },
-                            plugins: {
-                                legend: { display: false }
-                            }
-                        }
-                    });
-                })
-                .catch(error => console.error('Error fetching SPY history:', error));
-        }
-
         // Initial load
         updateCurrentGEX();
         updateGEXHistory();
@@ -821,7 +705,6 @@
         updateStrikeProfile();
         updateKeyLevels();
         updateRegimeChanges();
-        updateSPYChart();
 
         // Auto-refresh every 10 seconds
         setInterval(updateCurrentGEX, 10000);
@@ -830,7 +713,6 @@
         setInterval(updateStrikeProfile, 30000);
         setInterval(updateKeyLevels, 60000);
         setInterval(updateRegimeChanges, 60000);
-        setInterval(updateSPYChart, 30000);
     </script>
 </body>
 </html>

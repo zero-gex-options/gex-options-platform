@@ -890,6 +890,186 @@ def get_bias_history():
         if conn:
             return_db_connection(conn)
 
+@app.route('/api/market/bias/current')
+@cache_query(ttl_seconds=10)
+def get_current_bias_score():
+    """Get current market bias with calculated score"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get latest GEX metrics
+        cursor.execute("""
+            SELECT
+                timestamp,
+                net_gex,
+                underlying_price,
+                gamma_flip_point,
+                put_call_ratio,
+                max_gamma_strike
+            FROM gex_metrics
+            WHERE symbol = 'SPY'
+                AND expiration = CURRENT_DATE
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+
+        row = cursor.fetchone()
+        cursor.close()
+
+        if not row:
+            return jsonify({'error': 'No data available'}), 404
+
+        data = dict(row)
+
+        # Calculate bias score (same logic as frontend)
+        score = 0
+
+        # Net GEX contribution (-30 to +30)
+        if data['net_gex']:
+            score += min(30, max(-30, (data['net_gex'] / 1e9) * 30))
+
+        # Flip point contribution (-25 to +25)
+        if data['gamma_flip_point'] and data['underlying_price']:
+            flip_distance = ((data['underlying_price'] - data['gamma_flip_point']) / data['underlying_price']) * 100
+            score += max(-25, min(25, flip_distance * 5))
+
+        # Put/Call ratio contribution (-20 to +20)
+        if data['put_call_ratio']:
+            score += max(-20, min(20, (1 - data['put_call_ratio']) * 20))
+
+        # Max gamma distance contribution (-15 to +15)
+        if data['max_gamma_strike'] and data['underlying_price']:
+            gamma_distance = ((data['underlying_price'] - data['max_gamma_strike']) / data['underlying_price']) * 100
+            score += -max(-15, min(15, gamma_distance * 3))
+
+        # Determine bias
+        if score > 25:
+            bias = 'BULLISH'
+            css_class = 'bullish'
+        elif score < -25:
+            bias = 'BEARISH'
+            css_class = 'bearish'
+        else:
+            bias = 'NEUTRAL'
+            css_class = 'neutral'
+
+        return jsonify({
+            'timestamp': data['timestamp'].isoformat(),
+            'bias': bias,
+            'score': round(score, 1),
+            'css_class': css_class,
+            'net_gex': float(data['net_gex']) if data['net_gex'] else 0,
+            'gamma_flip_point': float(data['gamma_flip_point']) if data['gamma_flip_point'] else None,
+            'underlying_price': float(data['underlying_price']) if data['underlying_price'] else 0,
+            'put_call_ratio': float(data['put_call_ratio']) if data['put_call_ratio'] else 0,
+            'max_gamma_strike': float(data['max_gamma_strike']) if data['max_gamma_strike'] else 0
+        })
+
+    except Exception as e:
+        print(f"Error in get_current_bias_score: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.route('/api/market/bias/score-history')
+@cache_query(ttl_seconds=30)
+def get_bias_score_history():
+    """Get historical market bias scores"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+
+        cursor.execute("""
+            SELECT
+                timestamp,
+                net_gex,
+                gamma_flip_point,
+                underlying_price,
+                put_call_ratio,
+                max_gamma_strike
+            FROM gex_metrics
+            WHERE symbol = 'SPY'
+                AND timestamp > NOW() - INTERVAL '48 hours'
+            ORDER BY timestamp ASC
+        """)
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        import pytz
+        eastern = pytz.timezone('America/New_York')
+        result = []
+
+        for row in rows:
+            ts = row['timestamp']
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            # Calculate score for each point
+            score = 0
+
+            # Net GEX contribution
+            if row['net_gex']:
+                score += min(30, max(-30, (row['net_gex'] / 1e9) * 30))
+
+            # Flip point contribution
+            if row['gamma_flip_point'] and row['underlying_price']:
+                flip_distance = ((row['underlying_price'] - row['gamma_flip_point']) / row['underlying_price']) * 100
+                score += max(-25, min(25, flip_distance * 5))
+
+            # Put/Call ratio contribution
+            if row['put_call_ratio']:
+                score += max(-20, min(20, (1 - row['put_call_ratio']) * 20))
+
+            # Max gamma distance contribution
+            if row['max_gamma_strike'] and row['underlying_price']:
+                gamma_distance = ((row['underlying_price'] - row['max_gamma_strike']) / row['underlying_price']) * 100
+                score += -max(-15, min(15, gamma_distance * 3))
+
+            # Determine bias
+            if score > 25:
+                bias = 'BULLISH'
+            elif score < -25:
+                bias = 'BEARISH'
+            else:
+                bias = 'NEUTRAL'
+
+            result.append({
+                'timestamp': ts.isoformat(),
+                'score': round(score, 1),
+                'bias': bias,
+                'net_gex': float(row['net_gex']) if row['net_gex'] else 0,
+                'gamma_flip_point': float(row['gamma_flip_point']) if row['gamma_flip_point'] else None,
+                'underlying_price': float(row['underlying_price']) if row['underlying_price'] else 0,
+                'put_call_ratio': float(row['put_call_ratio']) if row['put_call_ratio'] else 0,
+                'max_gamma_strike': float(row['max_gamma_strike']) if row['max_gamma_strike'] else 0
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in get_bias_score_history: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 @app.route('/api/spy-change')
 def get_spy_change():
     """Get SPY price change from previous close"""

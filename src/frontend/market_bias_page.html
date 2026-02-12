@@ -37,6 +37,12 @@
             text-transform: uppercase;
             font-weight: 600;
         }
+        .metric-score {
+            font-size: 24px;
+            font-weight: 600;
+            color: #94a3b8;
+            margin-top: 8px;
+        }
         .chart-container {
             position: relative;
             height: 400px;
@@ -45,6 +51,51 @@
         .bullish { color: #10b981; }
         .bearish { color: #ef4444; }
         .neutral { color: #f59e0b; }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            margin-left: 8px;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            opacity: 0;
+            width: 350px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+            text-align: left;
+            border-radius: 8px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            top: 100%;
+            left: 50%;
+            margin-left: -175px;
+            margin-top: 10px;
+            transition: opacity 0.3s;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent #1e293b transparent;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .info-icon {
+            cursor: help;
+            color: #64748b;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
@@ -53,13 +104,30 @@
     <div class="container">
         <!-- Current Bias -->
         <div class="card">
-            <div class="metric-label">Current Market Bias</div>
+            <div class="metric-label">
+                Current Market Bias
+                <span class="tooltip">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="tooltiptext">
+                        <strong>Market Bias Indicator</strong><br><br>
+                        Composite score from -100 to +100 based on:<br>
+                        • Net GEX (gamma regime)<br>
+                        • Position relative to Gamma Flip Point<br>
+                        • Put/Call Ratio<br>
+                        • Distance from Max Gamma Strike<br><br>
+                        <strong>Bullish (>25):</strong> Positive gamma regime, favorable positioning<br>
+                        <strong>Neutral (-25 to 25):</strong> Mixed signals<br>
+                        <strong>Bearish (<-25):</strong> Negative gamma regime, unfavorable positioning
+                    </span>
+                </span>
+            </div>
             <div id="currentBias" class="metric-large neutral">--</div>
+            <div id="currentScore" class="metric-score">Score: --</div>
         </div>
 
         <!-- Historical Chart -->
         <div class="card">
-            <h3 style="color: #94a3b8; margin-bottom: 16px;">Market Bias - 48 Hours</h3>
+            <h3 style="color: #94a3b8; margin-bottom: 16px;">Market Bias Score - 48 Hours</h3>
             <div class="chart-container">
                 <canvas id="biasChart"></canvas>
             </div>
@@ -77,28 +145,57 @@
 
         let chart = null;
 
-        function biasToNumber(bias) {
-            if (bias === 'Bullish') return 1;
-            if (bias === 'Bearish') return -1;
-            return 0;
-        }
+        // Plugin to draw background zones
+        const backgroundZonesPlugin = {
+            id: 'backgroundZones',
+            beforeDatasetsDraw: (chart) => {
+                const ctx = chart.ctx;
+                const chartArea = chart.chartArea;
+                const yScale = chart.scales.y;
+
+                ctx.save();
+
+                // Bearish zone (-100 to -25)
+                const bearishTop = yScale.getPixelForValue(-25);
+                const bearishBottom = yScale.getPixelForValue(-100);
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
+                ctx.fillRect(chartArea.left, bearishTop, chartArea.right - chartArea.left, bearishBottom - bearishTop);
+
+                // Neutral zone (-25 to 25)
+                const neutralTop = yScale.getPixelForValue(25);
+                const neutralBottom = yScale.getPixelForValue(-25);
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.1)';
+                ctx.fillRect(chartArea.left, neutralTop, chartArea.right - chartArea.left, neutralBottom - neutralTop);
+
+                // Bullish zone (25 to 100)
+                const bullishTop = yScale.getPixelForValue(100);
+                const bullishBottom = yScale.getPixelForValue(25);
+                ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
+                ctx.fillRect(chartArea.left, bullishTop, chartArea.right - chartArea.left, bullishBottom - bullishTop);
+
+                ctx.restore();
+            }
+        };
+
+        Chart.register(backgroundZonesPlugin);
 
         function updateCurrentBias() {
-            fetch('/api/market/bias/history')
+            fetch('/api/market/bias/current')
                 .then(response => response.json())
                 .then(data => {
-                    if (data.error || data.length === 0) return;
+                    if (data.error) return;
 
-                    const latest = data[data.length - 1];
                     const biasEl = document.getElementById('currentBias');
-                    biasEl.textContent = latest.market_bias;
-                    biasEl.className = 'metric-large ' + latest.market_bias.toLowerCase();
+                    biasEl.textContent = data.bias;
+                    biasEl.className = 'metric-large ' + data.css_class;
+
+                    document.getElementById('currentScore').textContent = `Score: ${data.score}/100`;
                 })
                 .catch(error => console.error('Error fetching current bias:', error));
         }
 
         function updateChart() {
-            fetch('/api/market/bias/history')
+            fetch('/api/market/bias/score-history')
                 .then(response => response.json())
                 .then(data => {
                     if (data.error || data.length === 0) return;
@@ -110,21 +207,33 @@
                         type: 'line',
                         data: {
                             datasets: [{
-                                label: 'Market Bias',
+                                label: 'Market Bias Score',
                                 data: data.map(d => ({
                                     x: new Date(d.timestamp).getTime(),
-                                    y: biasToNumber(d.market_bias)
+                                    y: d.score
                                 })),
-                                borderColor: '#f59e0b',
-                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                                stepped: true,
+                                borderColor: '#60a5fa',
+                                backgroundColor: 'rgba(96, 165, 250, 0.1)',
                                 fill: true,
-                                borderWidth: 3
+                                tension: 0.4,
+                                borderWidth: 3,
+                                pointRadius: 2,
+                                pointHoverRadius: 6,
+                                pointBackgroundColor: '#60a5fa',
+                                pointBorderColor: '#1e293b',
+                                pointBorderWidth: 2,
+                                pointHoverBackgroundColor: '#3b82f6',
+                                pointHoverBorderColor: '#1e293b',
+                                pointHoverBorderWidth: 3
                             }]
                         },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
                             scales: {
                                 x: {
                                     type: 'time',
@@ -136,17 +245,19 @@
                                     grid: { color: '#334155' }
                                 },
                                 y: {
-                                    min: -1.5,
-                                    max: 1.5,
-                                    title: { display: true, text: 'Market Bias', color: '#94a3b8' },
+                                    min: -100,
+                                    max: 100,
+                                    title: { display: true, text: 'Bias Score', color: '#94a3b8' },
                                     ticks: {
                                         color: '#94a3b8',
-                                        stepSize: 1,
+                                        stepSize: 25,
                                         callback: function(value) {
-                                            if (value === 1) return 'Bullish';
-                                            if (value === 0) return 'Neutral';
-                                            if (value === -1) return 'Bearish';
-                                            return '';
+                                            if (value === 100) return 'Bullish (+100)';
+                                            if (value === 25) return 'Bullish Threshold (+25)';
+                                            if (value === 0) return 'Neutral (0)';
+                                            if (value === -25) return 'Bearish Threshold (-25)';
+                                            if (value === -100) return 'Bearish (-100)';
+                                            return value;
                                         }
                                     },
                                     grid: { color: '#334155' }
@@ -155,12 +266,24 @@
                             plugins: {
                                 legend: { display: false },
                                 tooltip: {
+                                    enabled: true,
                                     callbacks: {
+                                        title: function(context) {
+                                            const date = new Date(context[0].parsed.x);
+                                            return date.toLocaleString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            });
+                                        },
                                         label: function(context) {
                                             const value = context.parsed.y;
-                                            if (value === 1) return 'Bullish';
-                                            if (value === -1) return 'Bearish';
-                                            return 'Neutral';
+                                            let bias;
+                                            if (value > 25) bias = 'Bullish';
+                                            else if (value < -25) bias = 'Bearish';
+                                            else bias = 'Neutral';
+                                            return `${bias}: ${value.toFixed(1)}`;
                                         }
                                     }
                                 }

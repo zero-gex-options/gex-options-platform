@@ -41,6 +41,9 @@
             margin-bottom: 8px;
             text-transform: uppercase;
             font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .chart-container {
             position: relative;
@@ -50,6 +53,50 @@
         .positive { color: #10b981; }
         .negative { color: #ef4444; }
         .neutral { color: #60a5fa; }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            opacity: 0;
+            width: 320px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+            text-align: left;
+            border-radius: 8px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            top: 100%;
+            left: 50%;
+            margin-left: -160px;
+            margin-top: 10px;
+            transition: opacity 0.3s;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent #1e293b transparent;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .info-icon {
+            cursor: help;
+            color: #64748b;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
@@ -59,11 +106,32 @@
         <!-- Current Metrics -->
         <div class="grid">
             <div class="card">
-                <div class="metric-label">Premium Spent</div>
+                <div class="metric-label">
+                    Premium Spent
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Total Premium Spent</strong><br><br>
+                            Dollar amount spent on SPY options contracts. Calculated as price × volume × 100 (contract multiplier).<br><br>
+                            Higher values indicate increased options activity and potential institutional interest.
+                        </span>
+                    </span>
+                </div>
                 <div id="currentPremium" class="metric-large positive">--</div>
             </div>
             <div class="card">
-                <div class="metric-label">Delta-Weighted Flow</div>
+                <div class="metric-label">
+                    Delta-Weighted Flow
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Cumulative Delta-Weighted Flow</strong><br><br>
+                            Running total of directional exposure from options trades. Adjusted by delta to represent equivalent stock exposure.<br><br>
+                            <strong>Positive (Green):</strong> Net bullish flow (more calls or aggressive call buying)<br>
+                            <strong>Negative (Red):</strong> Net bearish flow (more puts or aggressive put buying)
+                        </span>
+                    </span>
+                </div>
                 <div id="currentDeltaFlow" class="metric-large">--</div>
             </div>
         </div>

@@ -39,6 +39,7 @@
             text-decoration: none;
             border-bottom: 3px solid transparent;
             transition: all 0.2s;
+            position: relative;
         }
         .nav-item:hover {
             color: #e2e8f0;
@@ -47,6 +48,11 @@
         .nav-item.active {
             color: #60a5fa;
             border-bottom-color: #60a5fa;
+            background: rgba(96, 165, 250, 0.1);
+        }
+        .nav-item.active:hover {
+            color: #3b82f6;
+            background: rgba(96, 165, 250, 0.15);
         }
     </style>
 </head>
@@ -80,7 +86,7 @@
             '/spy-price': 'spy-price',
             '/market-bias': 'market-bias'
         };
-        
+
         const activePage = pathMap[currentPath];
         if (activePage) {
             const activeLink = document.querySelector(`[data-page="${activePage}"]`);
