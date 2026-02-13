@@ -289,7 +289,7 @@
                         <span>Loading...</span>
                     </div>
                 </div>
-                <div id="bannerTimestamp" class="banner-timestamp">Last updated: --</div>
+                <div id="bannerTimestamp" class="banner-timestamp">Current bar: --</div>
             </div>
 
             <div id="spyBannerContent" class="banner-metrics">
@@ -435,7 +435,7 @@
                 });
         }
 
-        function updateSPYBanner(latestData, changeData) {
+        async function updateSPYBanner(latestData, changeData) {
             const latestTime = new Date(latestData.actual_timestamp || latestData.timestamp);
 
             const priceChange = changeData.change || 0;
@@ -444,18 +444,24 @@
             const changeSymbol = priceChange >= 0 ? '+' : '';
             const changeArrow = priceChange >= 0 ? '▲' : '▼';
 
-            const upVolume = latestData.up_volume || 0;
-            const downVolume = latestData.down_volume || 0;
-            const totalVolume = latestData.volume || 0;
+            // Fetch 48hr range and today's volume
+            let rangeData = { range_low: 0, range_high: 0, total_volume: 0, up_volume: 0, down_volume: 0 };
+            try {
+                const rangeResponse = await fetch('/api/spy-48hr-range');
+                rangeData = await rangeResponse.json();
+            } catch (error) {
+                console.error('Error fetching 48hr range:', error);
+            }
 
-            document.getElementById('bannerTimestamp').textContent = 
-                `Last updated: ${latestTime.toLocaleString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    second: '2-digit'
-                })}`;
+	    document.getElementById('bannerTimestamp').textContent =
+                 `Current bar: ${latestTime.toLocaleString('en-US', {
+                     month: 'short',
+                     day: 'numeric',
+                     year: 'numeric',
+                     hour: '2-digit',
+                     minute: '2-digit',
+                     timeZone: 'America/New_York'
+                 }) + ' ET'}`;
 
             document.getElementById('spyBannerContent').innerHTML = `
                 <div class="metric-box">
@@ -468,33 +474,28 @@
                 </div>
 
                 <div class="metric-box">
-                    <div class="metric-label">Total Volume</div>
-                    <div class="metric-value">${formatNumber(totalVolume)}</div>
+                    <div class="metric-label">48-Hour Range</div>
+                    <div class="metric-value" style="font-size: 18px;">
+                        $${rangeData.range_low.toFixed(2)} - $${rangeData.range_high.toFixed(2)}
+                    </div>
+                    <div style="margin-top: 8px; color: #64748b; font-size: 12px;">
+                        Spread: $${(rangeData.range_high - rangeData.range_low).toFixed(2)}
+                    </div>
+                </div>
+
+                <div class="metric-box">
+                    <div class="metric-label">Today's Volume (since 4:00 AM)</div>
+                    <div class="metric-value">${formatNumber(rangeData.total_volume)}</div>
                     <div class="volume-breakdown">
                         <div class="volume-item up">
                             <span class="volume-arrow">▲</span>
-                            <span>${formatNumber(upVolume)}</span>
+                            <span>${formatNumber(rangeData.up_volume)}</span>
                         </div>
                         <div class="volume-item down">
                             <span class="volume-arrow">▼</span>
-                            <span>${formatNumber(downVolume)}</span>
+                            <span>${formatNumber(rangeData.down_volume)}</span>
                         </div>
                     </div>
-                </div>
-
-                <div class="metric-box">
-                    <div class="metric-label">Day's Range</div>
-                    <div class="metric-value" style="font-size: 18px;">
-                        $${latestData.low.toFixed(2)} - $${latestData.high.toFixed(2)}
-                    </div>
-                    <div style="margin-top: 8px; color: #64748b; font-size: 12px;">
-                        Spread: $${(latestData.high - latestData.low).toFixed(2)}
-                    </div>
-                </div>
-
-                <div class="metric-box">
-                    <div class="metric-label">Open</div>
-                    <div class="metric-value" style="font-size: 20px;">$${latestData.open.toFixed(2)}</div>
                 </div>
             `;
         }
@@ -820,6 +821,35 @@
             updateMarketStatus();
             updateSPYChart();
         }, 2000);
+    </script>
+
+    <!-- Last Updated Footer -->
+    <div style="text-align: center; padding: 24px 0; color: #64748b; font-size: 12px; border-top: 1px solid #334155; margin-top: 32px;
+">
+        <div id="lastUpdated">Last updated: --</div>
+    </div>
+
+    <script>
+        // Update timestamp function
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('lastUpdated').textContent =
+                'Last updated: ' + now.toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: 'America/New_York'
+                }) + ' ET';
+        }
+
+        // Initial update
+        updateTimestamp();
+
+        // Update every second
+        setInterval(updateTimestamp, 1000);
     </script>
 </body>
 </html>

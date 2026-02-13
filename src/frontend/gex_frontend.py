@@ -814,6 +814,60 @@ def get_spy_market_history():
         if conn:
             return_db_connection(conn)
 
+@app.route('/api/spy-48hr-range')
+@cache_query(ttl_seconds=10)
+def get_spy_48hr_range():
+    """Get SPY 48-hour range and today's cumulative volume"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+
+        # Get 48hr range
+        cursor.execute("""
+            SELECT 
+                MIN(low) as range_low,
+                MAX(high) as range_high
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+                AND timestamp > NOW() - INTERVAL '48 hours'
+        """)
+        range_result = cursor.fetchone()
+
+        # Get today's cumulative volume since 4:00 AM ET
+        cursor.execute("""
+            SELECT 
+                SUM(COALESCE(total_volume, 0)) as total_volume,
+                SUM(COALESCE(up_volume, 0)) as up_volume,
+                SUM(COALESCE(down_volume, 0)) as down_volume
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+                AND timestamp >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/New_York') 
+                    + INTERVAL '4 hours'
+        """)
+        volume_result = cursor.fetchone()
+
+        cursor.close()
+
+        return jsonify({
+            'range_low': float(range_result['range_low']) if range_result and range_result['range_low'] else 0,
+            'range_high': float(range_result['range_high']) if range_result and range_result['range_high'] else 0,
+            'total_volume': int(volume_result['total_volume']) if volume_result and volume_result['total_volume'] else 0,
+            'up_volume': int(volume_result['up_volume']) if volume_result and volume_result['up_volume'] else 0,
+            'down_volume': int(volume_result['down_volume']) if volume_result and volume_result['down_volume'] else 0
+        })
+
+    except Exception as e:
+        print(f"Error in get_spy_48hr_range: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/market/bias/history')
 @cache_query(ttl_seconds=30)

@@ -209,5 +209,34 @@
         setInterval(updateCurrentRatio, 10000);
         setInterval(updateChart, 30000);
     </script>
+
+    <!-- Last Updated Footer -->
+    <div style="text-align: center; padding: 24px 0; color: #64748b; font-size: 12px; border-top: 1px solid #334155; margin-top: 32px;
+">
+        <div id="lastUpdated">Last updated: --</div>
+    </div>
+
+    <script>
+        // Update timestamp function
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('lastUpdated').textContent =
+                'Last updated: ' + now.toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: 'America/New_York'
+                }) + ' ET';
+        }
+
+        // Initial update
+        updateTimestamp();
+
+        // Update every second
+        setInterval(updateTimestamp, 1000);
+    </script>
 </body>
 </html>
