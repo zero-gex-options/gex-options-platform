@@ -1,7 +1,8 @@
 [Unit]
-Description=GEX Calculation Scheduler
-After=network.target postgresql.service gex-ingestion.service
-Wants=postgresql.service
+Description=ZeroGEX Metrics Calculation Scheduler Service
+Documentation=https://github.com/zero-gex-options/gex-options-platform
+After=network-online.target postgresql.service gex-ingestion.service
+Wants=network-online.target postgresql.service
 
 [Service]
 Type=simple
@@ -9,11 +10,27 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/home/ubuntu/gex-options-platform
 
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=/usr/bin:/usr/local/bin"
+
 ExecStart=/home/ubuntu/gex-options-platform/deployment/run/scheduler.sh
 
 # Restart behavior
 Restart=always
 RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Resource limits
+MemoryMax=2G
+MemoryHigh=1.6G
+CPUQuota=75%
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/ubuntu/gex-options-platform /data /var/log
 
 # Logging
 StandardOutput=journal

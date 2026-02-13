@@ -1,18 +1,44 @@
 [Unit]
 Description=ZeroGEX Monitoring Web Dashboard
-After=network.target gex-monitor.service
+Documentation=https://github.com/zero-gex-options/gex-options-platform
+After=network-online.target gex-monitor.service
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=ubuntu
+Group=ubuntu
 WorkingDirectory=/opt/zerogex/monitoring
+
+# Python unbuffered for immediate logging
+Environment="PYTHONUNBUFFERED=1"
+Environment="HOME=/home/ubuntu"
+Environment="PATH=/usr/bin:/usr/local/bin"
+
 ExecStart=/usr/bin/python3 /opt/zerogex/monitoring/dashboard.py
+
+# Restart behavior
 Restart=always
 RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Resource limits
 MemoryMax=500M
 MemoryHigh=400M
+CPUQuota=20%
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/tmp /var/log
+
+# Logging
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=gex-dashboard
 
 [Install]
 WantedBy=multi-user.target

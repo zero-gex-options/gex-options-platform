@@ -1,22 +1,41 @@
 [Unit]
 Description=ZeroGEX Platform Monitoring Daemon
-After=network.target postgresql.service
+Documentation=https://github.com/zero-gex-options/gex-options-platform
+After=network-online.target postgresql.service
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=ubuntu
+Group=ubuntu
 WorkingDirectory=/opt/zerogex/monitoring
+
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=/usr/bin:/usr/local/bin"
+
 ExecStart=/usr/bin/python3 /opt/zerogex/monitoring/monitor.py --daemon --export --interval 60
+
+# Restart behavior
 Restart=always
 RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=60
 
 # Resource limits
-MemoryLimit=256M
+MemoryMax=512M
+MemoryHigh=400M
 CPUQuota=10%
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/data/monitoring /var/log
 
 # Logging
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=gex-monitor
 
 [Install]
 WantedBy=multi-user.target
