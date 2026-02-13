@@ -1267,7 +1267,7 @@ def get_market_status():
 @app.route('/logo')
 def get_logo():
     try:
-        return send_from_directory('/opt/zerogex/monitoring', 'ZeroGEX.png')
+        return send_from_directory('/opt/zerogex/frontend/static', 'New_Title_Subtitle.png')
     except Exception as e:
         print(f"Error serving logo: {e}")
         return jsonify({'error': str(e)}), 500

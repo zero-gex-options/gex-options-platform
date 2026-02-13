@@ -49,8 +49,8 @@ done
 log "     ✓ All required files found"
 
 # Verify branding
-if [ ! -f "$BRANDING/ZeroGEX.png" ]; then
-    log "  ✗ ZeroGEX logo not found: $BRANDING/ZeroGEX.png"
+if [ ! -f "$BRANDING/New_Title_Subtitle.png" ]; then
+    log "  ✗ ZeroGEX logo not found: $BRANDING/New_Title_Subtitle.png"
     exit 1
 fi
 
@@ -76,7 +76,7 @@ done
 
 # Copy branding assets
 log "  → Installing branding assets..."
-sudo cp "$BRANDING/ZeroGEX.png" "$FRONTEND_DIR/static/"
+sudo cp "$BRANDING/New_Title_Subtitle.png" "$FRONTEND_DIR/static/"
 log "     ✓ Logo copied to static/"
 
 # Set proper ownership and permissions
