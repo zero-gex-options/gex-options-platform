@@ -1318,13 +1318,21 @@ def get_market_status():
             'color': 'gray'
         })
 
-@app.route('/logo')
-def get_logo():
+@app.route('/logo_full')
+def get_logo_full():
     try:
-        return send_from_directory('/opt/zerogex/frontend/static', 'New_Title_Subtitle.png')
+        return send_from_directory('/opt/zerogex/frontend/static', 'New_Full.png')
     except Exception as e:
         print(f"Error serving logo: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/logo_title')
+def get_logo_title():
+    try:
+        return send_from_directory('/opt/zerogex/frontend/static', 'New_Title.png')
+    except Exception as e:
+        print(f"Error serving logo: {e}")
+        return jsonify({'error': str(e)}), 50
 
 if __name__ == '__main__':
     print("Starting GEX Dashboard on port 8081...")
