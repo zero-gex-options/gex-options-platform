@@ -1321,7 +1321,7 @@ def get_market_status():
 @app.route('/logo_full')
 def get_logo_full():
     try:
-        return send_from_directory('/opt/zerogex/frontend/static', 'New_Full.png')
+        return send_from_directory('/opt/zerogex/frontend/static', 'Dark_Full.png')
     except Exception as e:
         print(f"Error serving logo: {e}")
         return jsonify({'error': str(e)}), 500
@@ -1329,7 +1329,15 @@ def get_logo_full():
 @app.route('/logo_title')
 def get_logo_title():
     try:
-        return send_from_directory('/opt/zerogex/frontend/static', 'New_Title.png')
+        return send_from_directory('/opt/zerogex/frontend/static', 'Dark_Title.png')
+    except Exception as e:
+        print(f"Error serving logo: {e}")
+        return jsonify({'error': str(e)}), 50
+
+@app.route('/logo_icon')
+def get_logo_icon():
+    try:
+        return send_from_directory('/opt/zerogex/frontend/static', 'Dark_Helmet.png')
     except Exception as e:
         print(f"Error serving logo: {e}")
         return jsonify({'error': str(e)}), 50

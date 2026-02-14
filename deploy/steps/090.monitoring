@@ -91,14 +91,9 @@ if [ ! -f "$DASHBOARD_SOURCE/dashboard.html" ]; then
     exit 1
 fi
 
-if [ ! -f "$BRANDING/New_Full.png" ]; then
-    log "  ✗ ZeroGEX logo image file not found: $BRANDING/New_Full.png"
-    exit 1
-fi
-
 sudo cp "$DASHBOARD_SOURCE/dashboard.py" "$MONITOR_DIR/"
 sudo cp "$DASHBOARD_SOURCE/dashboard.html" "$MONITOR_DIR/"
-sudo cp "$BRANDING/New_Full.png" "$MONITOR_DIR/"
+sudo cp "$BRANDING"/*.png "$MONITOR_DIR/"
 
 # Set proper ownership and permissions
 log "  → Setting permissions..."
@@ -107,7 +102,7 @@ sudo chmod 755 "$MONITOR_DIR"
 sudo chmod 755 "$MONITOR_DIR/monitor.py"
 sudo chmod 755 "$MONITOR_DIR/dashboard.py"
 sudo chmod 644 "$MONITOR_DIR/dashboard.html"
-sudo chmod 644 "$MONITOR_DIR/New_Full.png"
+sudo chmod 644 "$MONITOR_DIR"/*.png
 log "     ✓ Dashboard files installed"
 
 # Setup SPY previous close caching
