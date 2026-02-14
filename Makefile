@@ -83,11 +83,11 @@ migrate-gex:
 # Development
 install:
 	@echo "Installing Python dependencies..."
-	source venv/bin/activate && pip install -r requirements.txt
+	. venv/bin/activate && pip install -r requirements.txt
 
 test:
 	@echo "Running tests..."
-	source venv/bin/activate && python -m pytest tests/
+	. venv/bin/activate && python -m pytest tests/
 
 clean:
 	@echo "Cleaning Python cache files..."
@@ -101,7 +101,7 @@ gex-cli:
 
 gex-calc:
 	@echo "Calculating GEX for SPY..."
-	source venv/bin/activate && python src/gex/gex_calculator.py
+	. venv/bin/activate && python src/gex/gex_calculator.py
 
 gex-summary:
 	@gex-cli summary SPY || (echo "Run 'make gex-cli' first to install CLI tools" && exit 1)
@@ -171,16 +171,16 @@ venv:
 	@echo "Creating virtual environment..."
 	python3 -m venv venv
 	@echo "Activating and installing dependencies..."
-	source venv/bin/activate && pip install -r requirements.txt
+	. venv/bin/activate && pip install -r requirements.txt
 	@echo "✓ Virtual environment ready"
 
 format:
 	@echo "Formatting Python code with black..."
-	source venv/bin/activate && black src/ tests/ || echo "Install black: pip install black"
+	. venv/bin/activate && black src/ tests/ || echo "Install black: pip install black"
 
 lint:
 	@echo "Linting Python code..."
-	source venv/bin/activate && pylint src/ || echo "Install pylint: pip install pylint"
+	. venv/bin/activate && pylint src/ || echo "Install pylint: pip install pylint"
 
 # Quick checks
 health:
@@ -240,3 +240,18 @@ view-cache:
 cache-history:
 	@echo "Recent cache updates:"
 	@ls -lht /data/monitoring/spy_previous_close.json 2>/dev/null || echo "No cache file found"
+
+# Database troubleshooting
+underlying_quotes:
+	@if [ -z "$(LINES)" ]; then \
+		echo "Usage: make underlying_quotes LINES=<number> [SYMBOL=<symbol>]"; \
+		exit 1; \
+	fi; \
+	. ~/.zerogex_db_creds && \
+	if [ -z "$(SYMBOL)" ]; then \
+		psql "postgresql://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_NAME" \
+			-c "SELECT * FROM underlying_quotes ORDER BY timestamp DESC LIMIT $(LINES);"; \
+	else \
+		psql "postgresql://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_NAME" \
+			-c "SELECT * FROM underlying_quotes WHERE symbol='$(SYMBOL)' ORDER BY timestamp DESC LIMIT $(LINES);"; \
+	fi

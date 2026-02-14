@@ -21,7 +21,7 @@ CREATE TABLE underlying_quotes (
     total_volume BIGINT,
     up_volume BIGINT,
     down_volume BIGINT,
-    source TEXT,
+    actual_time TIMESTAMPTZ,  -- NEW: Actual time when quote was received
     PRIMARY KEY (timestamp, symbol)
 );
 

@@ -412,11 +412,14 @@ class StreamingIngestionEngine:
             logger.error(f"Failed to parse timestamp '{quote_timestamp_str}': {e}")
             return
 
+        # Capture the actual time when we received/processed this quote
+        actual_time = datetime.now(timezone.utc)
+
         # Always write to database - let ON CONFLICT handle duplicates
         insert_query = """
             INSERT INTO underlying_quotes 
             (timestamp, symbol, open, close, high, low, 
-             total_volume, up_volume, down_volume, source)
+             total_volume, up_volume, down_volume, actual_time)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (timestamp, symbol) DO UPDATE SET
                 open = EXCLUDED.open,
@@ -425,7 +428,8 @@ class StreamingIngestionEngine:
                 low = EXCLUDED.low,
                 total_volume = EXCLUDED.total_volume,
                 up_volume = EXCLUDED.up_volume,
-                down_volume = EXCLUDED.down_volume
+                down_volume = EXCLUDED.down_volume,
+                actual_time = EXCLUDED.actual_time
         """
 
         try:
@@ -439,14 +443,14 @@ class StreamingIngestionEngine:
                 quote['total_vol'],
                 quote['up_vol'],
                 quote['down_vol'],
-                'tradestation_api'
+                actual_time  # NEW: Actual time when quote was received
             ))
             self.db_conn.commit()
 
             # Update in-memory cache
             self.underlying_prices[symbol] = quote['close']
 
-            logger.debug(f"Stored underlying quote: {symbol} = ${quote['close']:.2f}, vol={int(quote['total_vol']) if quote['total_vol'] else 0} (timestamp: {quote_timestamp_str})")
+            logger.debug(f"Stored underlying quote: {symbol} = ${quote['close']:.2f}, vol={int(quote['total_vol']) if quote['total_vol'] else 0} (ts: {quote_timestamp_str}, actual: {actual_time.isoformat()})")
 
         except Exception as e:
             logger.error(f"Error storing underlying quote: {e}")
