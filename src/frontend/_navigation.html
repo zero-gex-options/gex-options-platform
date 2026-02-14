@@ -12,10 +12,11 @@
             margin: 0 auto;
             display: flex;
             align-items: center;
-            gap: 20px;
+            justify-content: center;
+            position: relative;
         }
         .header-logo {
-            height: 60px;
+            height: 120px;
             width: auto;
             opacity: 0.9;
             transition: opacity 0.2s;
@@ -23,8 +24,22 @@
         .header-logo:hover {
             opacity: 1;
         }
-        .header-text {
-            flex: 1;
+        .header-clock {
+            position: absolute;
+            right: 32px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px;
+            font-weight: 600;
+            color: #94a3b8;
+            font-family: 'Courier New', monospace;
+        }
+        .header-clock-label {
+            font-size: 11px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 2px;
         }
         .header h1 {
             font-size: 32px;
@@ -74,10 +89,10 @@
 <body>
     <div class="header">
         <div class="header-content">
-            <img src="/logo_title" alt="ZeroGEX" class="header-logo">
-            <div class="header-text">
-                <h1>ZeroGEX™</h1>
-                <div class="header-subtitle">Real-Time Gamma Exposure Analytics</div>
+            <img src="/logo_title" alt="ZeroGEX™" class="header-logo">
+            <div class="header-clock">
+                <div class="header-clock-label">US/Eastern</div>
+                <div id="headerClock">---------- --:--:--</div>
             </div>
         </div>
     </div>
@@ -112,6 +127,33 @@
                 activeLink.classList.add('active');
             }
         }
+
+        // Update clock every second
+        function updateClock() {
+            const now = new Date();
+            const dateTimeString = now.toLocaleString('en-US', {
+                timeZone: 'America/New_York',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+
+            // Convert from "MM/DD/YYYY, HH:MM:SS" to "YYYY/MM/DD HH:MM:SS"
+            const parts = dateTimeString.split(', ');
+            const dateParts = parts[0].split('/');
+            const timePart = parts[1];
+            const formatted = `${dateParts[2]}-${dateParts[0]}-${dateParts[1]} ${timePart}`;
+
+            document.getElementById('headerClock').textContent = formatted;
+        }
+
+        updateClock();
+        setInterval(updateClock, 1000);
+
     </script>
 </body>
 </html>
