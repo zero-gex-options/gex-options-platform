@@ -289,7 +289,7 @@
                         <span>Loading...</span>
                     </div>
                 </div>
-                <div id="bannerTimestamp" class="banner-timestamp">Current bar: --</div>
+                <div id="bannerTimestamp" class="banner-timestamp">latest bar: --</div>
             </div>
 
             <div id="spyBannerContent" class="banner-metrics">
@@ -454,7 +454,7 @@
             }
 
 	    document.getElementById('bannerTimestamp').textContent =
-                 `Current bar: ${latestTime.toLocaleString('en-US', {
+                 `latest bar: ${latestTime.toLocaleString('en-US', {
                      month: 'short',
                      day: 'numeric',
                      year: 'numeric',
@@ -549,11 +549,16 @@
                     timestamp: d.timestamp
                 }));
 
-                // Find ALL hourly indices (where minute === 0)
+                // Find ALL hourly indices (where minute === 0) - exclude first/last hours of each day to prevent overlap
                 const hourlyIndices = [];
                 labels.forEach((label, idx) => {
                     if (label.date.getMinutes() === 0) {
-                        hourlyIndices.push(idx);
+                        const hour = label.date.getHours();
+
+                        // Skip 4 AM (first hour) and 8 PM (last hour) to avoid overlap at day boundaries
+                        if (hour !== 4 && hour !== 20) {
+                            hourlyIndices.push(idx);
+                        }
                     }
                 });
 
@@ -565,7 +570,7 @@
                     min: 0,
                     max: labels.length - 1,
                     grid: {
-                        color: '#334155',
+                        display: false,
                         drawBorder: false
                     },
                     afterBuildTicks: function(axis) {
@@ -724,11 +729,18 @@
                                     callback: function(value, index, ticks) {
                                         if (hourlyIndices.includes(value)) {
                                             const label = labels[value];
-                                            return label.date.toLocaleString('en-US', {
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                                hour12: false
-                                            });
+                                            const hour = label.date.getHours();
+                                            const minute = label.date.getMinutes();
+                                            const timeInMinutes = hour * 60 + minute;
+
+                                            // Only show labels for hours within trading session (4 AM - 8 PM)
+                                            if (timeInMinutes >= 240 && timeInMinutes <= 1200) {
+                                                return label.date.toLocaleString('en-US', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                    hour12: false
+                                                });
+                                            }
                                         }
                                         return '';
                                     }
@@ -778,17 +790,32 @@
                             ctx.fillStyle = '#94a3b8';
                             ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
 
-                            let lastDate = null;
-                            hourlyIndices.forEach(idx => {
-                                const label = labels[idx];
+                            // Group indices by date and find noon index for each date
+                            const dateGroups = {};
+                            labels.forEach((label, idx) => {
                                 const dateStr = label.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-                                if (dateStr !== lastDate) {
-                                    const x = xAxis.getPixelForValue(idx);
-                                    const y = chart.chartArea.bottom + 55;
-                                    ctx.fillText(dateStr, x, y);
-                                    lastDate = dateStr;
+                                if (!dateGroups[dateStr]) {
+                                    dateGroups[dateStr] = [];
                                 }
+                                dateGroups[dateStr].push(idx);
+                            });
+
+                            // Draw date label at noon (12:00) index for each date
+                            Object.keys(dateGroups).forEach(dateStr => {
+                                const indices = dateGroups[dateStr];
+                                // Find index closest to noon (12:00)
+                                let noonIdx = indices.find(idx => {
+                                    const hour = labels[idx].date.getHours();
+                                    return hour === 12;
+                                });
+                                // If no noon index, use middle index
+                                if (noonIdx === undefined) {
+                                    noonIdx = indices[Math.floor(indices.length / 2)];
+                                }
+
+                                const x = xAxis.getPixelForValue(noonIdx);
+                                const y = chart.chartArea.bottom + 55;
+                                ctx.fillText(dateStr, x, y);
                             });
 
                             ctx.restore();
