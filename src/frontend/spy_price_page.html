@@ -6,6 +6,7 @@
     <title>SPY Price - ZeroGEX</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
+    <script src="/navigation.js"></script>
     <style>
         * {
             margin: 0;
@@ -289,7 +290,7 @@
                         <span>Loading...</span>
                     </div>
                 </div>
-                <div id="bannerTimestamp" class="banner-timestamp">latest bar: --</div>
+                <div id="bannerTimestamp" class="banner-timestamp">Last update received: --</div>
             </div>
 
             <div id="spyBannerContent" class="banner-metrics">
@@ -329,6 +330,10 @@
             .then(response => response.text())
             .then(html => {
                 document.getElementById('nav-placeholder').innerHTML = html;
+                // Initialize navigation after it's loaded
+                if (typeof initializeNavigation === 'function') {
+                    initializeNavigation();
+                }
             })
             .catch(error => console.error('Error loading navigation:', error));
 
@@ -436,7 +441,8 @@
         }
 
         async function updateSPYBanner(latestData, changeData) {
-            const latestTime = new Date(latestData.actual_timestamp || latestData.timestamp);
+
+            const latestTime = new Date(latestData.actual_time || latestData.actual_timestamp || latestData.timestamp);
 
             const priceChange = changeData.change || 0;
             const percentChange = changeData.percent_change || 0;
@@ -454,12 +460,13 @@
             }
 
 	    document.getElementById('bannerTimestamp').textContent =
-                 `latest bar: ${latestTime.toLocaleString('en-US', {
+                 `Last update received: ${latestTime.toLocaleString('en-US', {
                      month: 'short',
                      day: 'numeric',
                      year: 'numeric',
                      hour: '2-digit',
                      minute: '2-digit',
+                     second: '2-digit',
                      timeZone: 'America/New_York'
                  }) + ' ET'}`;
 

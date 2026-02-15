@@ -32,6 +32,7 @@ REQUIRED_FILES=(
     "index.html"
     "gex_frontend.py"
     "_navigation.html"
+    "navigation.js"
     "flows_page.html"
     "gamma_page.html"
     "market_bias_page.html"
@@ -68,6 +69,15 @@ for file in "${REQUIRED_FILES[@]}"; do
     fi
 done
 
+# Copy JavaScript files
+log "  → Installing JavaScript files..."
+for file in "${REQUIRED_FILES[@]}"; do
+    if [[ "$file" == *.js ]]; then
+        sudo cp "$DASHBOARD_SOURCE/$file" "$FRONTEND_DIR/templates/"
+        log "     ✓ $file"
+    fi
+done
+
 # Copy branding assets
 log "  → Installing branding assets..."
 sudo cp "$BRANDING"/*.png "$FRONTEND_DIR/static/"
@@ -80,6 +90,7 @@ sudo chmod 755 "$FRONTEND_DIR"
 sudo chmod 755 "$FRONTEND_DIR/gex_frontend.py"
 sudo chmod 755 "$FRONTEND_DIR/templates"
 sudo chmod 644 "$FRONTEND_DIR/templates"/*.html
+sudo chmod 644 "$FRONTEND_DIR/templates"/*.js
 sudo chmod 755 "$FRONTEND_DIR/static"
 sudo chmod 644 "$FRONTEND_DIR/static"/*.png
 log "     ✓ Permissions set"

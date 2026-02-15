@@ -766,6 +766,7 @@ def get_spy_market_history():
                     MIN(low) as low,
                     (array_agg(close ORDER BY timestamp DESC))[1] as close,
                     MAX(timestamp) as actual_timestamp,
+                    MAX(actual_time) as actual_time,  -- NEW: Add actual_time
                     SUM(COALESCE(total_volume, 0)) as volume,
                     SUM(COALESCE(up_volume, 0)) as up_volume,
                     SUM(COALESCE(down_volume, 0)) as down_volume
@@ -795,6 +796,7 @@ def get_spy_market_history():
             result.append({
                 'timestamp': ts.isoformat(),
                 'actual_timestamp': row['actual_timestamp'].isoformat() if row['actual_timestamp'] else ts.isoformat(),
+                'actual_time': row['actual_time'].isoformat() if row['actual_time'] else None,  # NEW
                 'open': float(row['open'] or row['close'] or 0),
                 'high': float(row['high'] or row['close'] or 0),
                 'low': float(row['low'] or row['close'] or 0),
@@ -1341,6 +1343,15 @@ def get_logo_icon():
     except Exception as e:
         print(f"Error serving logo: {e}")
         return jsonify({'error': str(e)}), 50
+
+@app.route('/navigation.js')
+def serve_navigation_js():
+    """Serve navigation JavaScript"""
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'navigation.js')
+    except Exception as e:
+        print(f"Error serving navigation.js: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("Starting GEX Dashboard on port 8081...")
