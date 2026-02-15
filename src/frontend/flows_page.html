@@ -207,19 +207,28 @@
 
         <!-- Premium Chart -->
         <div class="card" style="margin-bottom: 24px;">
-            <h3 style="color: #968f92; margin-bottom: 16px;">Premium Spent - 48 Hours</h3>
+            <h3 style="color: #968f92; margin-bottom: 16px;">Premium Spent</h3>
             <div class="chart-container">
                 <canvas id="premiumChart"></canvas>
             </div>
         </div>
 
         <!-- Delta Flow Chart -->
-        <div class="card">
-            <h3 style="color: #968f92; margin-bottom: 16px;">Delta-Weighted Flow - 48 Hours</h3>
+        <div class="card" style="margin-bottom: 24px;">
+            <h3 style="color: #968f92; margin-bottom: 16px;">Delta-Weighted Flow</h3>
             <div class="chart-container">
                 <canvas id="deltaFlowChart"></canvas>
             </div>
         </div>
+
+        <!-- Put/Call Notional Chart -->
+        <div class="card">
+            <h3 style="color: #968f92; margin-bottom: 16px;">Put/Call Notional Value</h3>
+            <div class="chart-container">
+                <canvas id="notionalChart"></canvas>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -371,6 +380,121 @@
                     });
                 })
                 .catch(error => console.error('Error fetching chart data:', error));
+
+            // Notional Chart
+            updateNotionalChart();
+        }
+
+        function updateNotionalChart() {
+            fetch('/api/flows/history')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error || data.length === 0) {
+                        console.log('No flows history data for notional chart');
+                        return;
+                    }
+
+                    if (charts.notional) charts.notional.destroy();
+                    const notionalCtx = document.getElementById('notionalChart');
+                    charts.notional = new Chart(notionalCtx, {
+                        type: 'line',
+                        data: {
+                            datasets: [
+                                {
+                                    label: 'Call Notional Value',
+                                    data: data.map(d => ({
+                                        x: new Date(d.timestamp).getTime(),
+                                        y: d.call_notional || 0
+                                    })),
+                                    borderColor: '#10b981',
+                                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                    borderWidth: 2,
+                                    pointRadius: 0,
+                                    pointHoverRadius: 5,
+                                    tension: 0.4,
+                                    fill: true
+                                },
+                                {
+                                    label: 'Put Notional Value',
+                                    data: data.map(d => ({
+                                        x: new Date(d.timestamp).getTime(),
+                                        y: d.put_notional || 0
+                                    })),
+                                    borderColor: '#f45854',
+                                    backgroundColor: 'rgba(244, 88, 84, 0.1)',
+                                    borderWidth: 2,
+                                    pointRadius: 0,
+                                    pointHoverRadius: 5,
+                                    tension: 0.4,
+                                    fill: true
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            interaction: { mode: 'index', intersect: false },
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'hour',
+                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    },
+                                    ticks: { color: '#968f92' },
+                                    grid: { color: '#968f92' }
+                                },
+                                y: {
+                                    type: 'linear',
+                                    title: { display: true, text: 'Notional Value ($)', color: '#968f92' },
+                                    ticks: { 
+                                        color: '#968f92',
+                                        callback: function(value) {
+                                            if (value >= 1e9) {
+                                                return '$' + (value / 1e9).toFixed(2) + 'B';
+                                            } else if (value >= 1e6) {
+                                                return '$' + (value / 1e6).toFixed(1) + 'M';
+                                            } else if (value >= 1e3) {
+                                                return '$' + (value / 1e3).toFixed(0) + 'K';
+                                            }
+                                            return '$' + value.toFixed(0);
+                                        }
+                                    },
+                                    grid: { color: '#968f92' }
+                                }
+                            },
+                            plugins: {
+                                legend: { 
+                                    labels: { color: '#f2f2f2' },
+                                    position: 'top'
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            if (label) {
+                                                label += ': ';
+                                            }
+                                            const value = context.parsed.y;
+                                            if (value >= 1e9) {
+                                                label += '$' + (value / 1e9).toFixed(2) + 'B';
+                                            } else if (value >= 1e6) {
+                                                label += '$' + (value / 1e6).toFixed(1) + 'M';
+                                            } else if (value >= 1e3) {
+                                                label += '$' + (value / 1e3).toFixed(0) + 'K';
+                                            } else {
+                                                label += '$' + value.toFixed(0);
+                                            }
+                                            return label;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error fetching notional chart data:', error));
         }
 
         // Initial load
