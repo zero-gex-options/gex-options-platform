@@ -19,6 +19,35 @@ function initializeNavigation() {
         }
     }
 
+    // Initialize theme toggle
+    const themeToggle = document.getElementById('themeToggle');
+    const themeLabel = document.getElementById('themeLabel');
+
+    if (themeToggle && themeLabel) {
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        applyTheme(savedTheme);
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(newTheme);
+            localStorage.setItem('theme', newTheme);
+        });
+    }
+
+    function applyTheme(theme) {
+        if (theme === 'light') {
+            document.body.classList.add('light-mode');
+            themeToggle.classList.add('light');
+            themeLabel.textContent = 'Light';
+        } else {
+            document.body.classList.remove('light-mode');
+            themeToggle.classList.remove('light');
+            themeLabel.textContent = 'Dark';
+        }
+    }
+
     // Initialize dropdown functionality
     const dropdown = document.getElementById('symbolDropdown');
     const dropdownToggle = document.getElementById('symbolDropdownToggle');

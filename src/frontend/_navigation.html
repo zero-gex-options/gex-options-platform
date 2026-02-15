@@ -25,8 +25,6 @@
             opacity: 1;
         }
         .header-helmet {
-            position: absolute;
-            left: 32px;
             height: 120px;
             width: auto;
             opacity: 0.9;
@@ -175,13 +173,112 @@
         .nav-dropdown-item:last-child {
             border-radius: 0 0 8px 8px;
         }
+
+	/* Theme Toggle */
+        .theme-toggle {
+            position: absolute;
+            left: 32px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .theme-toggle-button {
+            background: #968f92;
+            border: none;
+            border-radius: 20px;
+            width: 50px;
+            height: 26px;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.3s;
+        }
+        .theme-toggle-button:hover {
+            background: #f45854;
+        }
+        .theme-toggle-button::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            background: #f2f2f2;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+        .theme-toggle-button.light::after {
+            transform: translateX(24px);
+        }
+        .theme-toggle-label {
+            font-size: 12px;
+            color: #968f92;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Light mode styles */
+        body.light-mode {
+            background: #f2f2f2;
+            color: #423d3f;
+        }
+        body.light-mode .header {
+            background: #f2f2f2;
+            border-bottom: 1px solid #968f92;
+        }
+        body.light-mode .nav-bar {
+            background: linear-gradient(135deg, #f2f2f2 0%, #e5e5e5 100%);
+            border-bottom: 1px solid #968f92;
+        }
+        body.light-mode .nav-item {
+            color: #423d3f;
+        }
+        body.light-mode .nav-item:hover {
+            color: #f45854;
+            background: rgba(244, 88, 84, 0.1);
+        }
+        body.light-mode .nav-item.active {
+            color: #f45854;
+            border-bottom-color: #f45854;
+            background: rgba(244, 88, 84, 0.15);
+        }
+        body.light-mode .nav-dropdown-toggle {
+            color: #423d3f;
+        }
+        body.light-mode .nav-dropdown-toggle:hover {
+            color: #f45854;
+            background: rgba(244, 88, 84, 0.1);
+        }
+        body.light-mode .nav-dropdown-menu {
+            background: #f2f2f2;
+            border: 1px solid #968f92;
+        }
+        body.light-mode .nav-dropdown-item {
+            color: #423d3f;
+        }
+        body.light-mode .nav-dropdown-item:hover {
+            background: rgba(244, 88, 84, 0.1);
+            color: #f45854;
+        }
+        body.light-mode .header-clock {
+            color: #423d3f;
+        }
+        body.light-mode .header-clock-label {
+            color: #968f92;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="header-content">
+            <div class="theme-toggle">
+                <button class="theme-toggle-button" id="themeToggle" aria-label="Toggle theme"></button>
+                <span class="theme-toggle-label" id="themeLabel">Dark</span>
+            </div>
             <img src="/logo_icon" alt="Helmet" class="header-helmet">
             <img src="/logo_title" alt="ZeroGEX™" class="header-logo">
+            <img src="/logo_icon" alt="Helmet" class="header-helmet">
             <div class="header-clock">
                 <div class="header-clock-label">US/Eastern</div>
                 <div id="headerClock">---------- --:--:--</div>
