@@ -21,12 +21,12 @@ class StrikeGammaProfile:
     put_oi: int
     call_volume: int
     put_volume: int
-    
+
     @property
     def gamma_exposure_millions(self) -> float:
         """Total gamma exposure in millions"""
         return self.total_gamma / 1e6
-    
+
     @property
     def net_exposure_millions(self) -> float:
         """Net gamma exposure in millions"""
@@ -36,71 +36,72 @@ class StrikeGammaProfile:
 @dataclass
 class GEXMetrics:
     """Container for comprehensive GEX calculation results"""
-    
+
     # Identification
     symbol: str
     expiration: date
     timestamp: datetime
-    
+
     # Market state
     underlying_price: float
-    
+
     # Aggregate gamma exposure
     total_gamma_exposure: float      # Total absolute gamma (calls + puts)
     call_gamma: float                # Total call gamma exposure
     put_gamma: float                 # Total put gamma exposure
     net_gex: float                   # Net gamma (calls - puts, dealer perspective)
-    
+
     # Volume and open interest
     call_volume: int
     put_volume: int
     call_oi: int
     put_oi: int
     total_contracts: int
-    
+
     # Key levels
     max_gamma_strike: float          # Strike with highest total gamma
     max_gamma_value: float           # Gamma value at max strike
     gamma_flip_point: Optional[float]  # Where net GEX crosses zero
-    
+    max_pain: Optional[float]        # Max pain strike (most value lost)
+
     # Ratios and indicators
     put_call_ratio: float            # Put OI / Call OI
-    
+
     # Higher order Greeks
     vanna_exposure: float            # Sensitivity to vol and spot
     charm_exposure: float            # Gamma decay over time
-    
+
     # Strike-level details (optional)
     strike_profiles: Optional[Dict[float, StrikeGammaProfile]] = None
-    
+
     def __post_init__(self):
         """Validate metrics after initialization"""
         if self.underlying_price <= 0:
             raise ValueError(f"Invalid underlying price: {self.underlying_price}")
-        
+
         if self.total_gamma_exposure < 0:
             raise ValueError(f"Total gamma exposure cannot be negative: {self.total_gamma_exposure}")
-    
+
     @property
     def total_gex_millions(self) -> float:
         """Total gamma exposure in millions"""
         return self.total_gamma_exposure / 1e6
-    
+
     @property
     def net_gex_millions(self) -> float:
         """Net gamma exposure in millions"""
         return self.net_gex / 1e6
-    
+
     @property
     def call_gamma_millions(self) -> float:
         """Call gamma in millions"""
         return self.call_gamma / 1e6
-    
+
     @property
     def put_gamma_millions(self) -> float:
         """Put gamma in millions"""
         return self.put_gamma / 1e6
-    
+
     @property
     def is_positive_gamma_regime(self) -> bool:
         """
@@ -108,7 +109,7 @@ class GEXMetrics:
         This occurs when net_gex > 0 (calls > puts from dealer perspective).
         """
         return self.net_gex > 0
-    
+
     @property
     def gamma_regime(self) -> str:
         """Return human-readable gamma regime"""
@@ -116,13 +117,13 @@ class GEXMetrics:
             return "Positive (Stabilizing)"
         else:
             return "Negative (Destabilizing)"
-    
+
     def get_strike_profile(self, strike: float) -> Optional[StrikeGammaProfile]:
         """Get gamma profile for a specific strike"""
         if self.strike_profiles:
             return self.strike_profiles.get(strike)
         return None
-    
+
     def to_dict(self) -> dict:
         """Convert metrics to dictionary for storage/serialization"""
         return {
@@ -142,11 +143,12 @@ class GEXMetrics:
             'max_gamma_strike': self.max_gamma_strike,
             'max_gamma_value': self.max_gamma_value,
             'gamma_flip_point': self.gamma_flip_point,
+            'max_pain': self.max_pain,
             'put_call_ratio': self.put_call_ratio,
             'vanna_exposure': self.vanna_exposure,
             'charm_exposure': self.charm_exposure
         }
-    
+
     def summary(self) -> str:
         """Return human-readable summary of GEX metrics"""
         lines = [
@@ -164,8 +166,11 @@ class GEXMetrics:
             f"  Put/Call Ratio: {self.put_call_ratio:.2f}",
             f"  Total Contracts: {self.total_contracts:,}",
         ]
-        
+
         if self.gamma_flip_point:
             lines.append(f"  Gamma Flip Point: ${self.gamma_flip_point:.2f}")
-        
+
+        if self.max_pain:
+            lines.append(f"  Max Pain: ${self.max_pain:.2f}")
+
         return "\n".join(lines)

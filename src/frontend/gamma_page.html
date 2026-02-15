@@ -300,55 +300,72 @@
         </div>
 
         <!-- Secondary Metrics -->
-        <div class="grid grid-3">
-            <div class="card">
-                <h3>
-                    Max Gamma Strike
-                    <span class="tooltip">
-                        <span class="info-icon">ℹ️</span>
-                        <span class="tooltiptext">
-                            <strong>Maximum Gamma Strike</strong><br><br>
-                            The strike with the highest total gamma acts as a "price magnet" - especially near expiration. Price tends to gravitate toward this level as dealers hedge.<br><br>
-                            <strong>Above Max Gamma:</strong> Slight bearish pull<br>
-                            <strong>Below Max Gamma:</strong> Slight bullish pull
+        <div class="grid">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px;">
+                <div class="card">
+                    <h3>
+                        Max Gamma Strike
+                        <span class="tooltip">
+                            <span class="info-icon">ℹ️</span>
+                            <span class="tooltiptext">
+                                <strong>Maximum Gamma Strike</strong><br><br>
+                                The strike with the highest total gamma acts as a "price magnet" - especially near expiration. Price tends to gravitate toward this level as dealers hedge.<br><br>
+                                <strong>Above Max Gamma:</strong> Slight bearish pull<br>
+                                <strong>Below Max Gamma:</strong> Slight bullish pull
+                            </span>
                         </span>
-                    </span>
-                </h3>
-                <div id="maxGammaStrike" class="metric-medium neutral">--</div>
-                <div class="metric-label">Price Magnet</div>
-            </div>
-            <div class="card">
-                <h3>
-                    Gamma Flip Point
-                    <span class="tooltip">
-                        <span class="info-icon">ℹ️</span>
-                        <span class="tooltiptext">
-                            <strong>Zero-Gamma Level</strong><br><br>
-                            The price where net GEX crosses zero. Critical inflection point:<br><br>
-                            <strong>Above Flip:</strong> Positive gamma regime (stabilizing). <strong>Bullish.</strong><br>
-                            <strong>Below Flip:</strong> Negative gamma regime (destabilizing). <strong>Bearish.</strong>
+                    </h3>
+                    <div id="maxGammaStrike" class="metric-medium neutral">--</div>
+                    <div class="metric-label">Price Magnet</div>
+                </div>
+                <div class="card">
+                    <h3>
+                        Gamma Flip Point
+                        <span class="tooltip">
+                            <span class="info-icon">ℹ️</span>
+                            <span class="tooltiptext">
+                                <strong>Zero-Gamma Level</strong><br><br>
+                                The price where net GEX crosses zero. Critical inflection point:<br><br>
+                                <strong>Above Flip:</strong> Positive gamma regime (stabilizing). <strong>Bullish.</strong><br>
+                                <strong>Below Flip:</strong> Negative gamma regime (destabilizing). <strong>Bearish.</strong>
+                            </span>
                         </span>
-                    </span>
-                </h3>
-                <div id="gammaFlip" class="metric-medium neutral">--</div>
-                <div class="metric-label">Zero-Gamma Level</div>
-            </div>
-            <div class="card">
-                <h3>
-                    Put/Call Ratio
-                    <span class="tooltip">
-                        <span class="info-icon">ℹ️</span>
-                        <span class="tooltiptext">
-                            <strong>Put/Call Open Interest Ratio</strong><br><br>
-                            Ratio of put to call open interest.<br><br>
-                            <strong>High (>1.0):</strong> More puts than calls - can indicate hedging/fear. <strong>Bearish tilt.</strong><br>
-                            <strong>Low (<0.7):</strong> More calls than puts - bullish positioning. <strong>Bullish tilt.</strong><br>
-                            <strong>~0.7-1.0:</strong> Balanced positioning.
+                    </h3>
+                    <div id="gammaFlip" class="metric-medium neutral">--</div>
+                    <div class="metric-label">Zero-Gamma Level</div>
+                </div>
+                <div class="card">
+                    <h3>
+                        Max Pain
+                        <span class="tooltip">
+                            <span class="info-icon">ℹ️</span>
+                            <span class="tooltiptext">
+                                <strong>Max Pain Strike</strong><br><br>
+                                The strike price where the most option value would expire worthless at expiration. This represents the price that would cause maximum losses for option buyers.<br><br>
+                                Often acts as a magnet near expiration as market makers may hedge towards this level.
+                            </span>
                         </span>
-                    </span>
-                </h3>
-                <div id="putCallRatio" class="metric-medium neutral">--</div>
-                <div class="metric-label">Open Interest Ratio</div>
+                    </h3>
+                    <div id="maxPain" class="metric-medium neutral">--</div>
+                    <div class="metric-label">Max Loss Point</div>
+                </div>
+                <div class="card">
+                    <h3>
+                        Put/Call Ratio
+                        <span class="tooltip">
+                            <span class="info-icon">ℹ️</span>
+                            <span class="tooltiptext">
+                                <strong>Put/Call Open Interest Ratio</strong><br><br>
+                                Ratio of put to call open interest.<br><br>
+                                <strong>High (>1.0):</strong> More puts than calls - can indicate hedging/fear. <strong>Bearish tilt.</strong><br>
+                                <strong>Low (<0.7):</strong> More calls than puts - bullish positioning. <strong>Bullish tilt.</strong><br>
+                                <strong>~0.7-1.0:</strong> Balanced positioning.
+                            </span>
+                        </span>
+                    </h3>
+                    <div id="putCallRatio" class="metric-medium neutral">--</div>
+                    <div class="metric-label">Open Interest Ratio</div>
+                </div>
             </div>
         </div>
 
@@ -433,6 +450,7 @@
 
                     document.getElementById('maxGammaStrike').textContent = `$${data.max_gamma_strike.toFixed(2)}`;
                     document.getElementById('gammaFlip').textContent = data.gamma_flip_point ? `$${data.gamma_flip_point.toFixed(2)}` : 'N/A';
+                    document.getElementById('maxPain').textContent = data.max_pain ? `$${data.max_pain.toFixed(2)}` : 'N/A';
                     document.getElementById('putCallRatio').textContent = data.put_call_ratio.toFixed(2);
 
                 })

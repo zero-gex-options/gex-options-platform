@@ -79,6 +79,7 @@ CREATE TABLE gex_metrics (
     put_call_ratio DOUBLE PRECISION,
     vanna_exposure DOUBLE PRECISION,
     charm_exposure DOUBLE PRECISION,
+    max_pain DOUBLE PRECISION,
     PRIMARY KEY (timestamp, symbol, expiration)
 );
 

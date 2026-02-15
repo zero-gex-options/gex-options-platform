@@ -216,6 +216,7 @@ def get_current_gex():
                 max_gamma_strike,
                 max_gamma_value,
                 gamma_flip_point,
+                max_pain,
                 put_call_ratio,
                 vanna_exposure,
                 charm_exposure
