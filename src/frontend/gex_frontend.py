@@ -620,7 +620,6 @@ def get_put_call_history():
         if conn:
             return_db_connection(conn)
 
-
 @app.route('/api/flows/history')
 @cache_query(ttl_seconds=30)
 def get_flows_history():
@@ -705,7 +704,6 @@ def get_flows_history():
         if conn:
             return_db_connection(conn)
 
-
 @app.route('/api/market/SPY/current')
 @cache_query(ttl_seconds=5)
 def get_spy_current():
@@ -750,11 +748,10 @@ def get_spy_current():
         if conn:
             return_db_connection(conn)
 
-
 @app.route('/api/market/SPY/history')
 @cache_query(ttl_seconds=30)
 def get_spy_market_history():
-    """Get SPY market history for charts"""
+    """Get SPY market history for charts - last two trading sessions"""
     conn = None
     try:
         conn = get_db_connection()
@@ -774,22 +771,24 @@ def get_spy_market_history():
                     MIN(low) as low,
                     (array_agg(close ORDER BY timestamp DESC))[1] as close,
                     MAX(timestamp) as actual_timestamp,
-                    MAX(actual_time) as actual_time,  -- NEW: Add actual_time
+                    MAX(actual_time) as actual_time,
                     SUM(COALESCE(total_volume, 0)) as volume,
                     SUM(COALESCE(up_volume, 0)) as up_volume,
                     SUM(COALESCE(down_volume, 0)) as down_volume
                 FROM underlying_quotes
                 WHERE symbol = 'SPY'
-                  AND timestamp > NOW() - INTERVAL '48 hours'
                 GROUP BY bucket_time
             )
             SELECT * FROM five_min_buckets
-            ORDER BY bucket_time ASC
-            LIMIT 600
+            ORDER BY bucket_time DESC
+            LIMIT 385
         """)
 
         rows = cursor.fetchall()
         cursor.close()
+
+        # Reverse to get chronological order
+        rows = list(reversed(rows))
 
         import pytz
         eastern = pytz.timezone('America/New_York')
@@ -804,7 +803,7 @@ def get_spy_market_history():
             result.append({
                 'timestamp': ts.isoformat(),
                 'actual_timestamp': row['actual_timestamp'].isoformat() if row['actual_timestamp'] else ts.isoformat(),
-                'actual_time': row['actual_time'].isoformat() if row['actual_time'] else None,  # NEW
+                'actual_time': row['actual_time'].isoformat() if row['actual_time'] else None,
                 'open': float(row['open'] or row['close'] or 0),
                 'high': float(row['high'] or row['close'] or 0),
                 'low': float(row['low'] or row['close'] or 0),
@@ -827,7 +826,7 @@ def get_spy_market_history():
 @app.route('/api/spy-48hr-range')
 @cache_query(ttl_seconds=10)
 def get_spy_48hr_range():
-    """Get SPY 48-hour range and today's cumulative volume"""
+    """Get SPY range from last two trading sessions and today's cumulative volume"""
     conn = None
     try:
         conn = get_db_connection()
@@ -837,26 +836,36 @@ def get_spy_48hr_range():
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("SET TIME ZONE 'America/New_York'")
 
-        # Get 48hr range
+        # Get range from last two trading sessions
         cursor.execute("""
-            SELECT 
+            WITH five_min_buckets AS (
+                SELECT
+                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') +
+                    (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
+                    MAX(high) as high,
+                    MIN(low) as low
+                FROM underlying_quotes
+                WHERE symbol = 'SPY'
+                GROUP BY bucket_time
+                ORDER BY bucket_time DESC
+                LIMIT 385
+            )
+            SELECT
                 MIN(low) as range_low,
                 MAX(high) as range_high
-            FROM underlying_quotes
-            WHERE symbol = 'SPY'
-                AND timestamp > NOW() - INTERVAL '48 hours'
+            FROM five_min_buckets
         """)
         range_result = cursor.fetchone()
 
         # Get today's cumulative volume since 4:00 AM ET
         cursor.execute("""
-            SELECT 
+            SELECT
                 SUM(COALESCE(total_volume, 0)) as total_volume,
                 SUM(COALESCE(up_volume, 0)) as up_volume,
                 SUM(COALESCE(down_volume, 0)) as down_volume
             FROM underlying_quotes
             WHERE symbol = 'SPY'
-                AND timestamp >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/New_York') 
+                AND timestamp >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/New_York')
                     + INTERVAL '4 hours'
         """)
         volume_result = cursor.fetchone()
