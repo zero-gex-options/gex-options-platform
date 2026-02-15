@@ -1336,13 +1336,29 @@ def get_logo_full():
         print(f"Error serving logo: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/logo_full_light')
+def get_logo_full_light():
+    try:
+        return send_from_directory('/opt/zerogex/frontend/static', 'Light_Full.png')
+    except Exception as e:
+        print(f"Error serving logo: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/logo_title')
 def get_logo_title():
     try:
         return send_from_directory('/opt/zerogex/frontend/static', 'Dark_Title.png')
     except Exception as e:
         print(f"Error serving logo: {e}")
-        return jsonify({'error': str(e)}), 50
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/logo_title_light')
+def get_logo_title_light():
+    try:
+        return send_from_directory('/opt/zerogex/frontend/static', 'Light_Title.png')
+    except Exception as e:
+        print(f"Error serving logo: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/logo_icon')
 def get_logo_icon():
@@ -1350,7 +1366,15 @@ def get_logo_icon():
         return send_from_directory('/opt/zerogex/frontend/static', 'Dark_Helmet.png')
     except Exception as e:
         print(f"Error serving logo: {e}")
-        return jsonify({'error': str(e)}), 50
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/logo_icon_light')
+def get_logo_icon_light():
+    try:
+        return send_from_directory('/opt/zerogex/frontend/static', 'Light_Helmet.png')
+    except Exception as e:
+        print(f"Error serving logo: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/navigation.js')
 def serve_navigation_js():

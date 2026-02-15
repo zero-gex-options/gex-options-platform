@@ -41,10 +41,28 @@ function initializeNavigation() {
             document.body.classList.add('light-mode');
             themeToggle.classList.add('light');
             themeLabel.textContent = 'Light';
+
+            // Switch to light logos (use querySelectorAll for multiple elements)
+            const headerLogos = document.querySelectorAll('.header-logo');
+            const headerHelmets = document.querySelectorAll('.header-helmet');
+            const footerLogos = document.querySelectorAll('.footer-logo');
+
+            headerLogos.forEach(logo => logo.src = '/logo_title_light');
+            headerHelmets.forEach(helmet => helmet.src = '/logo_icon_light');
+            footerLogos.forEach(logo => logo.src = '/logo_full_light');
         } else {
             document.body.classList.remove('light-mode');
             themeToggle.classList.remove('light');
             themeLabel.textContent = 'Dark';
+
+            // Switch to dark logos (use querySelectorAll for multiple elements)
+            const headerLogos = document.querySelectorAll('.header-logo');
+            const headerHelmets = document.querySelectorAll('.header-helmet');
+            const footerLogos = document.querySelectorAll('.footer-logo');
+
+            headerLogos.forEach(logo => logo.src = '/logo_title');
+            headerHelmets.forEach(helmet => helmet.src = '/logo_icon');
+            footerLogos.forEach(logo => logo.src = '/logo_full');
         }
     }
 
