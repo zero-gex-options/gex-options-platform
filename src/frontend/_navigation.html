@@ -24,6 +24,17 @@
         .header-logo:hover {
             opacity: 1;
         }
+	.header-helmet {
+            position: absolute;
+            left: 32px;
+            height: 120px;
+            width: auto;
+            opacity: 0.9;
+            transition: opacity 0.2s;
+        }
+	.header-helmet:hover {
+            opacity: 1;
+        }
         .header-clock {
             position: absolute;
             right: 32px;
@@ -64,7 +75,7 @@
             display: flex;
         }
         .nav-item {
-            padding: 16px 24px;
+            padding: 10px 16px;
             color: #423d3f;
             text-decoration: none;
             border-bottom: 3px solid transparent;
@@ -73,22 +84,23 @@
         }
         .nav-item:hover {
             color: #423d3f;
-            background: rgba(255, 255, 255, 0.05);
+            background: #968f92;
         }
         .nav-item.active {
             color: #f45854;
             border-bottom-color: #f45854;
-            background: rgba(96, 165, 250, 0.1);
+            background: #f2f2f2;
         }
         .nav-item.active:hover {
             color: #f45854;
-            background: rgba(96, 165, 250, 0.15);
+            background: #968f92;
         }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="header-content">
+            <img src="/logo_icon" alt="Helmet" class="header-helmet">
             <img src="/logo_title" alt="ZeroGEX™" class="header-logo">
             <div class="header-clock">
                 <div class="header-clock-label">US/Eastern</div>
@@ -99,7 +111,7 @@
 
     <nav class="nav-bar">
         <div class="nav-container">
-            <a href="/" class="nav-item" data-page="home">Dashboard</a>
+            <a href="/" class="nav-item" data-page="home">Home</a>
             <a href="/gamma" class="nav-item" data-page="gamma">Gamma Exposure</a>
             <a href="/put-call" class="nav-item" data-page="put-call">Put/Call Ratio</a>
             <a href="/flows" class="nav-item" data-page="flows">Option Flows</a>
