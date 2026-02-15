@@ -33,6 +33,7 @@ REQUIRED_FILES=(
     "gex_frontend.py"
     "_navigation.html"
     "navigation.js"
+    "about.html"
     "flows_page.html"
     "gamma_page.html"
     "market_bias_page.html"

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ZeroGEX™ | About</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="/navigation.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #2a2628;
+            color: #f2f2f2;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+        .card {
+            background: #423d3f;
+            border-radius: 16px;
+            padding: 40px;
+            border: 1px solid #968f92;
+            margin-bottom: 24px;
+        }
+        .card h1 {
+            color: #f45854;
+            font-size: 36px;
+            margin-bottom: 24px;
+        }
+        .card h2 {
+            color: #f45854;
+            font-size: 24px;
+            margin-top: 32px;
+            margin-bottom: 16px;
+        }
+        .card p {
+            color: #f2f2f2;
+            line-height: 1.8;
+            margin-bottom: 16px;
+            font-size: 16px;
+        }
+        .card ul {
+            margin-left: 24px;
+            margin-bottom: 16px;
+        }
+        .card li {
+            color: #f2f2f2;
+            line-height: 1.8;
+            margin-bottom: 8px;
+        }
+        .highlight {
+            color: #f45854;
+            font-weight: 600;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+            margin-top: 24px;
+        }
+        .feature-box {
+            background: #2a2628;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #968f92;
+        }
+        .feature-box h3 {
+            color: #f45854;
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+        .feature-box p {
+            font-size: 14px;
+            color: #968f92;
+            margin-bottom: 0;
+        }
+        .footer {
+            background: #423d3f;
+            border-top: 1px solid #968f92;
+            padding: 24px 32px;
+            margin-top: 48px;
+        }
+        .footer-content {
+            max-width: 1000px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .footer-logo {
+            height: 300px;
+            width: auto;
+            margin-bottom: 12px;
+            opacity: 0.8;
+        }
+        .footer-text {
+            color: #968f92;
+            font-size: 13px;
+        }
+        .footer-tagline {
+            color: #968f92;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="nav-placeholder"></div>
+
+    <div class="container">
+        <div class="card">
+            <h1>About ZeroGEX™</h1>
+
+            <p>
+                <strong>ZeroGEX™</strong> is a sophisticated options analytics platform designed to provide real-time gamma exposure (GEX) analysis for equity options traders and market participants.
+            </p>
+
+            <h2>What is Gamma Exposure?</h2>
+            <p>
+                Gamma Exposure (GEX) represents the dollar amount market makers must hedge as the underlying asset moves. When dealers are:
+            </p>
+            <ul>
+                <li><span class="highlight">Long Gamma (Positive GEX):</span> They buy dips and sell rallies, creating a stabilizing force in the market</li>
+                <li><span class="highlight">Short Gamma (Negative GEX):</span> They sell dips and buy rallies, amplifying volatility and price movements</li>
+            </ul>
+
+            <h2>Platform Features</h2>
+            <div class="feature-grid">
+                <div class="feature-box">
+                    <h3>Real-Time Data</h3>
+                    <p>Live streaming options data from TradeStation with calculated Greeks and gamma exposure metrics</p>
+                </div>
+                <div class="feature-box">
+                    <h3>Gamma Analytics</h3>
+                    <p>Comprehensive gamma exposure analysis including net GEX, flip points, and strike-level positioning</p>
+                </div>
+                <div class="feature-box">
+                    <h3>Market Bias</h3>
+                    <p>Composite scoring system combining multiple gamma indicators to determine overall market sentiment</p>
+                </div>
+                <div class="feature-box">
+                    <h3>Options Flow</h3>
+                    <p>Track premium spent and delta-weighted flow to identify institutional positioning</p>
+                </div>
+                <div class="feature-box">
+                    <h3>Put/Call Analysis</h3>
+                    <p>Monitor put/call ratios to gauge market hedging and positioning trends</p>
+                </div>
+                <div class="feature-box">
+                    <h3>Price Action</h3>
+                    <p>Real-time SPY price tracking with volume analysis and market session indicators</p>
+                </div>
+            </div>
+
+            <h2>Key Metrics Explained</h2>
+            <p>
+                <strong>Net GEX:</strong> The difference between call and put gamma exposure. Positive values suggest dealer stabilization, negative values suggest amplification of moves.
+            </p>
+            <p>
+                <strong>Gamma Flip Point:</strong> The price level where net GEX crosses zero, marking the transition between positive and negative gamma regimes.
+            </p>
+            <p>
+                <strong>Max Gamma Strike:</strong> The strike price with the highest total gamma, acting as a "price magnet" especially near expiration.
+            </p>
+
+            <h2>Technology Stack</h2>
+            <ul>
+                <li>Real-time data ingestion via TradeStation API</li>
+                <li>PostgreSQL with TimescaleDB for time-series storage</li>
+                <li>Black-Scholes options pricing and Greeks calculation</li>
+                <li>Flask-based REST API backend</li>
+                <li>Modern JavaScript frontend with Chart.js visualizations</li>
+            </ul>
+
+            <h2>Disclaimer</h2>
+            <p>
+                ZeroGEX™ is provided for informational and educational purposes only. This platform does not constitute financial advice, and should not be used as the sole basis for investment decisions. Options trading involves substantial risk and is not suitable for all investors. Past performance is not indicative of future results.
+            </p>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="footer-content">
+            <img src="/logo_full" alt="ZeroGEX" class="footer-logo">
+            <div class="footer-text"><i>Trading involves substantial risk. Past performance is not indicative of future results.</i></div>
+            <div class="footer-tagline">© 2026 ZeroGEX, LLC. All rights reserved.</div>
+        </div>
+    </div>
+
+    <script>
+        // Load shared navigation
+        fetch('/_navigation.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('nav-placeholder').innerHTML = html;
+                if (typeof initializeNavigation === 'function') {
+                    initializeNavigation();
+                }
+            })
+            .catch(error => console.error('Error loading navigation:', error));
+    </script>
+
+    <!-- Last Updated Footer -->
+    <div style="text-align: center; padding: 24px 0; color: #968f92; font-size: 12px; border-top: 1px solid #968f92; margin-top: 32px;">
+        <div id="lastUpdated">Last updated: --</div>
+    </div>
+
+    <script>
+        // Update timestamp function
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('lastUpdated').textContent =
+                'Last updated: ' + now.toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: 'America/New_York'
+                }) + ' ET';
+        }
+
+        // Initial update
+        updateTimestamp();
+
+        // Update every second
+        setInterval(updateTimestamp, 1000);
+    </script>
+</body>
+</html>

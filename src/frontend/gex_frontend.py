@@ -120,6 +120,14 @@ def index():
         print(f"Error serving index: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/about')
+def about_page():
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'about.html')
+    except Exception as e:
+        print(f"Error serving about page: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/gamma')
 def gamma_page():
     try:
