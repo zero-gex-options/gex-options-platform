@@ -4,7 +4,7 @@
     <style>
         .header {
             background: #423d3f;
-            border-bottom: 1px solid #f45854;
+            border-bottom: 1px solid #968f92;
             padding: 20px 32px;
         }
         .header-content {
@@ -24,7 +24,7 @@
         .header-logo:hover {
             opacity: 1;
         }
-	.header-helmet {
+        .header-helmet {
             position: absolute;
             left: 32px;
             height: 120px;
@@ -32,7 +32,7 @@
             opacity: 0.9;
             transition: opacity 0.2s;
         }
-	.header-helmet:hover {
+        .header-helmet:hover {
             opacity: 1;
         }
         .header-clock {
@@ -42,7 +42,7 @@
             transform: translateY(-50%);
             font-size: 16px;
             font-weight: 600;
-            color: #f2f2f2;
+            color: #968f92;
             font-family: 'Courier New', monospace;
         }
         .header-clock-label {
@@ -54,7 +54,7 @@
         }
         .header h1 {
             font-size: 32px;
-            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            background: linear-gradient(135deg, #f45854, #c44642);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -66,8 +66,8 @@
             margin-top: 4px;
         }
         .nav-bar {
-            background: #968f92;
-            border-bottom: 1px solid #f45854;
+            background: linear-gradient(135deg, #423d3f 0%, #2a2628 100%);
+            border-bottom: 1px solid #968f92;
         }
         .nav-container {
             max-width: 1400px;
@@ -76,24 +76,27 @@
         }
         .nav-item {
             padding: 10px 16px;
-            color: #423d3f;
+            font-size: 12px;
+            color: #968f92;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
             text-decoration: none;
             border-bottom: 3px solid transparent;
             transition: all 0.2s;
             position: relative;
         }
         .nav-item:hover {
-            color: #423d3f;
-            background: #968f92;
+            color: #f2f2f2;
+            background: rgba(242, 242, 242, 0.05);
         }
         .nav-item.active {
             color: #f45854;
             border-bottom-color: #f45854;
-            background: #f2f2f2;
+            background: rgba(244, 88, 84, 0.1);
         }
         .nav-item.active:hover {
             color: #f45854;
-            background: #968f92;
+            background: rgba(244, 88, 84, 0.15);
         }
     </style>
 </head>
@@ -119,6 +122,5 @@
             <a href="/market-bias" class="nav-item" data-page="market-bias">Market Bias</a>
         </div>
     </nav>
-
 </body>
 </html>

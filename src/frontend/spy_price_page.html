@@ -16,8 +16,8 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            background: #0a0e27;
-            color: #e2e8f0;
+            background: #2a2628;
+            color: #f2f2f2;
             overflow-x: hidden;
         }
 
@@ -28,15 +28,15 @@
         }
 
         .card {
-            background: #1e293b;
+            background: #423d3f;
             border-radius: 12px;
             padding: 24px;
-            border: 1px solid #334155;
+            border: 1px solid #968f92;
             margin-bottom: 20px;
         }
 
         .metric-label {
-            color: #94a3b8;
+            color: #968f92;
             font-size: 12px;
             margin-bottom: 4px;
             text-transform: uppercase;
@@ -49,7 +49,7 @@
         .metric-value {
             font-size: 24px;
             font-weight: 600;
-            color: #e2e8f0;
+            color: #f2f2f2;
         }
 
         .chart-container {
@@ -57,7 +57,7 @@
             height: 400px;
             margin-bottom: 0;
             padding-bottom: 16px;
-            border-bottom: 2px solid #334155;
+            border-bottom: 2px solid #968f92;
         }
 
         .chart-container.volume {
@@ -84,12 +84,12 @@
             font-size: 16px;
         }
 
-	/* Enhanced SPY Banner */
+        /* Enhanced SPY Banner */
         .spy-banner {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            background: linear-gradient(135deg, #423d3f 0%, #2a2628 100%);
             border-radius: 16px;
             padding: 32px;
-            border: 1px solid #334155;
+            border: 1px solid #968f92;
             margin-bottom: 24px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
@@ -110,7 +110,7 @@
         .banner-title h2 {
             font-size: 24px;
             font-weight: 600;
-            color: #e2e8f0;
+            color: #f2f2f2;
         }
 
         .market-status-badge {
@@ -132,16 +132,16 @@
 
         .market-status-badge.pre-market,
         .market-status-badge.after-hours {
-            background: rgba(245, 158, 11, 0.2);
-            color: #f59e0b;
-            border: 1px solid rgba(245, 158, 11, 0.3);
+            background: rgba(244, 88, 84, 0.2);
+            color: #f45854;
+            border: 1px solid rgba(244, 88, 84, 0.3);
         }
 
         .market-status-badge.closed,
         .market-status-badge.unknown {
-            background: rgba(148, 163, 184, 0.2);
-            color: #94a3b8;
-            border: 1px solid rgba(148, 163, 184, 0.3);
+            background: rgba(150, 143, 146, 0.2);
+            color: #968f92;
+            border: 1px solid rgba(150, 143, 146, 0.3);
         }
 
         @keyframes pulse {
@@ -151,7 +151,7 @@
 
         .banner-timestamp {
             font-size: 12px;
-            color: #64748b;
+            color: #968f92;
         }
 
         .banner-metrics {
@@ -161,14 +161,14 @@
         }
 
         .metric-box {
-            background: rgba(15, 23, 42, 0.5);
+            background: rgba(42, 38, 40, 0.5);
             padding: 20px;
             border-radius: 12px;
-            border: 1px solid #334155;
+            border: 1px solid #968f92;
         }
 
         .metric-label {
-            color: #94a3b8;
+            color: #968f92;
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -179,7 +179,7 @@
         .metric-value {
             font-size: 28px;
             font-weight: 700;
-            color: #e2e8f0;
+            color: #f2f2f2;
             line-height: 1;
         }
 
@@ -197,7 +197,7 @@
         }
 
         .metric-change.negative {
-            color: #ef4444;
+            color: #f45854;
         }
 
         .change-arrow {
@@ -215,7 +215,7 @@
             align-items: center;
             gap: 4px;
             font-size: 13px;
-            color: #94a3b8;
+            color: #968f92;
         }
 
         .volume-item.up {
@@ -223,7 +223,7 @@
         }
 
         .volume-item.down {
-            color: #ef4444;
+            color: #f45854;
         }
 
         .volume-arrow {
@@ -239,8 +239,8 @@
             visibility: hidden;
             opacity: 0;
             width: 280px;
-            background-color: #1e293b;
-            color: #e2e8f0;
+            background-color: #423d3f;
+            color: #f2f2f2;
             text-align: left;
             border-radius: 8px;
             padding: 12px;
@@ -251,7 +251,7 @@
             margin-left: -140px;
             margin-top: 10px;
             transition: opacity 0.3s;
-            border: 1px solid #334155;
+            border: 1px solid #968f92;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             font-size: 12px;
             line-height: 1.5;
@@ -264,7 +264,7 @@
             margin-left: -5px;
             border-width: 5px;
             border-style: solid;
-            border-color: transparent transparent #1e293b transparent;
+            border-color: transparent transparent #423d3f transparent;
         }
         .tooltip:hover .tooltiptext {
             visibility: visible;
@@ -272,7 +272,7 @@
         }
         .info-icon {
             cursor: help;
-            color: #64748b;
+            color: #968f92;
             font-size: 14px;
         }
     </style>
@@ -300,7 +300,7 @@
 
         <!-- Charts -->
         <div class="card" style="padding: 24px 24px 0 24px;">
-            <h3 style="margin-bottom: 16px; color: #60a5fa; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+            <h3 style="margin-bottom: 16px; color: #f45854; font-size: 16px; display: flex; align-items: center; gap: 8px;">
                 SPY Price & Volume
                 <span class="tooltip">
                     <span class="info-icon">ℹ️</span>
@@ -330,7 +330,6 @@
             .then(response => response.text())
             .then(html => {
                 document.getElementById('nav-placeholder').innerHTML = html;
-                // Initialize navigation after it's loaded
                 if (typeof initializeNavigation === 'function') {
                     initializeNavigation();
                 }
@@ -376,7 +375,7 @@
                             const startX = xScale.getPixelForValue(zoneStartIdx);
                             const endX = xScale.getPixelForValue(idx - 1);
 
-                            ctx.fillStyle = 'rgba(251, 146, 60, 0.08)';
+                            ctx.fillStyle = 'rgba(244, 88, 84, 0.08)';
                             ctx.fillRect(startX, chartArea.top, endX - startX, chartArea.bottom - chartArea.top);
                         }
 
@@ -390,7 +389,7 @@
                     const startX = xScale.getPixelForValue(zoneStartIdx);
                     const endX = xScale.getPixelForValue(labels.length - 1);
 
-                    ctx.fillStyle = 'rgba(251, 146, 60, 0.08)';
+                    ctx.fillStyle = 'rgba(244, 88, 84, 0.08)';
                     ctx.fillRect(startX, chartArea.top, endX - startX, chartArea.bottom - chartArea.top);
                 }
 
@@ -398,7 +397,7 @@
             }
         };
 
-	// Grid lines at hourly intervals plugin
+        // Grid lines at hourly intervals plugin
         const hourlyGridPlugin = {
             id: 'hourlyGrid',
             afterTickToLabelConversion: (chart) => {
@@ -441,7 +440,7 @@
         }
 
         async function updateSPYBanner(latestData, changeData) {
-
+            // Use actual_time if available, otherwise fall back to timestamp
             const latestTime = new Date(latestData.actual_time || latestData.actual_timestamp || latestData.timestamp);
 
             const priceChange = changeData.change || 0;
@@ -459,7 +458,7 @@
                 console.error('Error fetching 48hr range:', error);
             }
 
-	    document.getElementById('bannerTimestamp').textContent =
+            document.getElementById('bannerTimestamp').textContent =
                  `Last update received: ${latestTime.toLocaleString('en-US', {
                      month: 'short',
                      day: 'numeric',
@@ -485,7 +484,7 @@
                     <div class="metric-value" style="font-size: 18px;">
                         $${rangeData.range_low.toFixed(2)} - $${rangeData.range_high.toFixed(2)}
                     </div>
-                    <div style="margin-top: 8px; color: #64748b; font-size: 12px;">
+                    <div style="margin-top: 8px; color: #968f92; font-size: 12px;">
                         Spread: $${(rangeData.range_high - rangeData.range_low).toFixed(2)}
                     </div>
                 </div>
@@ -597,13 +596,13 @@
                             data: ohlcData,
                             borderColor: {
                                 up: '#059669',
-                                down: '#dc2626',
-                                unchanged: '#64748b'
+                                down: '#f45854',
+                                unchanged: '#968f92'
                             },
                             backgroundColor: {
                                 up: 'rgba(16, 185, 129, 0.5)',
-                                down: 'rgba(239, 68, 68, 0.5)',
-                                unchanged: 'rgba(148, 163, 184, 0.5)'
+                                down: 'rgba(244, 88, 84, 0.5)',
+                                unchanged: 'rgba(150, 143, 146, 0.5)'
                             }
                         }]
                     },
@@ -621,7 +620,7 @@
                                     axis.ticks = hourlyIndices.map(idx => ({ value: idx }));
                                 },
                                 ticks: {
-                                    color: '#94a3b8',
+                                    color: '#968f92',
                                     maxRotation: 90,
                                     minRotation: 90,
                                     autoSkip: false,
@@ -632,15 +631,15 @@
                             },
                             y: {
                                 position: 'right',
-                                title: { display: true, text: 'Price ($)', color: '#94a3b8' },
+                                title: { display: true, text: 'Price ($)', color: '#968f92' },
                                 ticks: { 
-                                    color: '#94a3b8',
+                                    color: '#968f92',
                                     padding: 8,
                                     callback: function(value) {
                                         return '$' + Math.round(value);
                                     }
                                 },
-                                grid: { color: '#334155', drawBorder: false },
+                                grid: { color: '#968f92', drawBorder: false },
                                 border: { display: false }
                             }
                         },
@@ -700,7 +699,7 @@
                             {
                                 label: 'Down Volume',
                                 data: volumeDownData,
-                                backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                                backgroundColor: 'rgba(244, 88, 84, 0.7)',
                                 stack: 'volume'
                             },
                             {
@@ -729,7 +728,7 @@
                                     axis.ticks = hourlyIndices.map(idx => ({ value: idx }));
                                 },
                                 ticks: {
-                                    color: '#94a3b8',
+                                    color: '#968f92',
                                     maxRotation: 90,
                                     minRotation: 90,
                                     autoSkip: false,
@@ -756,20 +755,20 @@
                             y: {
                                 position: 'right',
                                 stacked: true,
-                                title: { display: true, text: 'Volume', color: '#94a3b8' },
+                                title: { display: true, text: 'Volume', color: '#968f92' },
                                 ticks: { 
-                                    color: '#94a3b8',
+                                    color: '#968f92',
                                     padding: 8,
                                     callback: function(value) {
                                         return (value / 1000000).toFixed(1) + 'M';
                                     }
                                 },
-                                grid: { color: '#334155', drawBorder: false },
+                                grid: { color: '#968f92', drawBorder: false },
                                 border: { display: false }
                             }
                         },
                         plugins: {
-                            legend: { labels: { color: '#e2e8f0' }, position: 'top' },
+                            legend: { labels: { color: '#f2f2f2' }, position: 'top' },
                             tooltip: {
                                 callbacks: {
                                     title: function(context) {
@@ -794,7 +793,7 @@
 
                             ctx.save();
                             ctx.textAlign = 'center';
-                            ctx.fillStyle = '#94a3b8';
+                            ctx.fillStyle = '#968f92';
                             ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
 
                             // Group indices by date and find noon index for each date
@@ -858,8 +857,7 @@
     </script>
 
     <!-- Last Updated Footer -->
-    <div style="text-align: center; padding: 24px 0; color: #64748b; font-size: 12px; border-top: 1px solid #334155; margin-top: 32px;
-">
+    <div style="text-align: center; padding: 24px 0; color: #968f92; font-size: 12px; border-top: 1px solid #968f92; margin-top: 32px;">
         <div id="lastUpdated">Last updated: --</div>
     </div>
 

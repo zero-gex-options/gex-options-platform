@@ -12,8 +12,8 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #0f172a;
-            color: #e2e8f0;
+            background: #2a2628;
+            color: #f2f2f2;
         }
         .container {
             max-width: 1400px;
@@ -21,10 +21,10 @@
             padding: 32px;
         }
         .card {
-            background: #1e293b;
+            background: #423d3f;
             border-radius: 16px;
             padding: 24px;
-            border: 1px solid #334155;
+            border: 1px solid #968f92;
             margin-bottom: 24px;
         }
         .metric-large {
@@ -32,7 +32,7 @@
             font-weight: 700;
         }
         .metric-label {
-            color: #94a3b8;
+            color: #968f92;
             font-size: 14px;
             margin-bottom: 8px;
             text-transform: uppercase;
@@ -41,7 +41,7 @@
         .metric-score {
             font-size: 24px;
             font-weight: 600;
-            color: #94a3b8;
+            color: #968f92;
             margin-top: 8px;
         }
         .chart-container {
@@ -50,8 +50,8 @@
             margin-top: 16px;
         }
         .bullish { color: #10b981; }
-        .bearish { color: #ef4444; }
-        .neutral { color: #f59e0b; }
+        .bearish { color: #f45854; }
+        .neutral { color: #968f92; }
         .tooltip {
             position: relative;
             display: inline-block;
@@ -61,8 +61,8 @@
             visibility: hidden;
             opacity: 0;
             width: 350px;
-            background-color: #1e293b;
-            color: #e2e8f0;
+            background-color: #423d3f;
+            color: #f2f2f2;
             text-align: left;
             border-radius: 8px;
             padding: 12px;
@@ -73,7 +73,7 @@
             margin-left: -175px;
             margin-top: 10px;
             transition: opacity 0.3s;
-            border: 1px solid #334155;
+            border: 1px solid #968f92;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             font-size: 12px;
             line-height: 1.5;
@@ -86,7 +86,7 @@
             margin-left: -5px;
             border-width: 5px;
             border-style: solid;
-            border-color: transparent transparent #1e293b transparent;
+            border-color: transparent transparent #423d3f transparent;
         }
         .tooltip:hover .tooltiptext {
             visibility: visible;
@@ -94,7 +94,7 @@
         }
         .info-icon {
             cursor: help;
-            color: #64748b;
+            color: #968f92;
             font-size: 16px;
         }
     </style>
@@ -128,7 +128,7 @@
 
         <!-- Historical Chart -->
         <div class="card">
-            <h3 style="color: #94a3b8; margin-bottom: 16px;">Market Bias Score - 48 Hours</h3>
+            <h3 style="color: #968f92; margin-bottom: 16px;">Market Bias Score - 48 Hours</h3>
             <div class="chart-container">
                 <canvas id="biasChart"></canvas>
             </div>
@@ -141,7 +141,6 @@
             .then(response => response.text())
             .then(html => {
                 document.getElementById('nav-placeholder').innerHTML = html;
-                // Initialize navigation after it's loaded
                 if (typeof initializeNavigation === 'function') {
                     initializeNavigation();
                 }
@@ -163,13 +162,13 @@
                 // Bearish zone (-100 to -25)
                 const bearishTop = yScale.getPixelForValue(-25);
                 const bearishBottom = yScale.getPixelForValue(-100);
-                ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
+                ctx.fillStyle = 'rgba(244, 88, 84, 0.1)';
                 ctx.fillRect(chartArea.left, bearishTop, chartArea.right - chartArea.left, bearishBottom - bearishTop);
 
                 // Neutral zone (-25 to 25)
                 const neutralTop = yScale.getPixelForValue(25);
                 const neutralBottom = yScale.getPixelForValue(-25);
-                ctx.fillStyle = 'rgba(245, 158, 11, 0.1)';
+                ctx.fillStyle = 'rgba(150, 143, 146, 0.1)';
                 ctx.fillRect(chartArea.left, neutralTop, chartArea.right - chartArea.left, neutralBottom - neutralTop);
 
                 // Bullish zone (25 to 100)
@@ -217,18 +216,18 @@
                                     x: new Date(d.timestamp).getTime(),
                                     y: d.score
                                 })),
-                                borderColor: '#60a5fa',
-                                backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                                borderColor: '#f45854',
+                                backgroundColor: 'rgba(244, 88, 84, 0.1)',
                                 fill: true,
                                 tension: 0.4,
                                 borderWidth: 3,
                                 pointRadius: 2,
                                 pointHoverRadius: 6,
-                                pointBackgroundColor: '#60a5fa',
-                                pointBorderColor: '#1e293b',
+                                pointBackgroundColor: '#f45854',
+                                pointBorderColor: '#423d3f',
                                 pointBorderWidth: 2,
-                                pointHoverBackgroundColor: '#3b82f6',
-                                pointHoverBorderColor: '#1e293b',
+                                pointHoverBackgroundColor: '#f45854',
+                                pointHoverBorderColor: '#423d3f',
                                 pointHoverBorderWidth: 3
                             }]
                         },
@@ -246,15 +245,15 @@
                                         unit: 'hour',
                                         displayFormats: { hour: 'MMM dd HH:mm' }
                                     },
-                                    ticks: { color: '#94a3b8' },
-                                    grid: { color: '#334155' }
+                                    ticks: { color: '#968f92' },
+                                    grid: { color: '#968f92' }
                                 },
                                 y: {
                                     min: -100,
                                     max: 100,
-                                    title: { display: true, text: 'Bias Score', color: '#94a3b8' },
+                                    title: { display: true, text: 'Bias Score', color: '#968f92' },
                                     ticks: {
-                                        color: '#94a3b8',
+                                        color: '#968f92',
                                         stepSize: 25,
                                         callback: function(value) {
                                             if (value === 100) return 'Bullish (+100)';
@@ -265,7 +264,7 @@
                                             return value;
                                         }
                                     },
-                                    grid: { color: '#334155' }
+                                    grid: { color: '#968f92' }
                                 }
                             },
                             plugins: {
@@ -309,8 +308,7 @@
     </script>
 
     <!-- Last Updated Footer -->
-    <div style="text-align: center; padding: 24px 0; color: #64748b; font-size: 12px; border-top: 1px solid #334155; margin-top: 32px;
-">
+    <div style="text-align: center; padding: 24px 0; color: #968f92; font-size: 12px; border-top: 1px solid #968f92; margin-top: 32px;">
         <div id="lastUpdated">Last updated: --</div>
     </div>
 

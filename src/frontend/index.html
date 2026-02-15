@@ -12,8 +12,8 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #0f172a;
-            color: #e2e8f0;
+            background: #2a2628;
+            color: #f2f2f2;
         }
         .container {
             max-width: 1400px;
@@ -24,13 +24,13 @@
         .grid-2 { grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); }
         .grid-4 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
         .card {
-            background: #1e293b;
+            background: #423d3f;
             border-radius: 16px;
             padding: 24px;
-            border: 1px solid #334155;
+            border: 1px solid #968f92;
         }
         .card h3 {
-            color: #94a3b8;
+            color: #968f92;
             font-size: 14px;
             font-weight: 600;
             text-transform: uppercase;
@@ -42,7 +42,7 @@
             height: 350px;
         }
         .metric-label {
-            color: #94a3b8;
+            color: #968f92;
             font-size: 12px;
             margin-bottom: 8px;
             text-transform: uppercase;
@@ -54,7 +54,7 @@
         .metric-value {
             font-size: 36px;
             font-weight: 700;
-            color: #e2e8f0;
+            color: #f2f2f2;
         }
         .metric-large {
             font-size: 48px;
@@ -62,8 +62,8 @@
             line-height: 1;
         }
         .positive { color: #10b981; }
-        .negative { color: #ef4444; }
-        .neutral { color: #60a5fa; }
+        .negative { color: #f45854; }
+        .neutral { color: #f2f2f2; }
         .tooltip {
             position: relative;
             display: inline-block;
@@ -72,8 +72,8 @@
             visibility: hidden;
             opacity: 0;
             width: 300px;
-            background-color: #1e293b;
-            color: #e2e8f0;
+            background-color: #423d3f;
+            color: #f2f2f2;
             text-align: left;
             border-radius: 8px;
             padding: 12px;
@@ -84,7 +84,7 @@
             margin-left: -150px;
             margin-top: 10px;
             transition: opacity 0.3s;
-            border: 1px solid #334155;
+            border: 1px solid #968f92;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             font-size: 12px;
             line-height: 1.5;
@@ -97,7 +97,7 @@
             margin-left: -5px;
             border-width: 5px;
             border-style: solid;
-            border-color: transparent transparent #1e293b transparent;
+            border-color: transparent transparent #423d3f transparent;
         }
         .tooltip:hover .tooltiptext {
             visibility: visible;
@@ -105,12 +105,12 @@
         }
         .info-icon {
             cursor: help;
-            color: #64748b;
+            color: #968f92;
             font-size: 14px;
         }
         .footer {
-            background: #1e293b;
-            border-top: 1px solid #334155;
+            background: #423d3f;
+            border-top: 1px solid #968f92;
             padding: 24px 32px;
             margin-top: 48px;
         }
@@ -126,11 +126,11 @@
             opacity: 0.8;
         }
         .footer-text {
-            color: #64748b;
+            color: #968f92;
             font-size: 13px;
         }
         .footer-tagline {
-            color: #94a3b8;
+            color: #968f92;
             font-size: 12px;
             margin-top: 8px;
         }
@@ -257,7 +257,6 @@
             .then(response => response.text())
             .then(html => {
                 document.getElementById('nav-placeholder').innerHTML = html;
-                // Initialize navigation after it's loaded
                 if (typeof initializeNavigation === 'function') {
                     initializeNavigation();
                 }
@@ -342,8 +341,8 @@
                                 x: new Date(d.timestamp).getTime(),
                                 y: d.net_gex_millions
                             })),
-                            borderColor: '#60a5fa',
-                            backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                            borderColor: '#f45854',
+                            backgroundColor: 'rgba(244, 88, 84, 0.1)',
                             fill: true,
                             tension: 0.4,
                             pointRadius: 0
@@ -356,12 +355,12 @@
                             x: {
                                 type: 'time',
                                 time: { unit: 'hour', displayFormats: { hour: 'HH:mm' }},
-                                ticks: { color: '#94a3b8' },
-                                grid: { color: '#334155' }
+                                ticks: { color: '#968f92' },
+                                grid: { color: '#968f92' }
                             },
                             y: {
-                                ticks: { color: '#94a3b8' },
-                                grid: { color: '#334155' }
+                                ticks: { color: '#968f92' },
+                                grid: { color: '#968f92' }
                             }
                         },
                         plugins: { legend: { display: false }}
@@ -396,12 +395,12 @@
                             x: {
                                 type: 'time',
                                 time: { unit: 'hour', displayFormats: { hour: 'HH:mm' }},
-                                ticks: { color: '#94a3b8' },
-                                grid: { color: '#334155' }
+                                ticks: { color: '#968f92' },
+                                grid: { color: '#968f92' }
                             },
                             y: {
-                                ticks: { color: '#94a3b8' },
-                                grid: { color: '#334155' }
+                                ticks: { color: '#968f92' },
+                                grid: { color: '#968f92' }
                             }
                         },
                         plugins: { legend: { display: false }}
@@ -422,8 +421,8 @@
                                 x: new Date(d.timestamp).getTime(),
                                 y: d.put_call_ratio
                             })),
-                            borderColor: '#a855f7',
-                            backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                            borderColor: '#968f92',
+                            backgroundColor: 'rgba(150, 143, 146, 0.1)',
                             fill: true,
                             tension: 0.4,
                             pointRadius: 0
@@ -436,12 +435,12 @@
                             x: {
                                 type: 'time',
                                 time: { unit: 'hour', displayFormats: { hour: 'HH:mm' }},
-                                ticks: { color: '#94a3b8' },
-                                grid: { color: '#334155' }
+                                ticks: { color: '#968f92' },
+                                grid: { color: '#968f92' }
                             },
                             y: {
-                                ticks: { color: '#94a3b8' },
-                                grid: { color: '#334155' }
+                                ticks: { color: '#968f92' },
+                                grid: { color: '#968f92' }
                             }
                         },
                         plugins: { legend: { display: false }}
@@ -467,7 +466,7 @@
                             {
                                 label: 'Put Gamma',
                                 data: strikeData.strikes.map(s => -s.put_gamma_millions),
-                                backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                                backgroundColor: 'rgba(244, 88, 84, 0.7)',
                                 stack: 'stack0'
                             }
                         ]
@@ -477,16 +476,16 @@
                         maintainAspectRatio: false,
                         scales: {
                             x: {
-                                ticks: { color: '#94a3b8' },
-                                grid: { color: '#334155' }
+                                ticks: { color: '#968f92' },
+                                grid: { color: '#968f92' }
                             },
                             y: {
-                                ticks: { color: '#94a3b8' },
-                                grid: { color: '#334155' }
+                                ticks: { color: '#968f92' },
+                                grid: { color: '#968f92' }
                             }
                         },
                         plugins: {
-                            legend: { labels: { color: '#e2e8f0' }}
+                            legend: { labels: { color: '#f2f2f2' }}
                         }
                     }
                 });
@@ -504,7 +503,7 @@
     </script>
 
     <!-- Last Updated Footer -->
-    <div style="text-align: center; padding: 24px 0; color: #64748b; font-size: 12px; border-top: 1px solid #334155; margin-top: 32px;">
+    <div style="text-align: center; padding: 24px 0; color: #968f92; font-size: 12px; border-top: 1px solid #968f92; margin-top: 32px;">
         <div id="lastUpdated">Last updated: --</div>
     </div>
 
