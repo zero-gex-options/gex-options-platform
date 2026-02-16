@@ -658,7 +658,7 @@ def get_flows_history():
             WITH five_min_buckets AS (
                 SELECT
                     date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') +
-                    (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
+                    (floor((EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') - 1) / 5) * INTERVAL '5 minutes') as bucket_time,
                     SUM(last * volume * 100) as premium_spent,
                     SUM(
                         volume *
@@ -775,7 +775,7 @@ def get_spy_current():
 @app.route('/api/market/SPY/history')
 @cache_query(ttl_seconds=30)
 def get_spy_market_history():
-    """Get SPY market history for charts - last two trading sessions"""
+    """Get SPY market history for charts - last 384 5-minute bars"""
     conn = None
     try:
         conn = get_db_connection()
@@ -789,7 +789,7 @@ def get_spy_market_history():
             WITH five_min_buckets AS (
                 SELECT
                     date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') +
-                    (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
+                    (floor((EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') - 1) / 5) * INTERVAL '5 minutes') as bucket_time,
                     (array_agg(open ORDER BY timestamp))[1] as open,
                     MAX(high) as high,
                     MIN(low) as low,
@@ -802,17 +802,18 @@ def get_spy_market_history():
                 FROM underlying_quotes
                 WHERE symbol = 'SPY'
                 GROUP BY bucket_time
+                ORDER BY bucket_time DESC
+                LIMIT 384
             )
             SELECT * FROM five_min_buckets
             ORDER BY bucket_time DESC
-            LIMIT 385
         """)
 
         rows = cursor.fetchall()
         cursor.close()
 
         # Reverse to get chronological order
-        rows = list(reversed(rows))
+        rows = list(reversed(rows)) if rows else []
 
         import pytz
         eastern = pytz.timezone('America/New_York')
@@ -824,9 +825,18 @@ def get_spy_market_history():
             else:
                 ts = ts.astimezone(eastern)
 
+            actual_ts = row['actual_timestamp']
+            if actual_ts:
+                if actual_ts.tzinfo is None:
+                    actual_ts_display = eastern.localize(actual_ts)
+                else:
+                    actual_ts_display = actual_ts.astimezone(eastern)
+            else:
+                actual_ts_display = ts
+
             result.append({
                 'timestamp': ts.isoformat(),
-                'actual_timestamp': row['actual_timestamp'].isoformat() if row['actual_timestamp'] else ts.isoformat(),
+                'actual_timestamp': actual_ts_display.isoformat(),
                 'actual_time': row['actual_time'].isoformat() if row['actual_time'] else None,
                 'open': float(row['open'] or row['close'] or 0),
                 'high': float(row['high'] or row['close'] or 0),
@@ -850,7 +860,7 @@ def get_spy_market_history():
 @app.route('/api/spy-48hr-range')
 @cache_query(ttl_seconds=10)
 def get_spy_48hr_range():
-    """Get SPY range from last two trading sessions and today's cumulative volume"""
+    """Get SPY range from last 384 5-minute bars and today's cumulative volume"""
     conn = None
     try:
         conn = get_db_connection()
@@ -860,19 +870,19 @@ def get_spy_48hr_range():
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("SET TIME ZONE 'America/New_York'")
 
-        # Get range from last two trading sessions
+        # Get range from last 384 5-minute buckets
         cursor.execute("""
             WITH five_min_buckets AS (
                 SELECT
                     date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') +
-                    (floor(EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') / 5) * INTERVAL '5 minutes') as bucket_time,
+                    (floor((EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') - 1) / 5) * INTERVAL '5 minutes') as bucket_time,
                     MAX(high) as high,
                     MIN(low) as low
                 FROM underlying_quotes
                 WHERE symbol = 'SPY'
                 GROUP BY bucket_time
                 ORDER BY bucket_time DESC
-                LIMIT 385
+                LIMIT 384
             )
             SELECT
                 MIN(low) as range_low,

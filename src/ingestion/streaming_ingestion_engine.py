@@ -398,6 +398,10 @@ class StreamingIngestionEngine:
         """
         cursor = self.db_conn.cursor()
 
+        # Skip if volume is 0
+        if quote.get('total_volume', 0) == 0:
+            logger.debug(f"Skipping quote with zero volume: {quote}")
+
         # Parse the timestamp from the quote
         quote_timestamp_str = quote.get('timestamp')
         if not quote_timestamp_str:
