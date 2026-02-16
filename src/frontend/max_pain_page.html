@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ZeroGEX™ | Max Pain Analysis</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    <script src="/navigation.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #2a2628;
+            color: #f2f2f2;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+
+        /* Max Pain Banner */
+        .max-pain-banner {
+            background: linear-gradient(135deg, #423d3f 0%, #2a2628 100%);
+            border-radius: 16px;
+            padding: 32px;
+            border: 1px solid #968f92;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .banner-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .banner-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .banner-title h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #f2f2f2;
+        }
+        .banner-timestamp {
+            font-size: 12px;
+            color: #968f92;
+        }
+        .banner-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+        }
+        .metric-box {
+            background: rgba(42, 38, 40, 0.5);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #968f92;
+        }
+        .metric-label {
+            color: #968f92;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #f2f2f2;
+            line-height: 1;
+        }
+        .metric-subtext {
+            font-size: 14px;
+            color: #968f92;
+            margin-top: 8px;
+        }
+        .distance-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .distance-indicator.above {
+            color: #f45854;
+        }
+        .distance-indicator.below {
+            color: #10b981;
+        }
+        .distance-arrow {
+            font-size: 20px;
+        }
+
+        .card {
+            background: #423d3f;
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid #968f92;
+            margin-bottom: 24px;
+        }
+        .card h3 {
+            color: #968f92;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .chart-container {
+            position: relative;
+            height: 500px;
+            margin-top: 16px;
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            opacity: 0;
+            width: 350px;
+            background-color: #423d3f;
+            color: #f2f2f2;
+            text-align: left;
+            border-radius: 8px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            top: 100%;
+            left: 50%;
+            margin-left: -175px;
+            margin-top: 10px;
+            transition: opacity 0.3s;
+            border: 1px solid #968f92;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent #423d3f transparent;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .info-icon {
+            cursor: help;
+            color: #968f92;
+            font-size: 16px;
+        }
+
+        /* Light mode styles */
+        body.light-mode {
+            background: #f2f2f2;
+            color: #423d3f;
+        }
+        body.light-mode .card {
+            background: #ffffff;
+            border: 1px solid #968f92;
+        }
+        body.light-mode .card h3 {
+            color: #423d3f;
+        }
+        body.light-mode .metric-label {
+            color: #423d3f;
+        }
+        body.light-mode .metric-value {
+            color: #423d3f;
+        }
+        body.light-mode .metric-subtext {
+            color: #423d3f;
+        }
+        body.light-mode .tooltip .tooltiptext {
+            background-color: #ffffff;
+            color: #423d3f;
+            border: 1px solid #968f92;
+        }
+        body.light-mode .tooltip .tooltiptext::after {
+            border-color: transparent transparent #ffffff transparent;
+        }
+        body.light-mode .info-icon {
+            color: #423d3f;
+        }
+        body.light-mode .max-pain-banner {
+            background: linear-gradient(135deg, #ffffff 0%, #f2f2f2 100%);
+            border: 1px solid #968f92;
+        }
+        body.light-mode .banner-timestamp {
+            color: #423d3f;
+        }
+        body.light-mode .metric-box {
+            background: #f2f2f2;
+            border: 1px solid #968f92;
+        }
+    </style>
+</head>
+<body>
+    <div id="nav-placeholder"></div>
+
+    <div class="container">
+        <!-- Max Pain Banner -->
+        <div class="max-pain-banner">
+            <div class="banner-header">
+                <div class="banner-title">
+                    <h2>Max Pain Analysis</h2>
+                </div>
+                <div id="bannerTimestamp" class="banner-timestamp">Loading...</div>
+            </div>
+
+            <div id="maxPainBannerContent" class="banner-metrics">
+                <div class="loading">Loading max pain data...</div>
+            </div>
+        </div>
+
+        <!-- Max Pain Chart -->
+        <div class="card">
+            <h3>
+                Option Value at Each Strike Price
+                <span class="tooltip">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="tooltiptext">
+                        <strong>Max Pain Visualization</strong><br><br>
+                        Shows the total intrinsic value of all options (calls and puts) if SPY were to close at each strike price.<br><br>
+                        <strong>Green (Calls):</strong> Value retained by call holders<br>
+                        <strong>Red (Puts):</strong> Value retained by put holders<br><br>
+                        The strike with the lowest total bar height is the Max Pain point - where option holders would lose the most money.
+                    </span>
+                </span>
+            </h3>
+            <div class="chart-container">
+                <canvas id="maxPainChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load shared navigation
+        fetch('/_navigation.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('nav-placeholder').innerHTML = html;
+                if (typeof initializeNavigation === 'function') {
+                    initializeNavigation();
+                }
+            })
+            .catch(error => console.error('Error loading navigation:', error));
+
+        let maxPainChart = null;
+
+        function formatCurrency(value) {
+            if (value >= 1e9) {
+                return '$' + (value / 1e9).toFixed(2) + 'B';
+            } else if (value >= 1e6) {
+                return '$' + (value / 1e6).toFixed(1) + 'M';
+            } else if (value >= 1e3) {
+                return '$' + (value / 1e3).toFixed(0) + 'K';
+            }
+            return '$' + value.toFixed(0);
+        }
+
+        async function updateMaxPainData() {
+            try {
+                // Fetch max pain analysis data
+                const response = await fetch('/api/max-pain/analysis');
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error('Max pain API error:', data.error);
+                    return;
+                }
+
+                // Update banner
+                updateBanner(data);
+
+                // Update chart
+                updateChart(data);
+
+            } catch (error) {
+                console.error('Error fetching max pain data:', error);
+            }
+        }
+
+        function updateBanner(data) {
+            const timestamp = new Date(data.timestamp);
+            document.getElementById('bannerTimestamp').textContent = 
+                `Last updated: ${timestamp.toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: 'America/New_York'
+                }) + ' ET'}`;
+
+            const distance = data.current_price - data.max_pain;
+            const distanceAbs = Math.abs(distance);
+            const distancePct = (distance / data.max_pain * 100);
+            const isAbove = distance > 0;
+
+            const distanceClass = isAbove ? 'above' : 'below';
+            const distanceArrow = isAbove ? '▲' : '▼';
+            const distanceText = isAbove ? 'ABOVE' : 'BELOW';
+
+            document.getElementById('maxPainBannerContent').innerHTML = `
+                <div class="metric-box">
+                    <div class="metric-label">Max Pain Strike</div>
+                    <div class="metric-value">$${data.max_pain.toFixed(2)}</div>
+                    <div class="metric-subtext">Expiration: ${data.expiration_display}</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Current SPY Price</div>
+                    <div class="metric-value">$${data.current_price.toFixed(2)}</div>
+                    <div class="distance-indicator ${distanceClass}">
+                        <span class="distance-arrow">${distanceArrow}</span>
+                        <span>${distanceText} by $${distanceAbs.toFixed(2)} (${Math.abs(distancePct).toFixed(2)}%)</span>
+                    </div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Total Option Value at Max Pain</div>
+                    <div class="metric-value">${formatCurrency(data.total_value_at_max_pain)}</div>
+                    <div class="metric-subtext">Value retained by option holders</div>
+                </div>
+            `;
+        }
+
+        function updateChart(data) {
+            if (maxPainChart) {
+                maxPainChart.destroy();
+            }
+
+            const ctx = document.getElementById('maxPainChart');
+
+            // Find max pain index to highlight it
+            const maxPainIndex = data.strikes.findIndex(s => s.strike === data.max_pain);
+
+            maxPainChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.strikes.map(s => s.strike),
+                    datasets: [
+                        {
+                            label: 'Call Value',
+                            data: data.strikes.map(s => s.call_value),
+                            backgroundColor: data.strikes.map((s, i) => 
+                                i === maxPainIndex ? 'rgba(16, 185, 129, 1)' : 'rgba(16, 185, 129, 0.7)'
+                            ),
+                            borderColor: data.strikes.map((s, i) => 
+                                i === maxPainIndex ? '#10b981' : 'rgba(16, 185, 129, 0)'
+                            ),
+                            borderWidth: data.strikes.map((s, i) => i === maxPainIndex ? 3 : 0),
+                            stack: 'value'
+                        },
+                        {
+                            label: 'Put Value',
+                            data: data.strikes.map(s => s.put_value),
+                            backgroundColor: data.strikes.map((s, i) => 
+                                i === maxPainIndex ? 'rgba(244, 88, 84, 1)' : 'rgba(244, 88, 84, 0.7)'
+                            ),
+                            borderColor: data.strikes.map((s, i) => 
+                                i === maxPainIndex ? '#f45854' : 'rgba(244, 88, 84, 0)'
+                            ),
+                            borderWidth: data.strikes.map((s, i) => i === maxPainIndex ? 3 : 0),
+                            stack: 'value'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    scales: {
+                        x: {
+                            title: { 
+                                display: true, 
+                                text: 'Strike Price ($)', 
+                                color: '#968f92',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            ticks: { 
+                                color: '#968f92',
+                                callback: function(value, index) {
+                                    const strike = data.strikes[index].strike;
+                                    // Highlight current price and max pain
+                                    if (strike === data.max_pain) {
+                                        return '★ $' + strike;
+                                    } else if (Math.abs(strike - data.current_price) < 0.5) {
+                                        return '► $' + strike;
+                                    }
+                                    return '$' + strike;
+                                }
+                            },
+                            grid: { color: '#334155' }
+                        },
+                        y: {
+                            stacked: true,
+                            title: { 
+                                display: true, 
+                                text: 'Total Option Value ($)', 
+                                color: '#968f92',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            ticks: { 
+                                color: '#968f92',
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
+                            },
+                            grid: { color: '#334155' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#f2f2f2' },
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    const strike = data.strikes[context[0].dataIndex].strike;
+                                    let title = `Strike: $${strike.toFixed(2)}`;
+                                    if (strike === data.max_pain) {
+                                        title += ' ★ MAX PAIN';
+                                    } else if (Math.abs(strike - data.current_price) < 0.5) {
+                                        title += ' ► CURRENT';
+                                    }
+                                    return title;
+                                },
+                                label: function(context) {
+                                    const label = context.dataset.label;
+                                    const value = context.parsed.y;
+                                    return `${label}: ${formatCurrency(value)}`;
+                                },
+                                footer: function(context) {
+                                    const idx = context[0].dataIndex;
+                                    const total = data.strikes[idx].total_value;
+                                    return `Total Value: ${formatCurrency(total)}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initial load
+        updateMaxPainData();
+
+        // Auto-refresh every 30 seconds
+        setInterval(updateMaxPainData, 30000);
+    </script>
+
+    <!-- Last Updated Footer -->
+    <div style="text-align: center; padding: 24px 0; color: #968f92; font-size: 12px; border-top: 1px solid #968f92; margin-top: 32px;">
+        <div id="lastUpdated">Last updated: --</div>
+    </div>
+
+    <script>
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('lastUpdated').textContent =
+                'Last updated: ' + now.toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: 'America/New_York'
+                }) + ' ET';
+        }
+        updateTimestamp();
+        setInterval(updateTimestamp, 1000);
+    </script>
+</body>
+</html>

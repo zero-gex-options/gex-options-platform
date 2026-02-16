@@ -39,6 +39,7 @@ REQUIRED_FILES=(
     "market_bias_page.html"
     "put_call_page.html"
     "spy_price_page.html"
+    "max_pain_page.html"
 )
 
 log "  → Verifying required frontend files..."

@@ -9,6 +9,7 @@ function initializeNavigation() {
         '/flows': 'flows',
         '/spy-price': 'spy-price',
         '/market-bias': 'market-bias',
+        '/max-pain': 'max-pain',
         '/about': 'about'
     };
     const activePage = pathMap[currentPath];

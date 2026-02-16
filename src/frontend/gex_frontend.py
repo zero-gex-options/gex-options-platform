@@ -11,7 +11,7 @@ import psycopg2
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
 import traceback
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, time as dt_time
 import pytz
 import time
 from functools import wraps
@@ -166,6 +166,14 @@ def market_bias_page():
         return send_from_directory(DASHBOARD_DIR, 'market_bias_page.html')
     except Exception as e:
         print(f"Error serving market bias page: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/max-pain')
+def max_pain_page():
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'max_pain_page.html')
+    except Exception as e:
+        print(f"Error serving max pain page: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/_navigation.html')
@@ -1237,6 +1245,162 @@ def get_spy_change():
 
     except Exception as e:
         print(f"Error in get_spy_change: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/max-pain/analysis')
+@cache_query(ttl_seconds=10)
+def get_max_pain_analysis():
+    """Get max pain analysis with strike-by-strike breakdown"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+
+        # Determine target expiration (today if before 4PM, else next trading day)
+        eastern = pytz.timezone('America/New_York')
+        now_et = datetime.now(eastern)
+
+        # If it's after 4 PM ET or weekend, target next trading day
+        if now_et.time() >= dt_time(16, 0) or now_et.weekday() >= 5:
+            # Find next trading day
+            target_date = now_et.date()
+            while True:
+                target_date = target_date + timedelta(days=1)
+                if target_date.weekday() < 5:  # Monday = 0, Friday = 4
+                    break
+        else:
+            target_date = now_et.date()
+
+        # Get current SPY price
+        cursor.execute("""
+            SELECT close as current_price
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+        price_result = cursor.fetchone()
+        current_price = float(price_result['current_price']) if price_result else 600.0
+
+        # Get max pain from database
+        cursor.execute("""
+            SELECT max_pain, timestamp
+            FROM gex_metrics
+            WHERE symbol = 'SPY'
+                AND DATE(expiration) = %s
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """, (target_date,))
+
+        max_pain_result = cursor.fetchone()
+
+        if not max_pain_result or not max_pain_result['max_pain']:
+            return jsonify({'error': 'No max pain data available'}), 404
+
+        max_pain = float(max_pain_result['max_pain'])
+        timestamp = max_pain_result['timestamp']
+
+        # Get all options for the target expiration
+        cursor.execute("""
+            SELECT DISTINCT ON (strike, option_type)
+                strike,
+                option_type,
+                open_interest,
+                mid,
+                underlying_price
+            FROM options_quotes
+            WHERE symbol LIKE 'SPY%'
+                AND DATE(expiration) = %s
+                AND timestamp > NOW() - INTERVAL '30 minutes'
+                AND open_interest > 0
+            ORDER BY strike, option_type, timestamp DESC
+        """, (target_date,))
+
+        options_rows = cursor.fetchall()
+        cursor.close()
+
+        if not options_rows:
+            return jsonify({'error': 'No options data available'}), 404
+
+        # Calculate value at each strike
+        strikes_dict = {}
+
+        for row in options_rows:
+            strike = float(row['strike'])
+            opt_type = row['option_type']
+            oi = int(row['open_interest'])
+
+            if strike not in strikes_dict:
+                strikes_dict[strike] = {
+                    'strike': strike,
+                    'call_oi': 0,
+                    'put_oi': 0,
+                    'call_value': 0,
+                    'put_value': 0,
+                    'total_value': 0
+                }
+
+            if opt_type == 'call':
+                strikes_dict[strike]['call_oi'] = oi
+            else:
+                strikes_dict[strike]['put_oi'] = oi
+
+        # Calculate intrinsic value at each strike
+        for strike, data in strikes_dict.items():
+            # For calls: value = max(0, strike - call_strike) * call_OI * 100
+            # For puts: value = max(0, put_strike - strike) * put_OI * 100
+
+            call_value = 0
+            put_value = 0
+
+            # Sum up value from all call options
+            for s, d in strikes_dict.items():
+                if d['call_oi'] > 0:
+                    intrinsic = max(0, strike - s)
+                    call_value += intrinsic * d['call_oi'] * 100
+
+                if d['put_oi'] > 0:
+                    intrinsic = max(0, s - strike)
+                    put_value += intrinsic * d['put_oi'] * 100
+
+            data['call_value'] = call_value
+            data['put_value'] = put_value
+            data['total_value'] = call_value + put_value
+
+        # Convert to sorted list
+        strikes_list = sorted(strikes_dict.values(), key=lambda x: x['strike'])
+
+        # Find total value at max pain
+        max_pain_data = next((s for s in strikes_list if s['strike'] == max_pain), None)
+        total_value_at_max_pain = max_pain_data['total_value'] if max_pain_data else 0
+
+        # Format expiration display
+        expiration_display = target_date.strftime('%b %d, %Y')
+        if target_date == now_et.date():
+            expiration_display += ' (0DTE)'
+
+        result = {
+            'timestamp': timestamp.isoformat() if timestamp else datetime.now(pytz.utc).isoformat(),
+            'expiration': target_date.isoformat(),
+            'expiration_display': expiration_display,
+            'current_price': current_price,
+            'max_pain': max_pain,
+            'total_value_at_max_pain': total_value_at_max_pain,
+            'strikes': strikes_list
+        }
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in max_pain_analysis: {e}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
