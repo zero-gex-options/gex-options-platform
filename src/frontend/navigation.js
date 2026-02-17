@@ -118,32 +118,49 @@ function initializeNavigation() {
         });
     }
 
-    // Update analog clock every second
-    function updateAnalogClock() {
-        const hourHand = document.getElementById('hourHand');
-        const minuteHand = document.getElementById('minuteHand');
-        const secondHand = document.getElementById('secondHand');
-
-        if (!hourHand || !minuteHand || !secondHand) return;
-
+    // Update all analog clocks every second
+    function updateAllClocks() {
         const now = new Date();
-        const etTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const clocks = document.querySelectorAll('.analog-clock, .analog-clock-small');
 
-        const hours = etTime.getHours() % 12;
-        const minutes = etTime.getMinutes();
-        const seconds = etTime.getSeconds();
+        clocks.forEach(clock => {
+            const timezone = clock.getAttribute('data-timezone');
+            const hourHand = clock.querySelector('.hour-hand');
+            const minuteHand = clock.querySelector('.minute-hand');
+            const secondHand = clock.querySelector('.second-hand');
 
-        // Calculate angles (0 degrees = 12 o'clock, clockwise)
-        const secondAngle = seconds * 6; // 6 degrees per second
-        const minuteAngle = minutes * 6 + seconds * 0.1; // 6 degrees per minute + smooth seconds
-        const hourAngle = hours * 30 + minutes * 0.5; // 30 degrees per hour + smooth minutes
+            if (!hourHand || !minuteHand || !secondHand) return;
 
-        // Apply rotations
-        secondHand.setAttribute('transform', `rotate(${secondAngle} 50 50)`);
-        minuteHand.setAttribute('transform', `rotate(${minuteAngle} 50 50)`);
-        hourHand.setAttribute('transform', `rotate(${hourAngle} 50 50)`);
+            // Get time for this timezone
+            const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: timezone,
+                hour: 'numeric',
+                minute: 'numeric',
+                second: 'numeric',
+                hour12: false
+            });
+
+            const parts = formatter.formatToParts(now);
+            const hourValue = parseInt(parts.find(p => p.type === 'hour').value);
+            const minuteValue = parseInt(parts.find(p => p.type === 'minute').value);
+            const secondValue = parseInt(parts.find(p => p.type === 'second').value);
+
+            const hours = hourValue % 12;
+            const minutes = minuteValue;
+            const seconds = secondValue;
+
+            // Calculate angles
+            const secondAngle = seconds * 6;
+            const minuteAngle = minutes * 6 + seconds * 0.1;
+            const hourAngle = hours * 30 + minutes * 0.5;
+
+            // Apply rotations
+            secondHand.setAttribute('transform', `rotate(${secondAngle} 50 50)`);
+            minuteHand.setAttribute('transform', `rotate(${minuteAngle} 50 50)`);
+            hourHand.setAttribute('transform', `rotate(${hourAngle} 50 50)`);
+        });
     }
 
-    updateAnalogClock();
-    setInterval(updateAnalogClock, 1000);
+    updateAllClocks();
+    setInterval(updateAllClocks, 1000);
 }

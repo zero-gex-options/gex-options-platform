@@ -33,27 +33,49 @@
         .header-helmet:hover {
             opacity: 1;
         }
-        .header-clock {
+        .header-clocks {
             position: absolute;
             right: 32px;
             top: 50%;
             transform: translateY(-50%);
-            font-size: 16px;
-            font-weight: 600;
-            color: #968f92;
-            font-family: 'Courier New', monospace;
+            display: flex;
+            gap: 20px;
+            align-items: center;
         }
-        .header-clock-label {
+        .main-clock {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .world-clocks-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        .world-clock {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .clock-label {
             font-size: 11px;
+            color: #968f92;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+            text-align: center;
+        }
+        .clock-label-small {
+            font-size: 9px;
             color: #968f92;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             margin-bottom: 2px;
             text-align: center;
         }
-        #analogClock {
+        .analog-clock,
+        .analog-clock-small {
             display: block;
-            margin: 0 auto;
         }
         .clock-face {
             fill: #423d3f;
@@ -66,6 +88,10 @@
         }
 
         /* Light mode clock adjustments */
+        body.light-mode .clock-label,
+        body.light-mode .clock-label-small {
+            color: #423d3f;
+        }
         body.light-mode .clock-face {
             fill: #f2f2f2;
         }
@@ -74,9 +100,6 @@
         }
         body.light-mode .minute-hand {
             stroke: #423d3f;
-        }
-        body.light-mode .header-clock-label {
-            color: #423d3f;
         }
         .header h1 {
             font-size: 32px;
@@ -307,33 +330,89 @@
             <img src="/logo_icon" alt="Helmet" class="header-helmet">
             <img src="/logo_title" alt="ZeroGEX™" class="header-logo">
             <img src="/logo_icon" alt="Helmet" class="header-helmet">
-            <div class="header-clock">
-                <div class="header-clock-label">US/Eastern</div>
-                <svg id="analogClock" width="100" height="100" viewBox="0 0 100 100">
-                    <!-- Clock face background -->
-                    <circle class="clock-face" cx="50" cy="50" r="48" stroke="#968f92" stroke-width="2"/>
+            <div class="header-clocks">
+                <!-- Main ET Clock (larger) -->
+                <div class="main-clock">
+                    <div class="clock-label">US/Eastern</div>
+                    <svg class="analog-clock" data-timezone="America/New_York" width="100" height="100" viewBox="0 0 100 100">
+                        <circle class="clock-face" cx="50" cy="50" r="48" stroke="#968f92" stroke-width="2"/>
+                        <circle class="clock-marker" cx="50" cy="8" r="2"/>
+                        <circle class="clock-marker" cx="50" cy="92" r="2"/>
+                        <circle class="clock-marker" cx="8" cy="50" r="2"/>
+                        <circle class="clock-marker" cx="92" cy="50" r="2"/>
+                        <line class="hour-hand" x1="50" y1="50" x2="50" y2="30" stroke="#f45854" stroke-width="3" stroke-linecap="round"/>
+                        <line class="minute-hand" x1="50" y1="50" x2="50" y2="20" stroke-width="2" stroke-linecap="round"/>
+                        <line class="second-hand" x1="50" y1="50" x2="50" y2="15" stroke="#f45854" stroke-width="1" stroke-linecap="round"/>
+                        <circle cx="50" cy="50" r="3" fill="#f45854"/>
+                    </svg>
+                </div>
 
-                    <!-- Hour markers (dots) -->
-                    <circle class="clock-marker" cx="50" cy="8" r="2"/>
-                    <circle class="clock-marker" cx="50" cy="92" r="2"/>
-                    <circle class="clock-marker" cx="8" cy="50" r="2"/>
-                    <circle class="clock-marker" cx="92" cy="50" r="2"/>
+                <!-- World Clocks Grid -->
+                <div class="world-clocks-grid">
+                    <!-- London -->
+                    <div class="world-clock">
+                        <div class="clock-label-small">London</div>
+                        <svg class="analog-clock-small" data-timezone="Europe/London" width="60" height="60" viewBox="0 0 100 100">
+                            <circle class="clock-face" cx="50" cy="50" r="48" stroke="#968f92" stroke-width="2"/>
+                            <circle class="clock-marker" cx="50" cy="8" r="2"/>
+                            <circle class="clock-marker" cx="50" cy="92" r="2"/>
+                            <circle class="clock-marker" cx="8" cy="50" r="2"/>
+                            <circle class="clock-marker" cx="92" cy="50" r="2"/>
+                            <line class="hour-hand" x1="50" y1="50" x2="50" y2="30" stroke="#f45854" stroke-width="3" stroke-linecap="round"/>
+                            <line class="minute-hand" x1="50" y1="50" x2="50" y2="20" stroke-width="2" stroke-linecap="round"/>
+                            <line class="second-hand" x1="50" y1="50" x2="50" y2="15" stroke="#f45854" stroke-width="1" stroke-linecap="round"/>
+                            <circle cx="50" cy="50" r="3" fill="#f45854"/>
+                        </svg>
+                    </div>
 
-                    <!-- Hour hand -->
-                    <line id="hourHand" x1="50" y1="50" x2="50" y2="30" 
-                          stroke="#f45854" stroke-width="3" stroke-linecap="round"/>
+                    <!-- Mumbai -->
+                    <div class="world-clock">
+                        <div class="clock-label-small">Mumbai</div>
+                        <svg class="analog-clock-small" data-timezone="Asia/Kolkata" width="60" height="60" viewBox="0 0 100 100">
+                            <circle class="clock-face" cx="50" cy="50" r="48" stroke="#968f92" stroke-width="2"/>
+                            <circle class="clock-marker" cx="50" cy="8" r="2"/>
+                            <circle class="clock-marker" cx="50" cy="92" r="2"/>
+                            <circle class="clock-marker" cx="8" cy="50" r="2"/>
+                            <circle class="clock-marker" cx="92" cy="50" r="2"/>
+                            <line class="hour-hand" x1="50" y1="50" x2="50" y2="30" stroke="#f45854" stroke-width="3" stroke-linecap="round"/>
+                            <line class="minute-hand" x1="50" y1="50" x2="50" y2="20" stroke-width="2" stroke-linecap="round"/>
+                            <line class="second-hand" x1="50" y1="50" x2="50" y2="15" stroke="#f45854" stroke-width="1" stroke-linecap="round"/>
+                            <circle cx="50" cy="50" r="3" fill="#f45854"/>
+                        </svg>
+                    </div>
 
-                    <!-- Minute hand -->
-                    <line id="minuteHand" class="minute-hand" x1="50" y1="50" x2="50" y2="20" 
-                          stroke-width="2" stroke-linecap="round"/>
+                    <!-- Tokyo -->
+                    <div class="world-clock">
+                        <div class="clock-label-small">Tokyo</div>
+                        <svg class="analog-clock-small" data-timezone="Asia/Tokyo" width="60" height="60" viewBox="0 0 100 100">
+                            <circle class="clock-face" cx="50" cy="50" r="48" stroke="#968f92" stroke-width="2"/>
+                            <circle class="clock-marker" cx="50" cy="8" r="2"/>
+                            <circle class="clock-marker" cx="50" cy="92" r="2"/>
+                            <circle class="clock-marker" cx="8" cy="50" r="2"/>
+                            <circle class="clock-marker" cx="92" cy="50" r="2"/>
+                            <line class="hour-hand" x1="50" y1="50" x2="50" y2="30" stroke="#f45854" stroke-width="3" stroke-linecap="round"/>
+                            <line class="minute-hand" x1="50" y1="50" x2="50" y2="20" stroke-width="2" stroke-linecap="round"/>
+                            <line class="second-hand" x1="50" y1="50" x2="50" y2="15" stroke="#f45854" stroke-width="1" stroke-linecap="round"/>
+                            <circle cx="50" cy="50" r="3" fill="#f45854"/>
+                        </svg>
+                    </div>
 
-                    <!-- Second hand -->
-                    <line id="secondHand" x1="50" y1="50" x2="50" y2="15" 
-                          stroke="#f45854" stroke-width="1" stroke-linecap="round"/>
-
-                    <!-- Center dot -->
-                    <circle cx="50" cy="50" r="3" fill="#f45854"/>
-                </svg>
+                    <!-- Los Angeles -->
+                    <div class="world-clock">
+                        <div class="clock-label-small">Los Angeles</div>
+                        <svg class="analog-clock-small" data-timezone="America/Los_Angeles" width="60" height="60" viewBox="0 0 100 100">
+                            <circle class="clock-face" cx="50" cy="50" r="48" stroke="#968f92" stroke-width="2"/>
+                            <circle class="clock-marker" cx="50" cy="8" r="2"/>
+                            <circle class="clock-marker" cx="50" cy="92" r="2"/>
+                            <circle class="clock-marker" cx="8" cy="50" r="2"/>
+                            <circle class="clock-marker" cx="92" cy="50" r="2"/>
+                            <line class="hour-hand" x1="50" y1="50" x2="50" y2="30" stroke="#f45854" stroke-width="3" stroke-linecap="round"/>
+                            <line class="minute-hand" x1="50" y1="50" x2="50" y2="20" stroke-width="2" stroke-linecap="round"/>
+                            <line class="second-hand" x1="50" y1="50" x2="50" y2="15" stroke="#f45854" stroke-width="1" stroke-linecap="round"/>
+                            <circle cx="50" cy="50" r="3" fill="#f45854"/>
+                        </svg>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
