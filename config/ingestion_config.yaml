@@ -34,7 +34,7 @@ ingestion:
   batch_size: 100
   
   # How often to update underlying quotes (seconds)
-  underlying_update_interval: 5
+  underlying_update_interval: 1
   
   # How often to log ingestion metrics (seconds)
   metrics_interval: 60

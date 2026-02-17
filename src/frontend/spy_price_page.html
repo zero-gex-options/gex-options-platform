@@ -507,8 +507,7 @@
                 });
         }
 
-        async function updateSPYBanner(latestData, changeData) {
-            // Use actual_time if available, otherwise fall back to timestamp
+        function updateSPYBanner(latestData, changeData, rangeData) {
             const latestTime = new Date(latestData.actual_time || latestData.actual_timestamp || latestData.timestamp);
 
             const priceChange = changeData.change || 0;
@@ -517,25 +516,16 @@
             const changeSymbol = priceChange >= 0 ? '+' : '';
             const changeArrow = priceChange >= 0 ? '▲' : '▼';
 
-            // Fetch 48hr range and today's volume
-            let rangeData = { range_low: 0, range_high: 0, total_volume: 0, up_volume: 0, down_volume: 0 };
-            try {
-                const rangeResponse = await fetch('/api/spy-48hr-range');
-                rangeData = await rangeResponse.json();
-            } catch (error) {
-                console.error('Error fetching 48hr range:', error);
-            }
-
             document.getElementById('bannerTimestamp').textContent =
-                 `Last update received: ${latestTime.toLocaleString('en-US', {
-                     month: 'short',
-                     day: 'numeric',
-                     year: 'numeric',
-                     hour: '2-digit',
-                     minute: '2-digit',
-                     second: '2-digit',
-                     timeZone: 'America/New_York'
-                 }) + ' ET'}`;
+                `Last update received: ${latestTime.toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: 'America/New_York'
+                }) + ' ET'}`;
 
             document.getElementById('spyBannerContent').innerHTML = `
                 <div class="metric-box">
@@ -897,25 +887,46 @@
                     }]
                 });
 
-                // Update banner
-                const latestData = filteredData[filteredData.length - 1];
-                try {
-                    const changeResponse = await fetch('/api/spy-change');
-                    const changeData = await changeResponse.json();
-                    updateSPYBanner(latestData, changeData);
-                } catch (error) {
-                    console.error('Error fetching change data:', error);
-                    updateSPYBanner(latestData, { change: 0, percent_change: 0 });
-                }
-
             } catch (error) {
                 console.error('Error in updateSPYChart:', error);
             }
         }
 
+        // Fast banner + status update - every second
+        async function updateBannerOnly() {
+            try {
+                const [latestRes, changeRes, rangeRes, statusRes] = await Promise.all([
+                    fetch('/api/market/SPY/latest'),
+                    fetch('/api/spy-change'),
+                    fetch('/api/spy-48hr-range'),
+                    fetch('/api/market-status')
+                ]);
+
+                const latestData = await latestRes.json();
+                const changeData = await changeRes.json();
+                const rangeData = await rangeRes.json();
+                const status = await statusRes.json();
+
+                if (!latestData.error && !changeData.error && !rangeData.error) {
+                    updateSPYBanner(latestData, changeData, rangeData);
+                }
+
+                const badge = document.getElementById('marketStatusBadge');
+                badge.className = `market-status-badge ${status.status}`;
+                badge.innerHTML = `<span>${status.icon} ${status.label}</span>`;
+
+            } catch (error) {
+                console.error('Error updating banner:', error);
+            }
+        }
+
         // Initial load
-        updateMarketStatus();
+        updateBannerOnly();
         updateSPYChart();
+
+        // Refresh every second
+        setInterval(updateBannerOnly, 1000);
+        setInterval(updateSPYChart, 1000);
 
         // Refresh every 2 seconds
         setInterval(() => {

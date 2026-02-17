@@ -280,6 +280,9 @@
 
                 if (data.error) {
                     console.error('Max pain API error:', data.error);
+                    document.getElementById('maxPainBannerContent').innerHTML =
+                        `<div style="color: #968f92; padding: 20px;">No max pain data available: ${data.error}</div>`;
+                    document.getElementById('bannerTimestamp').textContent = 'Error loading data';
                     return;
                 }
 
@@ -309,12 +312,13 @@
 
             const distance = data.current_price - data.max_pain;
             const distanceAbs = Math.abs(distance);
-            const distancePct = (distance / data.max_pain * 100);
+            const distancePct = Math.abs(distance / data.max_pain * 100);
             const isAbove = distance > 0;
 
-            const distanceClass = isAbove ? 'above' : 'below';
-            const distanceArrow = isAbove ? '▲' : '▼';
-            const distanceText = isAbove ? 'ABOVE' : 'BELOW';
+            // Implied move is toward max pain, so direction is opposite of current position
+            const impliedUp = !isAbove;
+            const distanceClass = impliedUp ? 'below' : 'above';
+            const distanceArrow = impliedUp ? '▲' : '▼';
 
             document.getElementById('maxPainBannerContent').innerHTML = `
                 <div class="metric-box">
@@ -327,7 +331,8 @@
                     <div class="metric-value">$${data.current_price.toFixed(2)}</div>
                     <div class="distance-indicator ${distanceClass}">
                         <span class="distance-arrow">${distanceArrow}</span>
-                        <span>${distanceText} by $${distanceAbs.toFixed(2)} (${Math.abs(distancePct).toFixed(2)}%)</span>
+                        <span>Implied move: $${distanceAbs.toFixed(2)} (${distancePct.toFixed(2)}%)</span>
+                    </div>
                     </div>
                 </div>
                 <div class="metric-box">

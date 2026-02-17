@@ -349,7 +349,7 @@ def get_strike_profile():
                 open_interest,
                 underlying_price
             FROM options_quotes
-            WHERE symbol LIKE 'SPY%'
+            WHERE symbol LIKE 'SPY%%'
                 AND DATE(expiration) = CURRENT_DATE
                 AND timestamp > NOW() - INTERVAL '30 minutes'
                 AND gamma IS NOT NULL
@@ -518,7 +518,7 @@ def get_key_levels():
                 gamma,
                 open_interest
             FROM options_quotes
-            WHERE symbol LIKE 'SPY%'
+            WHERE symbol LIKE 'SPY%%'
                 AND DATE(expiration) = CURRENT_DATE
                 AND timestamp > NOW() - INTERVAL '30 minutes'
                 AND gamma IS NOT NULL
@@ -728,6 +728,57 @@ def get_flows_history():
         if conn:
             return_db_connection(conn)
 
+@app.route('/api/market/SPY/latest')
+def get_spy_latest():
+    """Get only the most recent SPY bar - no cache, for real-time banner updates"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT
+                timestamp,
+                actual_time,
+                close,
+                open,
+                high,
+                low,
+                total_volume as volume,
+                up_volume,
+                down_volume
+            FROM underlying_quotes
+            WHERE symbol = 'SPY'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        cursor.close()
+        if not row:
+            return jsonify({'error': 'No data'}), 404
+        result = dict(row)
+        # Serialize datetime fields
+        import pytz
+        eastern = pytz.timezone('America/New_York')
+        for key in ['timestamp', 'actual_time']:
+            if result.get(key):
+                ts = result[key]
+                if hasattr(ts, 'tzinfo'):
+                    if ts.tzinfo is None:
+                        ts = eastern.localize(ts)
+                    else:
+                        ts = ts.astimezone(eastern)
+                    result[key] = ts.isoformat()
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error in get_spy_latest: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 @app.route('/api/market/SPY/current')
 @cache_query(ttl_seconds=5)
 def get_spy_current():
@@ -741,7 +792,7 @@ def get_spy_current():
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("""
             SELECT 
-                timestamp,
+                actual_time,
                 symbol,
                 close as last_price,
                 open,
@@ -1300,17 +1351,24 @@ def get_max_pain_analysis():
         price_result = cursor.fetchone()
         current_price = float(price_result['current_price']) if price_result else 600.0
 
-        # Get max pain from database
-        cursor.execute("""
-            SELECT max_pain, timestamp
-            FROM gex_metrics
-            WHERE symbol = 'SPY'
-                AND DATE(expiration) = %s
-            ORDER BY timestamp DESC
-            LIMIT 1
-        """, (target_date,))
-
-        max_pain_result = cursor.fetchone()
+        # Get max pain - fall back to today if next-day data not available
+        from datetime import date as date_class
+        today = date_class.today()
+        max_pain_result = None
+        for query_date in [target_date, today]:
+            query_date_str = str(query_date)
+            cursor.execute("""
+                SELECT max_pain, timestamp
+                FROM gex_metrics
+                WHERE symbol = 'SPY'
+                    AND DATE(expiration) = %s::date
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (query_date_str,))
+            max_pain_result = cursor.fetchone()
+            if max_pain_result and max_pain_result['max_pain']:
+                target_date = query_date
+                break
 
         if not max_pain_result or not max_pain_result['max_pain']:
             return jsonify({'error': 'No max pain data available'}), 404
@@ -1318,21 +1376,35 @@ def get_max_pain_analysis():
         max_pain = float(max_pain_result['max_pain'])
         timestamp = max_pain_result['timestamp']
 
-        # Get all options for the target expiration
+        # Get options data
+        target_date_str = str(target_date)
         cursor.execute("""
-            SELECT DISTINCT ON (strike, option_type)
+            SELECT
                 strike,
                 option_type,
                 open_interest,
                 mid,
                 underlying_price
-            FROM options_quotes
-            WHERE symbol LIKE 'SPY%'
-                AND DATE(expiration) = %s
-                AND timestamp > NOW() - INTERVAL '30 minutes'
-                AND open_interest > 0
-            ORDER BY strike, option_type, timestamp DESC
-        """, (target_date,))
+            FROM (
+                SELECT
+                    strike,
+                    option_type,
+                    open_interest,
+                    mid,
+                    underlying_price,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY strike, option_type
+                        ORDER BY timestamp DESC
+                    ) as rn
+                FROM options_quotes
+                WHERE symbol LIKE 'SPY%%'
+                    AND DATE(expiration) = %s::date
+                    AND timestamp > NOW() - INTERVAL '30 minutes'
+                    AND open_interest > 0
+            ) latest
+            WHERE rn = 1
+            ORDER BY strike, option_type
+        """, (target_date_str,))
 
         options_rows = cursor.fetchall()
         cursor.close()
@@ -1340,13 +1412,15 @@ def get_max_pain_analysis():
         if not options_rows:
             return jsonify({'error': 'No options data available'}), 404
 
-        # Calculate value at each strike
+        # Build strikes_dict
         strikes_dict = {}
-
-        for row in options_rows:
-            strike = float(row['strike'])
-            opt_type = row['option_type']
-            oi = int(row['open_interest'])
+        for i, row in enumerate(options_rows):
+            try:
+                strike = float(row['strike'])
+                opt_type = row['option_type']
+                oi = int(row['open_interest'])
+            except Exception as e:
+                continue
 
             if strike not in strikes_dict:
                 strikes_dict[strike] = {
@@ -1364,26 +1438,27 @@ def get_max_pain_analysis():
                 strikes_dict[strike]['put_oi'] = oi
 
         # Calculate intrinsic value at each strike
-        for strike, data in strikes_dict.items():
-            # For calls: value = max(0, strike - call_strike) * call_OI * 100
-            # For puts: value = max(0, put_strike - strike) * put_OI * 100
+        strikes_items = list(strikes_dict.items())
 
+        for outer_strike, outer_data in strikes_items:
             call_value = 0
             put_value = 0
 
-            # Sum up value from all call options
-            for s, d in strikes_dict.items():
-                if d['call_oi'] > 0:
-                    intrinsic = max(0, strike - s)
-                    call_value += intrinsic * d['call_oi'] * 100
+            for inner_strike, inner_data in strikes_items:
+                try:
+                    if inner_data['call_oi'] > 0:
+                        intrinsic = max(0, float(outer_strike) - float(inner_strike))
+                        call_value += intrinsic * inner_data['call_oi'] * 100
 
-                if d['put_oi'] > 0:
-                    intrinsic = max(0, s - strike)
-                    put_value += intrinsic * d['put_oi'] * 100
+                    if inner_data['put_oi'] > 0:
+                        intrinsic = max(0, float(inner_strike) - float(outer_strike))
+                        put_value += intrinsic * inner_data['put_oi'] * 100
+                except Exception as e:
+                    continue
 
-            data['call_value'] = call_value
-            data['put_value'] = put_value
-            data['total_value'] = call_value + put_value
+            outer_data['call_value'] = call_value
+            outer_data['put_value'] = put_value
+            outer_data['total_value'] = call_value + put_value
 
         # Convert to sorted list
         strikes_list = sorted(strikes_dict.values(), key=lambda x: x['strike'])
@@ -1410,7 +1485,6 @@ def get_max_pain_analysis():
         return jsonify(result)
 
     except Exception as e:
-        print(f"Error in max_pain_analysis: {e}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
