@@ -134,9 +134,9 @@ function initializeNavigation() {
         const seconds = etTime.getSeconds();
 
         // Calculate angles (0 degrees = 12 o'clock, clockwise)
-        const secondAngle = (seconds * 6) - 90; // 6 degrees per second
-        const minuteAngle = (minutes * 6 + seconds * 0.1) - 90; // 6 degrees per minute + smooth seconds
-        const hourAngle = (hours * 30 + minutes * 0.5) - 90; // 30 degrees per hour + smooth minutes
+        const secondAngle = seconds * 6; // 6 degrees per second
+        const minuteAngle = minutes * 6 + seconds * 0.1; // 6 degrees per minute + smooth seconds
+        const hourAngle = hours * 30 + minutes * 0.5; // 30 degrees per hour + smooth minutes
 
         // Apply rotations
         secondHand.setAttribute('transform', `rotate(${secondAngle} 50 50)`);
