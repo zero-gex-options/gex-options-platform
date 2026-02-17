@@ -8,7 +8,7 @@ calculates Greeks, and stores in database.
 import asyncio
 import psycopg2
 from psycopg2.extras import execute_values
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta, time as dt_time
 import time
 import os
 import sys
@@ -156,6 +156,38 @@ class StreamingIngestionEngine:
 
         logger.debug("Database credentials parsed successfully")
         return db_config
+
+    def _get_target_expiration(self) -> date:
+        """
+        Get the appropriate expiration date based on current market time.
+
+        For 0DTE trading:
+        - Before 4:00 PM ET: Use today's date
+        - After 4:00 PM ET: Use next trading day's date
+
+        Returns:
+            date: Target expiration date
+        """
+        import pytz
+        from datetime import timedelta, time as dt_time
+
+        now_et = datetime.now(pytz.timezone('America/New_York'))
+        current_date = now_et.date()
+
+        # If after 4:00 PM ET (options expiration time), move to next day
+        if now_et.time() >= dt_time(16, 0):
+            # Move to next day
+            next_day = current_date + timedelta(days=1)
+
+            # Skip weekends (Saturday=5, Sunday=6)
+            while next_day.weekday() >= 5:
+                next_day += timedelta(days=1)
+
+            logger.info(f"⏰ After 4pm ET, rolling to next trading day: {next_day}")
+            return next_day
+
+        logger.info(f"📅 Before 4pm ET, using current day: {current_date}")
+        return current_date
 
     async def option_update_handler(self, data: Dict, symbol: str, expiration: date):
         """
@@ -557,10 +589,10 @@ class StreamingIngestionEngine:
         logger.info("="*60)
 
         symbols = self.config['symbols']
-        target_expiration = self.config['ingestion']['target_expiration']
+        target_expiration_config = self.config['ingestion']['target_expiration']
 
         logger.info(f"Symbols: {', '.join(symbols)}")
-        logger.info(f"Target expiration: {target_expiration}")
+        logger.info(f"Target expiration config: {target_expiration_config}")
         logger.info(f"Heartbeat timeout: {self.heartbeat_timeout}s")
 
         async with TradeStationStreamingClient(
@@ -570,13 +602,13 @@ class StreamingIngestionEngine:
             self.ts_sandbox
         ) as stream_client:
 
-            # Get expiration date
-            if target_expiration == 'today':
-                expiration = date.today()
-                logger.info(f"Using today's expiration: {expiration}")
+            # Get initial expiration date
+            if target_expiration_config == 'today':
+                initial_expiration = self._get_target_expiration()
+                logger.info(f"✅ Using dynamic expiration (currently: {initial_expiration})")
             else:
-                expiration = datetime.strptime(target_expiration, '%Y-%m-%d').date()
-                logger.info(f"Using specified expiration: {expiration}")
+                initial_expiration = datetime.strptime(target_expiration_config, '%Y-%m-%d').date()
+                logger.info(f"✅ Using fixed expiration: {initial_expiration}")
 
             # Start background tasks
             tasks = []
@@ -593,10 +625,16 @@ class StreamingIngestionEngine:
             heartbeat_task = asyncio.create_task(self.monitor_heartbeats())
             tasks.append(heartbeat_task)
 
+            # Start expiration rollover monitor (only for 'today' mode)
+            if target_expiration_config == 'today':
+                rollover_task = asyncio.create_task(self.monitor_expiration_rollover())
+                tasks.append(rollover_task)
+                logger.info("✅ Expiration rollover monitor enabled")
+
             # Start streaming for each symbol with auto-reconnect
             for symbol in symbols:
                 stream_task = asyncio.create_task(
-                    self.manage_symbol_stream(stream_client, symbol, expiration)
+                    self.manage_symbol_stream(stream_client, symbol, initial_expiration)
                 )
                 tasks.append(stream_task)
 
@@ -661,19 +699,79 @@ class StreamingIngestionEngine:
             except Exception as e:
                 logger.error(f"Error in heartbeat monitor: {e}", exc_info=True)
 
-    async def manage_symbol_stream(self, stream_client, symbol: str, expiration: date):
+    async def monitor_expiration_rollover(self):
         """
-        Manage streaming for a symbol with auto-reconnect on stale streams
+        Monitor for 4pm ET expiration time and trigger stream reconnection.
+
+        This ensures we automatically roll to the next trading day's options
+        when today's options expire.
+        """
+        import pytz
+        from datetime import timedelta
+
+        logger.info("📍 Starting expiration rollover monitor (checks at 4:00 PM ET)")
+
+        last_check_date = None
+
+        while True:
+            try:
+                now_et = datetime.now(pytz.timezone('America/New_York'))
+                current_date = now_et.date()
+
+                # Only trigger rollover once per day at 4:00 PM ET
+                if (now_et.time().hour == 16 and 
+                    now_et.time().minute == 0 and 
+                    last_check_date != current_date):
+
+                    logger.warning("="*60)
+                    logger.warning("🔄 OPTIONS EXPIRATION - 4:00 PM ET ROLLOVER")
+                    logger.warning("="*60)
+                    logger.warning("Current options have expired. Streams will reconnect")
+                    logger.warning("to next trading day's contracts automatically.")
+                    logger.warning("="*60)
+
+                    # Mark that we've processed today's rollover
+                    last_check_date = current_date
+
+                    # Streams will automatically reconnect via manage_symbol_stream
+                    # which will call _get_target_expiration() for the new date
+
+                    # Sleep for 2 minutes to avoid multiple triggers
+                    await asyncio.sleep(120)
+
+                # Check every 30 seconds
+                await asyncio.sleep(30)
+
+            except asyncio.CancelledError:
+                logger.info("Expiration rollover monitor stopped")
+                break
+            except Exception as e:
+                logger.error(f"Error in rollover monitor: {e}", exc_info=True)
+                await asyncio.sleep(30)
+
+    async def manage_symbol_stream(self, stream_client, symbol: str, initial_expiration: date):
+        """
+        Manage streaming for a symbol with auto-reconnect on stale streams.
+        Recalculates expiration on each reconnect to handle daily rollovers.
 
         Args:
             stream_client: TradeStationStreamingClient instance
             symbol: Symbol to stream
-            expiration: Expiration date
+            initial_expiration: Initial expiration date (used to determine if dynamic)
         """
         reconnect_count = 0
+        use_dynamic_expiration = (self.config['ingestion']['target_expiration'] == 'today')
 
         while True:
             try:
+                # Recalculate expiration on each reconnect if using 'today' mode
+                if use_dynamic_expiration:
+                    expiration = self._get_target_expiration()
+                    if reconnect_count > 0:
+                        logger.info(f"🔄 Reconnecting with updated expiration: {expiration}")
+                else:
+                    expiration = initial_expiration
+
                 logger.info(f"🚀 Starting stream for {symbol} {expiration} (attempt #{reconnect_count + 1})")
 
                 # Initialize last activity time for this symbol
