@@ -1009,7 +1009,8 @@
                                     tension: 0.4,
                                     fill: false,
                                     yAxisID: 'y1',
-                                    order: 0
+                                    order: 0,
+                                    pointStyle: 'line'
                                 }
                             ]
                         },
@@ -1058,8 +1059,25 @@
                             },
                             plugins: {
                                 legend: { 
-                                    labels: { color: '#f2f2f2' },
-                                    position: 'top'
+                                    position: 'top',
+                                    labels: { 
+                                        color: '#f2f2f2',
+                                        usePointStyle: true,
+                                        generateLabels: function(chart) {
+                                            const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                                            const labels = original.call(this, chart);
+
+                                            // Change the Total Gamma Exposure legend item to show a line
+                                            labels.forEach((label, index) => {
+                                                if (index === 2) { // Third dataset (Total Gamma Exposure)
+                                                    label.pointStyle = 'line';
+                                                    label.fillStyle = 'transparent';
+                                                }
+                                            });
+
+                                            return labels;
+                                        }
+                                    }
                                 },
                                 tooltip: {
                                     callbacks: {
