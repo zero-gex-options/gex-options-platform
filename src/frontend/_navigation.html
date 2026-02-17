@@ -49,6 +49,34 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
             margin-bottom: 2px;
+            text-align: center;
+        }
+        #analogClock {
+            display: block;
+            margin: 0 auto;
+        }
+        .clock-face {
+            fill: #423d3f;
+        }
+        .clock-marker {
+            fill: #968f92;
+        }
+        .minute-hand {
+            stroke: #f2f2f2;
+        }
+
+        /* Light mode clock adjustments */
+        body.light-mode .clock-face {
+            fill: #f2f2f2;
+        }
+        body.light-mode .clock-marker {
+            fill: #423d3f;
+        }
+        body.light-mode .minute-hand {
+            stroke: #423d3f;
+        }
+        body.light-mode .header-clock-label {
+            color: #423d3f;
         }
         .header h1 {
             font-size: 32px;
@@ -281,7 +309,31 @@
             <img src="/logo_icon" alt="Helmet" class="header-helmet">
             <div class="header-clock">
                 <div class="header-clock-label">US/Eastern</div>
-                <div id="headerClock">---------- --:--:--</div>
+                <svg id="analogClock" width="100" height="100" viewBox="0 0 100 100">
+                    <!-- Clock face background -->
+                    <circle class="clock-face" cx="50" cy="50" r="48" stroke="#968f92" stroke-width="2"/>
+
+                    <!-- Hour markers (dots) -->
+                    <circle class="clock-marker" cx="50" cy="8" r="2"/>
+                    <circle class="clock-marker" cx="50" cy="92" r="2"/>
+                    <circle class="clock-marker" cx="8" cy="50" r="2"/>
+                    <circle class="clock-marker" cx="92" cy="50" r="2"/>
+
+                    <!-- Hour hand -->
+                    <line id="hourHand" x1="50" y1="50" x2="50" y2="30" 
+                          stroke="#f45854" stroke-width="3" stroke-linecap="round"/>
+
+                    <!-- Minute hand -->
+                    <line id="minuteHand" class="minute-hand" x1="50" y1="50" x2="50" y2="20" 
+                          stroke-width="2" stroke-linecap="round"/>
+
+                    <!-- Second hand -->
+                    <line id="secondHand" x1="50" y1="50" x2="50" y2="15" 
+                          stroke="#f45854" stroke-width="1" stroke-linecap="round"/>
+
+                    <!-- Center dot -->
+                    <circle cx="50" cy="50" r="3" fill="#f45854"/>
+                </svg>
             </div>
         </div>
     </div>

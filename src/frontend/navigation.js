@@ -118,28 +118,32 @@ function initializeNavigation() {
         });
     }
 
-    // Update clock every second
-    function updateClock() {
-        const clockElement = document.getElementById('headerClock');
-        if (!clockElement) return;
+    // Update analog clock every second
+    function updateAnalogClock() {
+        const hourHand = document.getElementById('hourHand');
+        const minuteHand = document.getElementById('minuteHand');
+        const secondHand = document.getElementById('secondHand');
+
+        if (!hourHand || !minuteHand || !secondHand) return;
+
         const now = new Date();
-        const dateTimeString = now.toLocaleString('en-US', {
-            timeZone: 'America/New_York',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
-        // Convert from "MM/DD/YYYY, HH:MM:SS" to "YYYY-MM-DD HH:MM:SS"
-        const parts = dateTimeString.split(', ');
-        const dateParts = parts[0].split('/');
-        const timePart = parts[1];
-        const formatted = `${dateParts[2]}-${dateParts[0]}-${dateParts[1]} ${timePart}`;
-        clockElement.textContent = formatted;
+        const etTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+
+        const hours = etTime.getHours() % 12;
+        const minutes = etTime.getMinutes();
+        const seconds = etTime.getSeconds();
+
+        // Calculate angles (0 degrees = 12 o'clock, clockwise)
+        const secondAngle = (seconds * 6) - 90; // 6 degrees per second
+        const minuteAngle = (minutes * 6 + seconds * 0.1) - 90; // 6 degrees per minute + smooth seconds
+        const hourAngle = (hours * 30 + minutes * 0.5) - 90; // 30 degrees per hour + smooth minutes
+
+        // Apply rotations
+        secondHand.setAttribute('transform', `rotate(${secondAngle} 50 50)`);
+        minuteHand.setAttribute('transform', `rotate(${minuteAngle} 50 50)`);
+        hourHand.setAttribute('transform', `rotate(${hourAngle} 50 50)`);
     }
-    updateClock();
-    setInterval(updateClock, 1000);
+
+    updateAnalogClock();
+    setInterval(updateAnalogClock, 1000);
 }
