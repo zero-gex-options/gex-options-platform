@@ -77,6 +77,7 @@
             position: relative;
             height: 400px;
             margin-top: 16px;
+            margin-bottom: 24px;
         }
         .level-item {
             display: flex;
@@ -372,37 +373,97 @@
         <!-- Charts Row 1 -->
         <div class="grid grid-2">
             <div class="card">
-                <h3>Historical Net GEX</h3>
+                <h3>
+                    Historical Net GEX
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Historical Net GEX</strong><br><br>
+                            Net Gamma Exposure over the last 2 trading days, with overnight and weekend gaps removed.<br><br>
+                            <strong>Positive (above zero):</strong> Dealers are net long gamma — they stabilize price by buying dips and selling rallies. <strong>Bullish bias.</strong><br><br>
+                            <strong>Negative (below zero):</strong> Dealers are net short gamma — they amplify moves by selling dips and buying rallies. <strong>Bearish bias.</strong>
+                        </span>
+                    </span>
+                </h3>
                 <div class="chart-container">
                     <canvas id="gexHistoryChart"></canvas>
                 </div>
             </div>
             <div class="card">
-                <h3>SPY Price vs Max Gamma</h3>
+                <h3>
+                    Gamma Exposure by Strike
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Current Gamma Profile</strong><br><br>
+                            Shows gamma exposure distribution across strike prices for today's 0DTE options.<br><br>
+                            <strong>Green bars (calls):</strong> Strikes where dealers are long call gamma<br>
+                            <strong>Red bars (puts):</strong> Strikes where dealers are long put gamma<br>
+                            <strong>Red line (total):</strong> Combined gamma at each strike<br><br>
+                            Tall bars indicate strong hedging pressure at that price level. The current SPY price is marked with ◄.
+                        </span>
+                    </span>
+                </h3>
                 <div class="chart-container">
-                    <canvas id="priceVsGammaChart"></canvas>
+                    <canvas id="strikeProfileChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- Strike Profile Chart -->
-        <div class="card">
-            <h3>Gamma Exposure by Strike</h3>
+        <!-- SPY Price vs Max Gamma - Full Width -->
+        <div class="card" style="margin-bottom: 24px;">
+            <h3>
+                SPY Price vs Max Gamma
+                <span class="tooltip">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="tooltiptext">
+                        <strong>SPY Price vs Max Gamma Strike</strong><br><br>
+                        Compares SPY price (white line) to the strike with the highest total gamma (red dashed line) over the last 2 trading days.<br><br>
+                        <strong>Green shading:</strong> SPY is below max gamma — dealers hedge by buying, creating upward pull. <strong>Bullish bias.</strong><br><br>
+                        <strong>Red shading:</strong> SPY is above max gamma — dealers hedge by selling, creating downward pull. <strong>Bearish bias.</strong><br><br>
+                        The max gamma strike acts as a price magnet, especially near expiration.
+                    </span>
+                </span>
+            </h3>
             <div class="chart-container" style="height: 500px;">
-                <canvas id="strikeProfileChart"></canvas>
+                <canvas id="priceVsGammaChart"></canvas>
             </div>
         </div>
 
         <!-- Key Levels and Regime Changes -->
         <div class="grid grid-2">
             <div class="card">
-                <h3>Key Support & Resistance Levels</h3>
+                <h3>
+                    Key Support & Resistance Levels
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Gamma-Based Price Levels</strong><br><br>
+                            Strike prices with significant gamma exposure that may act as support or resistance.<br><br>
+                            <strong>Support (Green):</strong> Strikes below current price with high put gamma. Dealers buy dips at these levels to hedge, providing price support.<br><br>
+                            <strong>Resistance (Red):</strong> Strikes above current price with high call gamma. Dealers sell rallies at these levels to hedge, creating price resistance.<br><br>
+                            Only shows strikes with 50M+ gamma exposure.
+                        </span>
+                    </span>
+                </h3>
                 <div id="keyLevels">
                     <div class="loading">Loading levels...</div>
                 </div>
             </div>
             <div class="card">
-                <h3>Recent Regime Changes</h3>
+                <h3>
+                    Recent Regime Changes
+                    <span class="tooltip">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="tooltiptext">
+                            <strong>Gamma Regime Transitions</strong><br><br>
+                            Timeline showing when net GEX crossed zero (flipped between positive and negative gamma regimes).<br><br>
+                            <strong>Green border (→ Positive):</strong> Dealers became net long gamma — market enters stabilizing regime with reduced volatility expectations.<br><br>
+                            <strong>Red border (→ Negative):</strong> Dealers became net short gamma — market enters destabilizing regime with amplified volatility expectations.<br><br>
+                            Shows last 20 regime changes over the past 7 days.
+                        </span>
+                    </span>
+                </h3>
                 <div id="regimeChanges">
                     <div class="loading">Loading changes...</div>
                 </div>
@@ -457,22 +518,83 @@
                 .catch(error => console.error('Error fetching current GEX:', error));
         }
 
+        function filterToTradingHours(data) {
+            return data.filter(d => {
+                const date = new Date(d.timestamp);
+                const day = date.getDay();
+                if (day === 0 || day === 6) return false;
+                const hour = date.getHours();
+                const minute = date.getMinutes();
+                const timeInMinutes = hour * 60 + minute;
+                return timeInMinutes >= 240 && timeInMinutes <= 1200;
+            });
+        }
+
+        function getETDateString(timestamp) {
+            return new Date(timestamp).toLocaleString('en-CA', {
+                timeZone: 'America/New_York',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).split(',')[0].trim();
+        }
+
+        function getLastTwoTradingDays(data) {
+            const filtered = filterToTradingHours(data);
+            const tradingDates = [...new Set(
+                filtered.map(d => getETDateString(d.timestamp))
+            )].sort().slice(-2);
+            return filtered.filter(d => tradingDates.includes(getETDateString(d.timestamp)));
+        }
+
         function updateGEXHistory() {
             fetch('/api/gex/history')
                 .then(response => response.json())
-                .then(data => {
-                    if (data.error || data.length === 0) return;
+                .then(rawData => {
+                    if (rawData.error || rawData.length === 0) return;
+
+                    const filtered = getLastTwoTradingDays(rawData);
+                    if (filtered.length === 0) return;
 
                     if (charts.gexHistory) charts.gexHistory.destroy();
+
+                    const labels = filtered.map((d, idx) => ({
+                        index: idx,
+                        timestamp: d.timestamp,
+                        date: new Date(d.timestamp)
+                    }));
+
+                    // Generate hourly ticks - first point in each hour
+                    const hourlyIndices = [];
+                    const seenHours = new Set();
+                    labels.forEach((label, idx) => {
+                        const etHour = parseInt(label.date.toLocaleString('en-US', {
+                            hour: '2-digit',
+                            hour12: false,
+                            timeZone: 'America/New_York'
+                        }));
+                        const etDate = label.date.toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            timeZone: 'America/New_York'
+                        });
+                        const hourKey = `${etDate}-${etHour}`;
+                        if (!seenHours.has(hourKey)) {
+                            seenHours.add(hourKey);
+                            hourlyIndices.push(idx);
+                        }
+                    });
 
                     const ctx = document.getElementById('gexHistoryChart');
                     charts.gexHistory = new Chart(ctx, {
                         type: 'line',
                         data: {
+                            labels: labels,
                             datasets: [{
                                 label: 'Net GEX',
-                                data: data.map(d => ({
-                                    x: new Date(d.timestamp).getTime(),
+                                data: filtered.map((d, idx) => ({
+                                    x: idx,
                                     y: d.net_gex_millions
                                 })),
                                 borderColor: '#f45854',
@@ -488,23 +610,49 @@
                             responsive: true,
                             maintainAspectRatio: false,
                             animation: false,
+                            layout: {
+                                padding: { bottom: 30 }
+                            },
                             scales: {
                                 x: {
-                                    type: 'time',
-                                    time: {
-                                        unit: 'hour',
-                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    type: 'linear',
+                                    min: 0,
+                                    max: labels.length - 1,
+                                    grid: { display: false },
+                                    afterBuildTicks: axis => {
+                                        axis.ticks = hourlyIndices.map(i => ({ value: i }));
                                     },
-                                    ticks: { color: '#968f92' },
-                                    grid: { color: '#968f92' }
+                                    ticks: {
+                                        color: '#968f92',
+                                        maxRotation: 90,
+                                        minRotation: 90,
+                                        autoSkip: false,
+                                        callback: (value) => {
+                                            if (hourlyIndices.includes(value)) {
+                                                const label = labels[value];
+                                                const etMinute = parseInt(label.date.toLocaleString('en-US', {
+                                                    minute: '2-digit',
+                                                    timeZone: 'America/New_York'
+                                                }));
+                                                // Only show label if at top of hour
+                                                if (etMinute === 0) {
+                                                    return label.date.toLocaleString('en-US', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                        hour12: false,
+                                                        timeZone: 'America/New_York'
+                                                    });
+                                                }
+                                            }
+                                            return '';
+                                        }
+                                    }
                                 },
                                 y: {
                                     title: { display: true, text: 'Net GEX (Millions)', color: '#968f92' },
-                                    ticks: { 
+                                    ticks: {
                                         color: '#968f92',
-                                        callback: function(value) {
-                                            return (value >= 0 ? '+' : '') + value + 'M';
-                                        }
+                                        callback: val => (val >= 0 ? '+' : '') + val + 'M'
                                     },
                                     grid: { color: '#968f92' }
                                 }
@@ -513,13 +661,61 @@
                                 legend: { display: false },
                                 tooltip: {
                                     callbacks: {
-                                        label: function(context) {
-                                            return 'Net GEX: ' + (context.parsed.y >= 0 ? '+' : '') + context.parsed.y.toFixed(1) + 'M';
-                                        }
+                                        title: context => {
+                                            const label = labels[context[0].dataIndex];
+                                            return new Date(label.timestamp).toLocaleString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                timeZone: 'America/New_York'
+                                            });
+                                        },
+                                        label: context => 'Net GEX: ' + (context.parsed.y >= 0 ? '+' : '') + context.parsed.y.toFixed(1) + 'M'
                                     }
                                 }
                             }
-                        }
+                        },
+                        plugins: [{
+                            id: 'gexDateLabels',
+                            afterDraw: (chart) => {
+                                const ctx = chart.ctx;
+                                const xAxis = chart.scales.x;
+                                ctx.save();
+                                ctx.textAlign = 'center';
+                                ctx.fillStyle = '#968f92';
+                                ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+                                const dateGroups = {};
+                                labels.forEach((label, idx) => {
+                                    const dateStr = label.date.toLocaleString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        timeZone: 'America/New_York'
+                                    });
+                                    if (!dateGroups[dateStr]) dateGroups[dateStr] = [];
+                                    dateGroups[dateStr].push(idx);
+                                });
+
+                                Object.keys(dateGroups).forEach(dateStr => {
+                                    const indices = dateGroups[dateStr];
+                                    let noonIdx = indices.find(idx => {
+                                        const etHour = parseInt(labels[idx].date.toLocaleString('en-US', {
+                                            hour: '2-digit',
+                                            hour12: false,
+                                            timeZone: 'America/New_York'
+                                        }));
+                                        return etHour === 12;
+                                    });
+                                    if (noonIdx === undefined) noonIdx = indices[Math.floor(indices.length / 2)];
+                                    const x = xAxis.getPixelForValue(noonIdx);
+                                    const y = chart.chartArea.bottom + 60;
+                                    ctx.fillText(dateStr, x, y);
+                                });
+
+                                ctx.restore();
+                            }
+                        }]
                     });
                 })
                 .catch(error => console.error('Error fetching GEX history:', error));
@@ -528,39 +724,115 @@
         function updatePriceVsGamma() {
             fetch('/api/gex/history')
                 .then(response => response.json())
-                .then(data => {
-                    if (data.error || data.length === 0) return;
+                .then(rawData => {
+                    if (rawData.error || rawData.length === 0) return;
+
+                    const filtered = getLastTwoTradingDays(rawData);
+                    if (filtered.length === 0) return;
 
                     if (charts.priceVsGamma) charts.priceVsGamma.destroy();
+
+                    const labels = filtered.map((d, idx) => ({
+                        index: idx,
+                        timestamp: d.timestamp,
+                        date: new Date(d.timestamp)
+                    }));
+
+                    // Generate hourly ticks - first point in each hour
+                    const hourlyIndices = [];
+                    const seenHours = new Set();
+                    labels.forEach((label, idx) => {
+                        const etHour = parseInt(label.date.toLocaleString('en-US', {
+                            hour: '2-digit',
+                            hour12: false,
+                            timeZone: 'America/New_York'
+                        }));
+                        const etDate = label.date.toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            timeZone: 'America/New_York'
+                        });
+                        const hourKey = `${etDate}-${etHour}`;
+                        if (!seenHours.has(hourKey)) {
+                            seenHours.add(hourKey);
+                            hourlyIndices.push(idx);
+                        }
+                    });
+
+                    const spyPoints = filtered.map((d, idx) => ({ x: idx, y: d.underlying_price }));
+                    const gammaPoints = filtered.map((d, idx) => ({ x: idx, y: d.max_gamma_strike }));
+
+                    // Build per-point colors based on whether SPY is above or below gamma
+                    const aboveColor  = 'rgba(244, 88, 84, 0.25)';   // red   - SPY above gamma
+                    const belowColor  = 'rgba(16, 185, 129, 0.25)';  // green - SPY below gamma
+
+                    // We draw two filled area datasets - one for each color zone.
+                    // Where SPY is above gamma  -> fill down to gamma with red
+                    // Where SPY is below gamma  -> fill up to gamma with green
+                    // We do this by clamping each point to the gamma line.
+                    const spyAboveGamma = spyPoints.map((p, i) => ({
+                        x: p.x,
+                        y: p.y > gammaPoints[i].y ? p.y : gammaPoints[i].y
+                    }));
+                    const spyBelowGamma = spyPoints.map((p, i) => ({
+                        x: p.x,
+                        y: p.y < gammaPoints[i].y ? p.y : gammaPoints[i].y
+                    }));
 
                     const ctx = document.getElementById('priceVsGammaChart');
                     charts.priceVsGamma = new Chart(ctx, {
                         type: 'line',
+                        plugins: [],
                         data: {
+                            labels: labels,
                             datasets: [
                                 {
-                                    label: 'SPY Price',
-                                    data: data.map(d => ({
-                                        x: new Date(d.timestamp).getTime(),
-                                        y: d.underlying_price
-                                    })),
-                                    borderColor: '#f45854',
-                                    backgroundColor: 'rgba(244, 88, 84, 0.1)',
-                                    borderWidth: 2,
+                                    // Red fill - SPY above gamma
+                                    label: '_above',
+                                    data: spyAboveGamma,
+                                    borderColor: 'transparent',
+                                    backgroundColor: aboveColor,
                                     pointRadius: 0,
-                                    yAxisID: 'y'
+                                    fill: '+1',   // fill down to next dataset (gamma)
+                                    tension: 0.4,
+                                    yAxisID: 'y',
+                                    order: 3
+                                },
+                                {
+                                    // Green fill - SPY below gamma
+                                    label: '_below',
+                                    data: spyBelowGamma,
+                                    borderColor: 'transparent',
+                                    backgroundColor: belowColor,
+                                    pointRadius: 0,
+                                    fill: '+1',   // fill down to next dataset (gamma)
+                                    tension: 0.4,
+                                    yAxisID: 'y',
+                                    order: 3
                                 },
                                 {
                                     label: 'Max Gamma Strike',
-                                    data: data.map(d => ({
-                                        x: new Date(d.timestamp).getTime(),
-                                        y: d.max_gamma_strike
-                                    })),
-                                    borderColor: '#968f92',
+                                    data: gammaPoints,
+                                    borderColor: '#f45854',
                                     borderWidth: 2,
                                     borderDash: [5, 5],
+                                    backgroundColor: 'transparent',
                                     pointRadius: 0,
-                                    yAxisID: 'y'
+                                    fill: false,
+                                    yAxisID: 'y',
+                                    order: 2
+                                },
+                                {
+                                    label: 'SPY Price',
+                                    data: spyPoints,
+                                    borderColor: '#f2f2f2',
+                                    borderWidth: 2,
+                                    backgroundColor: 'transparent',
+                                    pointRadius: 0,
+                                    fill: false,
+                                    yAxisID: 'y',
+                                    order: 1
                                 }
                             ]
                         },
@@ -568,29 +840,125 @@
                             responsive: true,
                             maintainAspectRatio: false,
                             animation: false,
+                            layout: {
+                                padding: { bottom: 30 }
+                            },
                             scales: {
                                 x: {
-                                    type: 'time',
-                                    time: {
-                                        unit: 'hour',
-                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    type: 'linear',
+                                    min: 0,
+                                    max: labels.length - 1,
+                                    grid: { display: false },
+                                    afterBuildTicks: axis => {
+                                        axis.ticks = hourlyIndices.map(i => ({ value: i }));
                                     },
-                                    ticks: { color: '#968f92' },
-                                    grid: { color: '#968f92' }
+                                    ticks: {
+                                        color: '#968f92',
+                                        maxRotation: 90,
+                                        minRotation: 90,
+                                        autoSkip: false,
+                                        callback: (value) => {
+                                            if (hourlyIndices.includes(value)) {
+                                                const label = labels[value];
+                                                const etMinute = parseInt(label.date.toLocaleString('en-US', {
+                                                    minute: '2-digit',
+                                                    timeZone: 'America/New_York'
+                                                }));
+                                                // Only show label if at top of hour
+                                                if (etMinute === 0) {
+                                                    return label.date.toLocaleString('en-US', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                        hour12: false,
+                                                        timeZone: 'America/New_York'
+                                                    });
+                                                }
+                                            }
+                                            return '';
+                                        }
+                                    }
                                 },
                                 y: {
                                     title: { display: true, text: 'Price ($)', color: '#968f92' },
-                                    ticks: { color: '#968f92' },
+                                    ticks: {
+                                        color: '#968f92',
+                                        callback: val => '$' + val.toFixed(2)
+                                    },
                                     grid: { color: '#968f92' }
                                 }
                             },
                             plugins: {
-                                legend: { 
-                                    labels: { color: '#f2f2f2' },
-                                    position: 'top'
+                                legend: {
+                                    position: 'top',
+                                    labels: {
+                                        color: '#f2f2f2',
+                                        filter: item => !item.text.startsWith('_')
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        title: context => {
+                                            const label = labels[context[0].dataIndex];
+                                            return new Date(label.timestamp).toLocaleString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                timeZone: 'America/New_York'
+                                            });
+                                        },
+                                        afterBody: context => {
+                                            const idx = context[0].dataIndex;
+                                            const spy = filtered[idx].underlying_price;
+                                            const gamma = filtered[idx].max_gamma_strike;
+                                            const diff = spy - gamma;
+                                            const direction = diff < 0 ? '▲ Bullish pull' : '▼ Bearish pull';
+                                            return `${direction}: $${Math.abs(diff).toFixed(2)}`;
+                                        }
+                                    }
                                 }
                             }
-                        }
+                        },
+                        plugins: [{
+                            id: 'pvgDateLabels',
+                            afterDraw: (chart) => {
+                                const ctx = chart.ctx;
+                                const xAxis = chart.scales.x;
+                                ctx.save();
+                                ctx.textAlign = 'center';
+                                ctx.fillStyle = '#968f92';
+                                ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+                                const dateGroups = {};
+                                labels.forEach((label, idx) => {
+                                    const dateStr = label.date.toLocaleString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        timeZone: 'America/New_York'
+                                    });
+                                    if (!dateGroups[dateStr]) dateGroups[dateStr] = [];
+                                    dateGroups[dateStr].push(idx);
+                                });
+
+                                Object.keys(dateGroups).forEach(dateStr => {
+                                    const indices = dateGroups[dateStr];
+                                    let noonIdx = indices.find(idx => {
+                                        const etHour = parseInt(labels[idx].date.toLocaleString('en-US', {
+                                            hour: '2-digit',
+                                            hour12: false,
+                                            timeZone: 'America/New_York'
+                                        }));
+                                        return etHour === 12;
+                                    });
+                                    if (noonIdx === undefined) noonIdx = indices[Math.floor(indices.length / 2)];
+                                    const x = xAxis.getPixelForValue(noonIdx);
+                                    const y = chart.chartArea.bottom + 60;
+                                    ctx.fillText(dateStr, x, y);
+                                });
+
+                                ctx.restore();
+                            }
+                        }]
                     });
                 })
                 .catch(error => console.error('Error fetching price vs gamma:', error));

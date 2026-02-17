@@ -287,7 +287,7 @@ def get_gex_history():
                 put_call_ratio
             FROM gex_metrics
             WHERE symbol = 'SPY'
-                AND timestamp > NOW() - INTERVAL '48 hours'
+                AND timestamp > NOW() - INTERVAL '5 days'
             ORDER BY timestamp ASC
         """)
 
