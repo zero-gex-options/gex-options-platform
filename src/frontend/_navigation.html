@@ -12,36 +12,46 @@
             margin: 0 auto;
             display: flex;
             align-items: center;
-            justify-content: center;
-            position: relative;
+            justify-content: space-between;
+            gap: 40px;
         }
         .header-logo {
             height: 120px;
             width: auto;
             opacity: 0.9;
             transition: opacity 0.2s;
+            flex-shrink: 0;
         }
         .header-logo:hover {
             opacity: 1;
         }
-        .header-helmet {
+	.header-helmet {
             height: 120px;
             width: auto;
             opacity: 0.9;
             transition: opacity 0.2s;
+            flex-shrink: 0;
         }
         .header-helmet:hover {
             opacity: 1;
         }
-        .header-clocks {
-            position: absolute;
-            right: 32px;
-            top: 50%;
-            transform: translateY(-50%);
+
+        /* World clocks on left side */
+        .world-clocks-left {
+            flex: 1;
             display: flex;
-            gap: 20px;
+            justify-content: center;
             align-items: center;
         }
+
+        /* New York clock on right side */
+        .header-clocks {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
         .main-clock {
             display: flex;
             flex-direction: column;
@@ -87,33 +97,48 @@
             stroke: #f2f2f2;
         }
 
-        /* Light mode clock adjustments */
-        body.light-mode .clock-label,
-        body.light-mode .clock-label-small {
-            color: #423d3f;
+        /* Navbar styles */
+
+        .nav-theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 16px;
         }
-        body.light-mode .clock-face {
-            fill: #f2f2f2;
+        .theme-toggle-button {
+            background: #968f92;
+            border: none;
+            border-radius: 20px;
+            width: 50px;
+            height: 26px;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.3s;
         }
-        body.light-mode .clock-marker {
-            fill: #423d3f;
+        .theme-toggle-button:hover {
+            background: #f45854;
         }
-        body.light-mode .minute-hand {
-            stroke: #423d3f;
+        .theme-toggle-button::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            background: #f2f2f2;
+            border-radius: 50%;
+            transition: transform 0.3s;
         }
-        .header h1 {
-            font-size: 32px;
-            background: linear-gradient(135deg, #f45854, #c44642);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin: 0;
+        .theme-toggle-button.light::after {
+            transform: translateX(24px);
         }
-        .header-subtitle {
+        .theme-toggle-label {
+            font-size: 12px;
             color: #968f92;
-            font-size: 14px;
-            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
+
         .nav-bar {
             background: linear-gradient(135deg, #423d3f 0%, #2a2628 100%);
             border-bottom: 1px solid #968f92;
@@ -225,50 +250,6 @@
             border-radius: 0 0 8px 8px;
         }
 
-	/* Theme Toggle */
-        .theme-toggle {
-            position: absolute;
-            left: 32px;
-            top: 50%;
-            transform: translateY(-50%);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .theme-toggle-button {
-            background: #968f92;
-            border: none;
-            border-radius: 20px;
-            width: 50px;
-            height: 26px;
-            cursor: pointer;
-            position: relative;
-            transition: background 0.3s;
-        }
-        .theme-toggle-button:hover {
-            background: #f45854;
-        }
-        .theme-toggle-button::after {
-            content: '';
-            position: absolute;
-            top: 3px;
-            left: 3px;
-            width: 20px;
-            height: 20px;
-            background: #f2f2f2;
-            border-radius: 50%;
-            transition: transform 0.3s;
-        }
-        .theme-toggle-button.light::after {
-            transform: translateX(24px);
-        }
-        .theme-toggle-label {
-            font-size: 12px;
-            color: #968f92;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
         /* Light mode styles */
         body.light-mode {
             background: #f2f2f2;
@@ -312,42 +293,29 @@
             background: rgba(244, 88, 84, 0.1);
             color: #f45854;
         }
-        body.light-mode .header-clock {
+        body.light-mode .clock-label,
+        body.light-mode .clock-label-small {
             color: #423d3f;
         }
-        body.light-mode .header-clock-label {
-            color: #968f92;
+        body.light-mode .clock-face {
+            fill: #f2f2f2;
+        }
+        body.light-mode .clock-marker {
+            fill: #423d3f;
+        }
+        body.light-mode .minute-hand {
+            stroke: #423d3f;
         }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="header-content">
-            <div class="theme-toggle">
-                <button class="theme-toggle-button" id="themeToggle" aria-label="Toggle theme"></button>
-                <span class="theme-toggle-label" id="themeLabel">Dark</span>
-            </div>
+            <!-- Helmet (far left) -->
             <img src="/logo_icon" alt="Helmet" class="header-helmet">
-            <img src="/logo_title" alt="ZeroGEX™" class="header-logo">
-            <img src="/logo_icon" alt="Helmet" class="header-helmet">
-            <div class="header-clocks">
-                <!-- Main ET Clock (larger) -->
-                <div class="main-clock">
-                    <div class="clock-label">US/Eastern</div>
-                    <svg class="analog-clock" data-timezone="America/New_York" width="100" height="100" viewBox="0 0 100 100">
-                        <circle class="clock-face" cx="50" cy="50" r="48" stroke="#968f92" stroke-width="2"/>
-                        <circle class="clock-marker" cx="50" cy="8" r="2"/>
-                        <circle class="clock-marker" cx="50" cy="92" r="2"/>
-                        <circle class="clock-marker" cx="8" cy="50" r="2"/>
-                        <circle class="clock-marker" cx="92" cy="50" r="2"/>
-                        <line class="hour-hand" x1="50" y1="50" x2="50" y2="30" stroke="#f45854" stroke-width="3" stroke-linecap="round"/>
-                        <line class="minute-hand" x1="50" y1="50" x2="50" y2="20" stroke-width="2" stroke-linecap="round"/>
-                        <line class="second-hand" x1="50" y1="50" x2="50" y2="15" stroke="#f45854" stroke-width="1" stroke-linecap="round"/>
-                        <circle cx="50" cy="50" r="3" fill="#f45854"/>
-                    </svg>
-                </div>
 
-                <!-- World Clocks Grid -->
+            <!-- World Clocks (left side) -->
+            <div class="world-clocks-left">
                 <div class="world-clocks-grid">
                     <!-- London -->
                     <div class="world-clock">
@@ -414,11 +382,42 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Center Logo -->
+            <img src="/logo_title" alt="ZeroGEX™" class="header-logo">
+
+            <!-- New York Clock (right side) -->
+            <div class="header-clocks">
+                <div class="main-clock">
+                    <div class="clock-label">New York</div>
+                    <svg class="analog-clock" data-timezone="America/New_York" width="144" height="144" viewBox="0 0 100 100">
+                        <circle class="clock-face" cx="50" cy="50" r="48" stroke="#968f92" stroke-width="2"/>
+                        <circle class="clock-marker" cx="50" cy="8" r="2"/>
+                        <circle class="clock-marker" cx="50" cy="92" r="2"/>
+                        <circle class="clock-marker" cx="8" cy="50" r="2"/>
+                        <circle class="clock-marker" cx="92" cy="50" r="2"/>
+                        <line class="hour-hand" x1="50" y1="50" x2="50" y2="30" stroke="#f45854" stroke-width="3" stroke-linecap="round"/>
+                        <line class="minute-hand" x1="50" y1="50" x2="50" y2="20" stroke-width="2" stroke-linecap="round"/>
+                        <line class="second-hand" x1="50" y1="50" x2="50" y2="15" stroke="#f45854" stroke-width="1" stroke-linecap="round"/>
+                        <circle cx="50" cy="50" r="3" fill="#f45854"/>
+                    </svg>
+                </div>
+            </div>
+
+	    <!-- Helmet (far right) -->
+            <img src="/logo_icon" alt="Helmet" class="header-helmet">
         </div>
     </div>
 
     <nav class="nav-bar">
         <div class="nav-container">
+
+            <!-- Theme Toggle -->
+            <div class="nav-theme-toggle">
+                <button class="theme-toggle-button" id="themeToggle" aria-label="Toggle theme"></button>
+                <span class="theme-toggle-label" id="themeLabel">Dark</span>
+            </div>
+
             <!-- Symbol Dropdown -->
             <div class="nav-dropdown" id="symbolDropdown">
                 <button class="nav-dropdown-toggle" id="symbolDropdownToggle">
@@ -427,9 +426,9 @@
                 </button>
                 <div class="nav-dropdown-menu">
                     <div class="nav-dropdown-item selected" data-symbol="SPY">SPY</div>
-                    <div class="nav-dropdown-item" data-symbol="SPX ***Under construction***">SPX</div>
-                    <div class="nav-dropdown-item" data-symbol="QQQ ***Under construction***">QQQ</div>
-                    <div class="nav-dropdown-item" data-symbol="IWM ***Under construction***">IWM</div>
+                    <div class="nav-dropdown-item" data-symbol="SPX">SPX ***Under construction***</div>
+                    <div class="nav-dropdown-item" data-symbol="QQQ">QQQ ***Under construction***</div>
+                    <div class="nav-dropdown-item" data-symbol="IWM">IWM ***Under construction***</div>
                     <!-- Add more symbols here in the future -->
                 </div>
             </div>
