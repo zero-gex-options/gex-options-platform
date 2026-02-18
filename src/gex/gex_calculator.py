@@ -2,6 +2,7 @@
 Gamma Exposure (GEX) Calculator
 
 Calculates dealer gamma exposure from options market data.
+Updated to work with latest-state options_quotes table.
 """
 
 import psycopg2
@@ -99,6 +100,8 @@ class GEXCalculator:
         """
         Fetch latest options data from database
 
+        Updated to work with latest-state table (no timestamp in primary key)
+
         Args:
             symbol: Underlying symbol
             expiration: Expiration date
@@ -108,8 +111,10 @@ class GEXCalculator:
         """
         cursor = self.db.cursor()
 
+        # Updated query - no DISTINCT ON needed since we only have one row per contract
+        # Filter by symbol prefix (first 3 chars) and expiration
         query = """
-            SELECT DISTINCT ON (strike, option_type)
+            SELECT 
                 strike,
                 option_type,
                 gamma,
@@ -119,22 +124,25 @@ class GEXCalculator:
                 volume,
                 underlying_price,
                 expiration,
-                timestamp
+                last_updated
             FROM options_quotes
-            WHERE symbol LIKE %s
-                AND DATE(expiration) = %s
+            WHERE substring(symbol from 1 for 3) = %s
+                AND expiration = %s
                 AND gamma IS NOT NULL
                 AND gamma > 0
-            ORDER BY strike, option_type, timestamp DESC
+                AND last_updated > NOW() - INTERVAL '1 hour'
+            ORDER BY strike, option_type
         """
 
         try:
-            cursor.execute(query, (f"{symbol}%", expiration))
+            # Extract just the underlying symbol (first 3 chars, e.g., "SPY")
+            underlying_symbol = symbol[:3] if len(symbol) >= 3 else symbol
+
+            cursor.execute(query, (underlying_symbol, expiration))
             rows = cursor.fetchall()
 
             if not rows:
                 logger.debug(f"No data found for {symbol} exp {expiration}")
-                # Debug query to see what data exists
                 self._log_available_data(symbol)
                 return []
 
@@ -169,16 +177,19 @@ class GEXCalculator:
         """Debug log to show what data exists in database"""
         cursor = self.db.cursor()
         try:
+            # Extract underlying symbol
+            underlying_symbol = symbol[:3] if len(symbol) >= 3 else symbol
+
             cursor.execute("""
                 SELECT 
                     COUNT(*) as total,
-                    COUNT(DISTINCT DATE(expiration)) as exp_dates,
-                    MIN(DATE(expiration)) as min_exp,
-                    MAX(DATE(expiration)) as max_exp,
-                    MAX(timestamp) as latest_timestamp
+                    COUNT(DISTINCT expiration) as exp_dates,
+                    MIN(expiration) as min_exp,
+                    MAX(expiration) as max_exp,
+                    MAX(last_updated) as latest_update
                 FROM options_quotes
-                WHERE symbol = %s
-            """, (symbol,))
+                WHERE substring(symbol from 1 for 3) = %s
+            """, (underlying_symbol,))
 
             debug = cursor.fetchone()
             logger.debug(f"Available data - Total: {debug[0]}, "

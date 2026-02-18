@@ -355,19 +355,34 @@ class StreamingIngestionEngine:
             raise
 
     def _store_options_batch(self, batch: List[Dict]):
-        """Store batch of options to database"""
+        """
+        Store batch of options to database
+
+        Deduplicates batch to keep only the latest update per contract
+        """
         cursor = self.db_conn.cursor()
 
-        values = []
+        # Deduplicate batch - keep only latest update per contract
+        # Group by (symbol, strike, expiration, option_type)
+        contracts_map = {}
+
         for opt in batch:
+            key = (opt['symbol'], opt['strike'], opt['expiration'], opt['option_type'])
+            # Keep the latest one (or just overwrite - they should be similar)
+            contracts_map[key] = opt
+
+        logger.debug(f"Deduplicated batch: {len(batch)} updates -> {len(contracts_map)} unique contracts")
+
+        # Build values list from deduplicated contracts
+        values = []
+        for opt in contracts_map.values():
             values.append((
-                opt['timestamp'],
                 opt['symbol'],
-                opt['underlying_price'],
                 opt['strike'],
                 opt['expiration'],
-                opt['dte'],
                 opt['option_type'],
+                opt['underlying_price'],
+                opt['dte'],
                 opt['bid'],
                 opt['ask'],
                 opt['mid'],
@@ -382,18 +397,22 @@ class StreamingIngestionEngine:
                 opt['rho'],
                 opt['is_calculated'],
                 opt['spread_pct'],
-                opt['source']
+                opt['source'],
+                opt['timestamp']
             ))
 
         insert_query = """
-            INSERT INTO options_quotes 
-            (timestamp, symbol, underlying_price, strike, expiration, dte,
-             option_type, bid, ask, mid, last, volume, open_interest,
-             implied_vol, delta, gamma, theta, vega, rho,
-             is_calculated, spread_pct, source)
+            INSERT INTO options_quotes
+            (symbol, strike, expiration, option_type,
+             underlying_price, dte, bid, ask, mid, last,
+             volume, open_interest, implied_vol,
+             delta, gamma, theta, vega, rho,
+             is_calculated, spread_pct, source, last_updated)
             VALUES %s
-            ON CONFLICT (timestamp, symbol, strike, expiration, option_type) 
+            ON CONFLICT (symbol, strike, expiration, option_type)
             DO UPDATE SET
+                underlying_price = EXCLUDED.underlying_price,
+                dte = EXCLUDED.dte,
                 bid = EXCLUDED.bid,
                 ask = EXCLUDED.ask,
                 mid = EXCLUDED.mid,
@@ -407,12 +426,15 @@ class StreamingIngestionEngine:
                 vega = EXCLUDED.vega,
                 rho = EXCLUDED.rho,
                 is_calculated = EXCLUDED.is_calculated,
-                spread_pct = EXCLUDED.spread_pct
+                spread_pct = EXCLUDED.spread_pct,
+                source = EXCLUDED.source,
+                last_updated = EXCLUDED.last_updated
         """
 
         try:
             execute_values(cursor, insert_query, values)
             self.db_conn.commit()
+            logger.debug(f"Stored/updated {len(values)} unique option contracts")
         except Exception as e:
             logger.error(f"Database error: {e}", exc_info=True)
             self.db_conn.rollback()

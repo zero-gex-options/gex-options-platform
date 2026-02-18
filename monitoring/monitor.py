@@ -82,9 +82,9 @@ class MonitoringCollector:
             cursor.execute("""
                 SELECT 
                     COUNT(*) as total_rows,
-                    SUM(CASE WHEN timestamp > NOW() - INTERVAL '10 minutes' THEN 1 ELSE 0 END) as recent_10min,
-                    SUM(CASE WHEN timestamp > NOW() - INTERVAL '1 hour' THEN 1 ELSE 0 END) as recent_1hour,
-                    MAX(timestamp) as latest_timestamp
+                    SUM(CASE WHEN last_updated > NOW() - INTERVAL '10 minutes' THEN 1 ELSE 0 END) as recent_10min,
+                    SUM(CASE WHEN last_updated > NOW() - INTERVAL '1 hour' THEN 1 ELSE 0 END) as recent_1hour,
+                    MAX(last_updated) as latest_timestamp
                 FROM options_quotes;
             """)
             quotes_data = cursor.fetchone()
@@ -127,9 +127,9 @@ class MonitoringCollector:
             cursor.execute("""
                 SELECT symbol, strike, expiration, dte, option_type, last, 
                        bid, ask, mid, volume, open_interest, implied_vol, 
-                       delta, gamma, theta, vega, timestamp
+                       delta, gamma, theta, vega, last_updated as timestamp
                 FROM options_quotes
-                ORDER BY timestamp DESC
+                ORDER BY last_updated DESC
                 LIMIT 50;
             """)
             recent_options = cursor.fetchall()

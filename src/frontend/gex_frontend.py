@@ -351,10 +351,10 @@ def get_strike_profile():
             FROM options_quotes
             WHERE symbol LIKE 'SPY%%'
                 AND DATE(expiration) = CURRENT_DATE
-                AND timestamp > NOW() - INTERVAL '30 minutes'
+                AND last_updated > NOW() - INTERVAL '30 minutes'
                 AND gamma IS NOT NULL
                 AND gamma > 0
-            ORDER BY strike, option_type, timestamp DESC
+            ORDER BY strike, option_type, last_updated DESC
         """)
 
         rows = cursor.fetchall()
@@ -520,9 +520,9 @@ def get_key_levels():
             FROM options_quotes
             WHERE symbol LIKE 'SPY%%'
                 AND DATE(expiration) = CURRENT_DATE
-                AND timestamp > NOW() - INTERVAL '30 minutes'
+                AND last_updated > NOW() - INTERVAL '30 minutes'
                 AND gamma IS NOT NULL
-            ORDER BY strike, option_type, timestamp DESC
+            ORDER BY strike, option_type, last_updated DESC
         """)
 
         rows = cursor.fetchall()
@@ -657,8 +657,8 @@ def get_flows_history():
         cursor.execute("""
             WITH five_min_buckets AS (
                 SELECT
-                    date_trunc('hour', timestamp AT TIME ZONE 'America/New_York') +
-                    (floor((EXTRACT(minute FROM timestamp AT TIME ZONE 'America/New_York') - 1) / 5) * INTERVAL '5 minutes') as bucket_time,
+                    date_trunc('hour', last_updated AT TIME ZONE 'America/New_York') +
+                    (floor((EXTRACT(minute FROM last_updated AT TIME ZONE 'America/New_York') - 1) / 5) * INTERVAL '5 minutes') as bucket_time,
                     SUM(last * volume * 100) as premium_spent,
                     SUM(
                         volume *
@@ -1394,12 +1394,12 @@ def get_max_pain_analysis():
                     underlying_price,
                     ROW_NUMBER() OVER (
                         PARTITION BY strike, option_type
-                        ORDER BY timestamp DESC
+                        ORDER BY last_updated DESC
                     ) as rn
                 FROM options_quotes
                 WHERE symbol LIKE 'SPY%%'
                     AND DATE(expiration) = %s::date
-                    AND timestamp > NOW() - INTERVAL '30 minutes'
+                    AND last_updated > NOW() - INTERVAL '30 minutes'
                     AND open_interest > 0
             ) latest
             WHERE rn = 1
