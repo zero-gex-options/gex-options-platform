@@ -156,6 +156,7 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
             text-decoration: none;
+            border-top: 3px solid transparent;
             border-bottom: 3px solid transparent;
             transition: all 0.2s;
             position: relative;
@@ -172,6 +173,22 @@
         .nav-item.active:hover {
             color: #f45854;
             background: rgba(244, 88, 84, 0.15);
+        }
+        .nav-item-logo {
+            padding: 6px 12px;
+        }
+        .nav-home-icon {
+            height: 24px;
+            width: auto;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+            display: block;
+        }
+        .nav-item-logo:hover .nav-home-icon {
+            opacity: 1;
+        }
+        .nav-item-logo.active .nav-home-icon {
+            opacity: 1;
         }
 
         /* Dropdown styles */
@@ -432,7 +449,9 @@
                     <!-- Add more symbols here in the future -->
                 </div>
             </div>
-            <a href="/" class="nav-item" data-page="home">Home</a>
+            <a href="/" class="nav-item nav-item-logo" data-page="home">
+                <img src="/logo_icon" alt="Home" class="nav-home-icon">
+            </a>
             <a href="/gamma" class="nav-item" data-page="gamma">Gamma Exposure</a>
             <a href="/put-call" class="nav-item" data-page="put-call">Put/Call Ratio</a>
             <a href="/flows" class="nav-item" data-page="flows">Option Flows</a>

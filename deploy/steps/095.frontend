@@ -82,8 +82,8 @@ done
 
 # Copy branding assets
 log "  → Installing branding assets..."
-sudo cp "$BRANDING"/*.png "$FRONTEND_DIR/static/"
-log "     ✓ Logo copied to static/"
+sudo cp "$BRANDING"/* "$FRONTEND_DIR/static/"
+log "     ✓ Logo files copied to static/"
 
 # Set proper ownership and permissions
 log "  → Setting permissions..."
@@ -95,6 +95,7 @@ sudo chmod 644 "$FRONTEND_DIR/templates"/*.html
 sudo chmod 644 "$FRONTEND_DIR/templates"/*.js
 sudo chmod 755 "$FRONTEND_DIR/static"
 sudo chmod 644 "$FRONTEND_DIR/static"/*.png
+sudo chmod 644 "$FRONTEND_DIR/static"/*.ico
 log "     ✓ Permissions set"
 
 # Install Python dependencies
