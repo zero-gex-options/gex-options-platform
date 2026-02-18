@@ -5,6 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- Drop existing tables if recreating
+DROP TABLE IF EXISTS option_flow_metrics CASCADE;
 DROP TABLE IF EXISTS gex_metrics CASCADE;
 DROP TABLE IF EXISTS options_quotes CASCADE;
 DROP TABLE IF EXISTS underlying_quotes CASCADE;
@@ -105,6 +106,68 @@ CREATE TABLE gex_metrics (
 SELECT create_hypertable('gex_metrics', 'timestamp');
 
 -- ============================================================================
+-- Option Flow Metrics Table (TIME-SERIES)
+-- Tracks aggregated option flow data in 5-minute buckets
+-- ============================================================================
+CREATE TABLE option_flow_metrics (
+    -- Time bucket (rounded to 5-minute intervals)
+    timestamp TIMESTAMPTZ NOT NULL,
+
+    -- Identifiers
+    symbol TEXT NOT NULL,              -- Underlying symbol (e.g., 'SPY')
+    option_type TEXT NOT NULL,         -- 'call' or 'put'
+
+    -- Volume metrics
+    total_volume BIGINT NOT NULL,      -- Total contracts traded in this period
+    sweep_volume BIGINT,               -- Aggressive orders (bid/ask spread crossing)
+    block_volume BIGINT,               -- Large block trades (>= 100 contracts)
+
+    -- Open Interest changes
+    oi_change BIGINT,                  -- Net change in open interest
+    starting_oi BIGINT,                -- OI at start of period
+    ending_oi BIGINT,                  -- OI at end of period
+
+    -- Premium metrics
+    total_premium DOUBLE PRECISION,    -- Total premium spent ($)
+    avg_premium DOUBLE PRECISION,      -- Average premium per contract
+    vwap_premium DOUBLE PRECISION,     -- Volume-weighted average premium
+
+    -- Notional value metrics
+    total_notional DOUBLE PRECISION,   -- Total notional value (contracts * underlying price * 100)
+    avg_underlying_price DOUBLE PRECISION,  -- Average underlying price during period
+
+    -- Delta-weighted metrics
+    delta_weighted_volume DOUBLE PRECISION,     -- Sum of (volume * delta) for each contract
+    net_delta_exposure DOUBLE PRECISION,        -- Net delta exposure across all trades
+    gamma_weighted_volume DOUBLE PRECISION,     -- Sum of (volume * gamma)
+
+    -- Flow direction indicators
+    buy_volume BIGINT,                 -- Estimated buyer-initiated volume
+    sell_volume BIGINT,                -- Estimated seller-initiated volume
+    net_flow BIGINT,                   -- buy_volume - sell_volume
+
+    -- Strike distribution
+    atm_volume BIGINT,                 -- Volume within 2% of spot
+    otm_volume BIGINT,                 -- Out-of-the-money volume
+    itm_volume BIGINT,                 -- In-the-money volume
+
+    -- Size metrics
+    avg_trade_size DOUBLE PRECISION,   -- Average contracts per trade
+    max_trade_size BIGINT,             -- Largest single trade
+    trade_count BIGINT,                -- Number of distinct trades/updates
+
+    -- Metadata
+    unique_strikes INTEGER,            -- Number of unique strikes traded
+    bucket_start TIMESTAMPTZ NOT NULL, -- Exact start of 5-min bucket
+    bucket_end TIMESTAMPTZ NOT NULL,   -- Exact end of 5-min bucket
+
+    PRIMARY KEY (timestamp, symbol, option_type)
+);
+
+-- Convert to hypertable
+SELECT create_hypertable('option_flow_metrics', 'timestamp');
+
+-- ============================================================================
 -- Ingestion metrics table (TIME-SERIES)
 -- ============================================================================
 CREATE TABLE ingestion_metrics (
@@ -173,6 +236,21 @@ WHERE symbol = 'SPY';
 CREATE INDEX idx_gex_metrics_symbol 
 ON gex_metrics(symbol, timestamp DESC);
 
+-- Option flow metrics indexes
+CREATE INDEX idx_option_flow_symbol_time 
+ON option_flow_metrics(symbol, timestamp DESC);
+
+CREATE INDEX idx_option_flow_type 
+ON option_flow_metrics(symbol, option_type, timestamp DESC);
+
+CREATE INDEX idx_option_flow_volume 
+ON option_flow_metrics(symbol, timestamp DESC, total_volume DESC)
+WHERE total_volume > 1000;
+
+CREATE INDEX idx_option_flow_premium 
+ON option_flow_metrics(symbol, timestamp DESC, total_premium DESC)
+WHERE total_premium > 100000;
+
 -- Service uptime indexes
 CREATE INDEX idx_service_uptime_service 
 ON service_uptime_checks(service_name, timestamp DESC);
@@ -180,20 +258,22 @@ ON service_uptime_checks(service_name, timestamp DESC);
 -- ============================================================================
 -- Compression policies (for hypertables only)
 -- ============================================================================
-SELECT add_compression_policy('underlying_quotes', INTERVAL '1 day');
+SELECT add_compression_policy('underlying_quotes', INTERVAL '2 day');
+SELECT add_compression_policy('options_quotes', INTERVAL '2 day');
 SELECT add_compression_policy('gex_metrics', INTERVAL '7 days');
+SELECT add_compression_policy('option_flow_metrics', INTERVAL '2 day');
 SELECT add_compression_policy('ingestion_metrics', INTERVAL '7 days');
 SELECT add_compression_policy('service_uptime_checks', INTERVAL '7 days');
 
 -- ============================================================================
 -- Retention policies (for hypertables only)
 -- ============================================================================
-SELECT add_retention_policy('underlying_quotes', INTERVAL '2 days');
+SELECT add_retention_policy('underlying_quotes', INTERVAL '7 days');
+SELECT add_retention_policy('options_quotes', INTERVAL '7 days');
 SELECT add_retention_policy('gex_metrics', INTERVAL '30 days');
+SELECT add_retention_policy('option_flow_metrics', INTERVAL '90 days');
 SELECT add_retention_policy('ingestion_metrics', INTERVAL '30 days');
 SELECT add_retention_policy('service_uptime_checks', INTERVAL '30 days');
-
--- NOTE: No retention policy on options_quotes - it only stores latest state
 
 -- ============================================================================
 -- Views for common queries
@@ -232,6 +312,48 @@ WHERE gamma IS NOT NULL
     AND gamma > 0
     AND last_updated > NOW() - INTERVAL '1 hour';
 
+-- Latest 5-minute flow metrics
+CREATE OR REPLACE VIEW latest_option_flow AS
+SELECT DISTINCT ON (symbol, option_type)
+    *
+FROM option_flow_metrics
+ORDER BY symbol, option_type, timestamp DESC;
+
+-- Aggregated hourly flow
+CREATE OR REPLACE VIEW hourly_option_flow AS
+SELECT 
+    time_bucket('1 hour', timestamp) as hour,
+    symbol,
+    option_type,
+    SUM(total_volume) as total_volume,
+    SUM(total_premium) as total_premium,
+    SUM(total_notional) as total_notional,
+    SUM(delta_weighted_volume) as delta_weighted_volume,
+    AVG(avg_underlying_price) as avg_underlying_price,
+    SUM(buy_volume) as buy_volume,
+    SUM(sell_volume) as sell_volume,
+    SUM(net_flow) as net_flow
+FROM option_flow_metrics
+GROUP BY hour, symbol, option_type
+ORDER BY hour DESC, symbol, option_type;
+
+-- Put/Call flow comparison
+CREATE OR REPLACE VIEW put_call_flow_comparison AS
+SELECT 
+    timestamp,
+    symbol,
+    MAX(CASE WHEN option_type = 'call' THEN total_volume END) as call_volume,
+    MAX(CASE WHEN option_type = 'put' THEN total_volume END) as put_volume,
+    MAX(CASE WHEN option_type = 'call' THEN total_premium END) as call_premium,
+    MAX(CASE WHEN option_type = 'put' THEN total_premium END) as put_premium,
+    MAX(CASE WHEN option_type = 'call' THEN total_notional END) as call_notional,
+    MAX(CASE WHEN option_type = 'put' THEN total_notional END) as put_notional,
+    MAX(CASE WHEN option_type = 'call' THEN delta_weighted_volume END) as call_delta_flow,
+    MAX(CASE WHEN option_type = 'put' THEN delta_weighted_volume END) as put_delta_flow
+FROM option_flow_metrics
+GROUP BY timestamp, symbol
+ORDER BY timestamp DESC;
+
 -- ============================================================================
 -- Permissions
 -- ============================================================================
@@ -253,8 +375,23 @@ COMMENT ON TABLE underlying_quotes IS
 COMMENT ON TABLE gex_metrics IS 
 'Time-series of gamma exposure calculations. Stores historical GEX data.';
 
+COMMENT ON TABLE option_flow_metrics IS 
+'Time-series of option flow metrics aggregated into 5-minute buckets. Tracks volume, premium, notional value, and delta-weighted flows for calls and puts separately.';
+
+COMMENT ON COLUMN option_flow_metrics.delta_weighted_volume IS 
+'Sum of (volume * delta) for each contract. Positive values indicate bullish flow, negative indicates bearish flow.';
+
+COMMENT ON COLUMN option_flow_metrics.sweep_volume IS 
+'Aggressive orders that cross the bid/ask spread, indicating urgency. Estimated from quotes hitting ask (buys) or bid (sells).';
+
+COMMENT ON COLUMN option_flow_metrics.net_flow IS 
+'Net directional flow (buy_volume - sell_volume). Positive = buying pressure, negative = selling pressure.';
+
 COMMENT ON VIEW latest_options_for_gex IS 
 'Active options contracts for GEX calculations. Filters to data updated within the last hour with valid gamma values.';
+
+COMMENT ON VIEW put_call_flow_comparison IS 
+'Side-by-side comparison of put and call flow metrics for easy analysis of put/call ratios and sentiment.';
 
 -- Success message
 DO $$
@@ -266,6 +403,7 @@ BEGIN
     RAISE NOTICE '  - underlying_quotes (hypertable - time-series)';
     RAISE NOTICE '  - options_quotes (regular table - latest state only)';
     RAISE NOTICE '  - gex_metrics (hypertable - time-series)';
+    RAISE NOTICE '  - option_flow_metrics (hypertable - time-series, 5-min buckets)';
     RAISE NOTICE '  - ingestion_metrics (hypertable - time-series)';
     RAISE NOTICE '  - service_uptime_checks (hypertable - time-series)';
     RAISE NOTICE '';
@@ -273,9 +411,13 @@ BEGIN
     RAISE NOTICE '  - latest_gex';
     RAISE NOTICE '  - latest_underlying_quotes';
     RAISE NOTICE '  - latest_options_for_gex';
+    RAISE NOTICE '  - latest_option_flow';
+    RAISE NOTICE '  - hourly_option_flow';
+    RAISE NOTICE '  - put_call_flow_comparison';
     RAISE NOTICE '';
-    RAISE NOTICE 'Key design decision:';
+    RAISE NOTICE 'Key design decisions:';
     RAISE NOTICE '  - options_quotes stores LATEST STATE only (one row per contract)';
+    RAISE NOTICE '  - option_flow_metrics aggregates flow into 5-minute buckets';
     RAISE NOTICE '  - Other tables store TIME-SERIES data (multiple rows over time)';
     RAISE NOTICE '============================================================================';
 END $$;

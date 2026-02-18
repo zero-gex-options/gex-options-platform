@@ -632,7 +632,7 @@ def get_put_call_history():
 @app.route('/api/flows/history')
 @cache_query(ttl_seconds=30)
 def get_flows_history():
-    """Get historical option flow data including notional values"""
+    """Get historical option flow data from option_flow_metrics table"""
     conn = None
     try:
         conn = get_db_connection()
@@ -642,67 +642,34 @@ def get_flows_history():
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("SET TIME ZONE 'America/New_York'")
 
-        # Get latest underlying price for calculations
+        # Query the NEW option_flow_metrics table - last 48 hours
         cursor.execute("""
-            SELECT close as spy_price
-            FROM underlying_quotes
-            WHERE symbol = 'SPY'
-            ORDER BY timestamp DESC
-            LIMIT 1
-        """)
-        spy_result = cursor.fetchone()
-        spy_price = float(spy_result['spy_price']) if spy_result else 600.0
-
-        # Query for trades with time aggregation - now includes notional values
-        cursor.execute("""
-            WITH five_min_buckets AS (
-                SELECT
-                    date_trunc('hour', last_updated AT TIME ZONE 'America/New_York') +
-                    (floor((EXTRACT(minute FROM last_updated AT TIME ZONE 'America/New_York') - 1) / 5) * INTERVAL '5 minutes') as bucket_time,
-                    SUM(last * volume * 100) as premium_spent,
-                    SUM(
-                        volume *
-                        COALESCE(delta, 0) *
-                        %s *
-                        CASE
-                            WHEN option_type = 'call' THEN 1
-                            WHEN option_type = 'put' THEN -1
-                            ELSE 0
-                        END
-                    ) as delta_weighted_flow_interval,
-                    -- Add notional value calculations
-                    SUM(
-                        CASE WHEN option_type = 'call'
-                        THEN COALESCE(open_interest, 0) * COALESCE(mid, 0) * 100
-                        ELSE 0 END
-                    ) as call_notional,
-                    SUM(
-                        CASE WHEN option_type = 'put'
-                        THEN COALESCE(open_interest, 0) * COALESCE(mid, 0) * 100
-                        ELSE 0 END
-                    ) as put_notional
-                FROM options_quotes
-                WHERE symbol LIKE 'SPY%%'
-                GROUP BY bucket_time
-                ORDER BY bucket_time DESC
-                LIMIT 384
-            )
             SELECT
-                bucket_time as timestamp,
-                premium_spent,
-                SUM(delta_weighted_flow_interval) OVER (ORDER BY bucket_time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as delta_weighted_flow,
-                call_notional,
-                put_notional
-            FROM five_min_buckets
-            ORDER BY bucket_time ASC
-        """, (spy_price,))
+                timestamp,
+                symbol,
+                option_type,
+                total_premium,
+                delta_weighted_volume,
+                net_delta_exposure,
+                total_notional,
+                buy_volume,
+                sell_volume,
+                net_flow,
+                avg_underlying_price
+            FROM option_flow_metrics
+            WHERE symbol = 'SPY'
+                AND timestamp > NOW() - INTERVAL '48 hours'
+            ORDER BY timestamp ASC
+        """)
 
         rows = cursor.fetchall()
         cursor.close()
 
         import pytz
         eastern = pytz.timezone('America/New_York')
-        result = []
+
+        # Aggregate by timestamp (combine calls and puts)
+        buckets = {}
         for row in rows:
             ts = row['timestamp']
             if ts.tzinfo is None:
@@ -710,13 +677,28 @@ def get_flows_history():
             else:
                 ts = ts.astimezone(eastern)
 
-            result.append({
-                'timestamp': ts.isoformat(),
-                'premium_spent': float(row['premium_spent']) if row['premium_spent'] else 0,
-                'delta_weighted_flow': float(row['delta_weighted_flow']) if row['delta_weighted_flow'] else 0,
-                'call_notional': float(row['call_notional']) if row['call_notional'] else 0,
-                'put_notional': float(row['put_notional']) if row['put_notional'] else 0
-            })
+            ts_str = ts.isoformat()
+
+            if ts_str not in buckets:
+                buckets[ts_str] = {
+                    'timestamp': ts_str,
+                    'premium_spent': 0,
+                    'delta_weighted_flow': 0,
+                    'call_notional': 0,
+                    'put_notional': 0
+                }
+
+            # Add to aggregated values
+            buckets[ts_str]['premium_spent'] += float(row['total_premium'] or 0)
+            buckets[ts_str]['delta_weighted_flow'] += float(row['delta_weighted_volume'] or 0)
+
+            if row['option_type'] == 'call':
+                buckets[ts_str]['call_notional'] += float(row['total_notional'] or 0)
+            else:
+                buckets[ts_str]['put_notional'] += float(row['total_notional'] or 0)
+
+        # Convert to sorted list
+        result = sorted(buckets.values(), key=lambda x: x['timestamp'])
 
         return jsonify(result)
 

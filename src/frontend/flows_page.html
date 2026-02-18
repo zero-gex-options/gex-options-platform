@@ -134,39 +134,6 @@
         body.light-mode .info-icon {
             color: #423d3f;
         }
-        body.light-mode .loading {
-            color: #423d3f;
-        }
-        body.light-mode .level-item,
-        body.light-mode .regime-timeline-item,
-        body.light-mode .metric-box,
-        body.light-mode .feature-box {
-            background: #f2f2f2;
-            border: 1px solid #968f92;
-        }
-        body.light-mode .regime-time,
-        body.light-mode .regime-price,
-        body.light-mode .level-gamma {
-            color: #423d3f;
-        }
-        body.light-mode .footer {
-            background: #ffffff;
-            border-top: 1px solid #968f92;
-        }
-        body.light-mode .footer-text,
-        body.light-mode .footer-tagline {
-            color: #423d3f;
-        }
-        body.light-mode .spy-banner {
-            background: linear-gradient(135deg, #ffffff 0%, #f2f2f2 100%);
-            border: 1px solid #968f92;
-        }
-        body.light-mode .banner-timestamp {
-            color: #423d3f;
-        }
-        body.light-mode .market-status-badge {
-            color: #423d3f;
-        }
     </style>
 </head>
 <body>
@@ -177,12 +144,12 @@
         <div class="grid">
             <div class="card">
                 <div class="metric-label">
-                    Premium Spent
+                    Premium Spent (5-min)
                     <span class="tooltip">
                         <span class="info-icon">ℹ️</span>
                         <span class="tooltiptext">
-                            <strong>Total Premium Spent</strong><br><br>
-                            Dollar amount spent on SPY options contracts. Calculated as price × volume × 100 (contract multiplier).<br><br>
+                            <strong>Total Premium Spent (Last 5 Minutes)</strong><br><br>
+                            Dollar amount spent on SPY options contracts in the most recent 5-minute bucket. Calculated as mid price × volume × 100 (contract multiplier).<br><br>
                             Higher values indicate increased options activity and potential institutional interest.
                         </span>
                     </span>
@@ -206,9 +173,46 @@
             </div>
         </div>
 
+        <!-- Put/Call Notional Chart -->
+        <div class="card">
+            <h3 style="color: #968f92; margin-bottom: 16px;">
+                Put/Call Notional Value
+                <span class="tooltip">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="tooltiptext">
+                        <strong>Put vs Call Notional Exposure</strong><br><br>
+                        Compares the total dollar value of put positions (red) versus call positions (green) in eac
+h 5-minute bucket.<br><br>
+                        <strong>Green line above red:</strong> More bullish positioning - higher call exposure<br><
+br>
+                        <strong>Red line above green:</strong> More bearish positioning or hedging - higher put exp
+osure<br><br>
+                        <strong>Lines converging:</strong> Balanced market sentiment<br><br>
+                        Notional value = contracts × underlying price × 100, representing the total market exposure
+.
+                    </span>
+                </span>
+            </h3>
+            <div class="chart-container">
+                <canvas id="notionalChart"></canvas>
+            </div>
+        </div>
+
         <!-- Premium Chart -->
         <div class="card" style="margin-bottom: 24px;">
-            <h3 style="color: #968f92; margin-bottom: 16px;">Premium Spent</h3>
+            <h3 style="color: #968f92; margin-bottom: 16px;">
+                Premium Spent (5-Minute Buckets)
+                <span class="tooltip">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="tooltiptext">
+                        <strong>Premium Spent Over Time</strong><br><br>
+                        Shows the total dollar amount spent on SPY options in each 5-minute period. Each bar represents one 5-minute bucket of aggregated trades.<br><br>
+                        <strong>Higher bars:</strong> Increased options activity - often seen during volatile periods or near major support/resistance levels.<br><br>
+                        <strong>Lower bars:</strong> Quiet periods with less options trading activity.<br><br>
+                        Spikes in premium can indicate institutional positioning or hedging activity.
+                    </span>
+                </span>
+            </h3>
             <div class="chart-container">
                 <canvas id="premiumChart"></canvas>
             </div>
@@ -216,17 +220,22 @@
 
         <!-- Delta Flow Chart -->
         <div class="card" style="margin-bottom: 24px;">
-            <h3 style="color: #968f92; margin-bottom: 16px;">Delta-Weighted Flow</h3>
+            <h3 style="color: #968f92; margin-bottom: 16px;">
+                Delta-Weighted Flow
+                <span class="tooltip">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="tooltiptext">
+                        <strong>Cumulative Delta-Weighted Flow</strong><br><br>
+                        Running total showing the directional bias of options trades adjusted for delta (equivalent stock exposure).<br><br>
+                        <strong>Rising line:</strong> Bullish flow accumulation - more call buying or put selling<br><br>
+                        <strong>Falling line:</strong> Bearish flow accumulation - more put buying or call selling<br><br>
+                        <strong>Flat line:</strong> Balanced flow - neutral market positioning<br><br>
+                        This metric helps identify whether smart money is positioning for upside or downside moves.
+                    </span>
+                </span>
+            </h3>
             <div class="chart-container">
                 <canvas id="deltaFlowChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Put/Call Notional Chart -->
-        <div class="card">
-            <h3 style="color: #968f92; margin-bottom: 16px;">Put/Call Notional Value</h3>
-            <div class="chart-container">
-                <canvas id="notionalChart"></canvas>
             </div>
         </div>
 
@@ -261,15 +270,22 @@
             fetch('/api/flows/history')
                 .then(response => response.json())
                 .then(data => {
-                    if (data.error || data.length === 0) return;
+                    if (data.error || data.length === 0) {
+                        console.log('No flow data available');
+                        return;
+                    }
 
                     const latest = data[data.length - 1];
 
-                    document.getElementById('currentPremium').textContent = formatCurrency(latest.premium_spent);
+                    // Update premium (latest 5-min bucket)
+                    document.getElementById('currentPremium').textContent = 
+                        formatCurrency(latest.premium_spent || 0);
 
+                    // Update delta flow (cumulative)
                     const deltaFlowEl = document.getElementById('currentDeltaFlow');
-                    deltaFlowEl.textContent = formatCurrency(Math.abs(latest.delta_weighted_flow));
-                    deltaFlowEl.className = 'metric-large ' + (latest.delta_weighted_flow >= 0 ? 'positive' : 'negative');
+                    const deltaFlow = latest.delta_weighted_flow || 0;
+                    deltaFlowEl.textContent = formatCurrency(Math.abs(deltaFlow));
+                    deltaFlowEl.className = 'metric-large ' + (deltaFlow >= 0 ? 'positive' : 'negative');
                 })
                 .catch(error => console.error('Error fetching current metrics:', error));
         }
@@ -278,26 +294,26 @@
             fetch('/api/flows/history')
                 .then(response => response.json())
                 .then(data => {
-                    if (data.error || data.length === 0) return;
+                    if (data.error || data.length === 0) {
+                        console.log('No flow data for charts');
+                        return;
+                    }
 
                     // Premium Chart
                     if (charts.premium) charts.premium.destroy();
                     const premiumCtx = document.getElementById('premiumChart');
                     charts.premium = new Chart(premiumCtx, {
-                        type: 'line',
+                        type: 'bar',
                         data: {
                             datasets: [{
                                 label: 'Premium Spent',
                                 data: data.map(d => ({
                                     x: new Date(d.timestamp).getTime(),
-                                    y: d.premium_spent
+                                    y: d.premium_spent || 0
                                 })),
+                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
                                 borderColor: '#10b981',
-                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                fill: true,
-                                tension: 0.4,
-                                pointRadius: 0,
-                                borderWidth: 2
+                                borderWidth: 1
                             }]
                         },
                         options: {
@@ -325,12 +341,19 @@
                                 }
                             },
                             plugins: {
-                                legend: { display: false }
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return 'Premium: ' + formatCurrency(context.parsed.y);
+                                        }
+                                    }
+                                }
                             }
                         }
                     });
 
-                    // Delta Flow Chart
+                    // Delta Flow Chart (cumulative line)
                     if (charts.deltaFlow) charts.deltaFlow.destroy();
                     const deltaFlowCtx = document.getElementById('deltaFlowChart');
                     charts.deltaFlow = new Chart(deltaFlowCtx, {
@@ -340,7 +363,7 @@
                                 label: 'Delta-Weighted Flow',
                                 data: data.map(d => ({
                                     x: new Date(d.timestamp).getTime(),
-                                    y: d.delta_weighted_flow
+                                    y: d.delta_weighted_flow || 0
                                 })),
                                 borderColor: '#f45854',
                                 backgroundColor: 'rgba(244, 88, 84, 0.1)',
@@ -375,26 +398,21 @@
                                 }
                             },
                             plugins: {
-                                legend: { display: false }
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const value = context.parsed.y;
+                                            const sign = value >= 0 ? '+' : '';
+                                            return 'Delta Flow: ' + sign + formatCurrency(Math.abs(value));
+                                        }
+                                    }
+                                }
                             }
                         }
                     });
-                })
-                .catch(error => console.error('Error fetching chart data:', error));
 
-            // Notional Chart
-            updateNotionalChart();
-        }
-
-        function updateNotionalChart() {
-            fetch('/api/flows/history')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error || data.length === 0) {
-                        console.log('No flows history data for notional chart');
-                        return;
-                    }
-
+                    // Notional Chart (Put vs Call)
                     if (charts.notional) charts.notional.destroy();
                     const notionalCtx = document.getElementById('notionalChart');
                     charts.notional = new Chart(notionalCtx, {
@@ -434,7 +452,6 @@
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
-                            animation: false,
                             interaction: { mode: 'index', intersect: false },
                             scales: {
                                 x: {
@@ -447,19 +464,11 @@
                                     grid: { color: '#968f92' }
                                 },
                                 y: {
-                                    type: 'linear',
                                     title: { display: true, text: 'Notional Value ($)', color: '#968f92' },
                                     ticks: { 
                                         color: '#968f92',
                                         callback: function(value) {
-                                            if (value >= 1e9) {
-                                                return '$' + (value / 1e9).toFixed(2) + 'B';
-                                            } else if (value >= 1e6) {
-                                                return '$' + (value / 1e6).toFixed(1) + 'M';
-                                            } else if (value >= 1e3) {
-                                                return '$' + (value / 1e3).toFixed(0) + 'K';
-                                            }
-                                            return '$' + value.toFixed(0);
+                                            return formatCurrency(value);
                                         }
                                     },
                                     grid: { color: '#968f92' }
@@ -473,21 +482,7 @@
                                 tooltip: {
                                     callbacks: {
                                         label: function(context) {
-                                            let label = context.dataset.label || '';
-                                            if (label) {
-                                                label += ': ';
-                                            }
-                                            const value = context.parsed.y;
-                                            if (value >= 1e9) {
-                                                label += '$' + (value / 1e9).toFixed(2) + 'B';
-                                            } else if (value >= 1e6) {
-                                                label += '$' + (value / 1e6).toFixed(1) + 'M';
-                                            } else if (value >= 1e3) {
-                                                label += '$' + (value / 1e3).toFixed(0) + 'K';
-                                            } else {
-                                                label += '$' + value.toFixed(0);
-                                            }
-                                            return label;
+                                            return context.dataset.label + ': ' + formatCurrency(context.parsed.y);
                                         }
                                     }
                                 }
@@ -495,7 +490,7 @@
                         }
                     });
                 })
-                .catch(error => console.error('Error fetching notional chart data:', error));
+                .catch(error => console.error('Error fetching chart data:', error));
         }
 
         // Initial load
@@ -513,7 +508,6 @@
     </div>
 
     <script>
-        // Update timestamp function
         function updateTimestamp() {
             const now = new Date();
             document.getElementById('lastUpdated').textContent =
@@ -527,11 +521,7 @@
                     timeZone: 'America/New_York'
                 }) + ' ET';
         }
-
-        // Initial update
         updateTimestamp();
-
-        // Update every second
         setInterval(updateTimestamp, 1000);
     </script>
 </body>

@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from tradestation_streaming_client import TradeStationStreamingClient
 from tradestation_client import TradeStationSimpleClient
 from greeks_calculator import GreeksCalculator
+from flow_aggregator import OptionFlowAggregator
 from src.utils import get_logger
 
 logger = get_logger(__name__)
@@ -74,6 +75,10 @@ class StreamingIngestionEngine:
         self.ts_client_secret = os.getenv('TRADESTATION_CLIENT_SECRET')
         self.ts_refresh_token = os.getenv('TRADESTATION_REFRESH_TOKEN')
         self.ts_sandbox = os.getenv('TRADESTATION_USE_SANDBOX', 'false').lower() == 'true'
+
+        # Flow aggregator for tracking option flow metrics
+        self.flow_aggregator = OptionFlowAggregator(self.db_conn)
+        logger.info("✅ Flow aggregator initialized")
 
         # Greeks calculator
         self.greeks_calc = GreeksCalculator(
@@ -224,6 +229,9 @@ class StreamingIngestionEngine:
             if not option:
                 logger.debug("Failed to parse option data")
                 return
+
+            # Add to flow aggregator
+            await self.flow_aggregator.add_quote(option)
 
             # Add to batch buffer
             async with self.batch_lock:
@@ -635,6 +643,13 @@ class StreamingIngestionEngine:
             # Start background tasks
             tasks = []
 
+            # Start flow aggregator flush task
+            flow_flush_task = asyncio.create_task(
+                self.flow_aggregator.periodic_flush_task(interval_seconds=60)
+            )
+            tasks.append(flow_flush_task)
+            logger.info("✅ Flow aggregator flush task enabled")
+
             # Start underlying quotes updater
             underlying_task = asyncio.create_task(self.update_underlying_quotes())
             tasks.append(underlying_task)
@@ -676,6 +691,10 @@ class StreamingIngestionEngine:
                 # Flush remaining data
                 logger.info("Flushing remaining batch data...")
                 await self._flush_batch()
+
+                # Flush remaining flow data
+                logger.info("Flushing remaining flow buckets...")
+                await self.flow_aggregator.flush_old_buckets(force_all=True)
 
                 # Log final metrics
                 self._log_ingestion_metrics()
