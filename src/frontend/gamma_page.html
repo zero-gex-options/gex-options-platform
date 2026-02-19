@@ -97,6 +97,28 @@
             font-size: 14px;
             color: #968f92;
         }
+
+        /* FIXED HEIGHT SCROLLABLE REGIME CHANGES */
+        .regime-timeline-container {
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+        .regime-timeline-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .regime-timeline-container::-webkit-scrollbar-track {
+            background: #2a2628;
+            border-radius: 4px;
+        }
+        .regime-timeline-container::-webkit-scrollbar-thumb {
+            background: #968f92;
+            border-radius: 4px;
+        }
+        .regime-timeline-container::-webkit-scrollbar-thumb:hover {
+            background: #f45854;
+        }
+
         .regime-timeline-item {
             display: flex;
             gap: 16px;
@@ -219,9 +241,7 @@
             color: #423d3f;
         }
         body.light-mode .level-item,
-        body.light-mode .regime-timeline-item,
-        body.light-mode .metric-box,
-        body.light-mode .feature-box {
+        body.light-mode .regime-timeline-item {
             background: #f2f2f2;
             border: 1px solid #968f92;
         }
@@ -230,23 +250,14 @@
         body.light-mode .level-gamma {
             color: #423d3f;
         }
-        body.light-mode .footer {
-            background: #ffffff;
-            border-top: 1px solid #968f92;
+        body.light-mode .regime-timeline-container::-webkit-scrollbar-track {
+            background: #f2f2f2;
         }
-        body.light-mode .footer-text,
-        body.light-mode .footer-tagline {
-            color: #423d3f;
+        body.light-mode .regime-timeline-container::-webkit-scrollbar-thumb {
+            background: #423d3f;
         }
-        body.light-mode .spy-banner {
-            background: linear-gradient(135deg, #ffffff 0%, #f2f2f2 100%);
-            border: 1px solid #968f92;
-        }
-        body.light-mode .banner-timestamp {
-            color: #423d3f;
-        }
-        body.light-mode .market-status-badge {
-            color: #423d3f;
+        body.light-mode .regime-timeline-container::-webkit-scrollbar-thumb:hover {
+            background: #f45854;
         }
     </style>
 </head>
@@ -465,7 +476,7 @@
                         </span>
                     </span>
                 </h3>
-                <div id="regimeChanges">
+                <div class="regime-timeline-container" id="regimeChanges">
                     <div class="loading">Loading changes...</div>
                 </div>
             </div>
@@ -485,6 +496,22 @@
             .catch(error => console.error('Error loading navigation:', error));
 
         let charts = {};
+
+        // Get text color based on theme
+        function getTextColor() {
+            return document.body.classList.contains('light-mode') ? '#423d3f' : '#f2f2f2';
+        }
+
+        function getGridColor() {
+            return '#968f92';
+        }
+
+        // Redraw charts on theme change
+        document.addEventListener('themeChanged', () => {
+            updateGEXHistory();
+            updatePriceVsGamma();
+            updateStrikeProfile();
+        });
 
         function formatNumber(num) {
             return new Intl.NumberFormat().format(num);
@@ -565,7 +592,6 @@
                         date: new Date(d.timestamp)
                     }));
 
-                    // Generate hourly ticks - first point in each hour
                     const hourlyIndices = [];
                     const seenHours = new Set();
                     labels.forEach((label, idx) => {
@@ -624,7 +650,7 @@
                                         axis.ticks = hourlyIndices.map(i => ({ value: i }));
                                     },
                                     ticks: {
-                                        color: '#968f92',
+                                        color: getTextColor(),
                                         maxRotation: 90,
                                         minRotation: 90,
                                         autoSkip: false,
@@ -635,7 +661,6 @@
                                                     minute: '2-digit',
                                                     timeZone: 'America/New_York'
                                                 }));
-                                                // Only show label if at top of hour
                                                 if (etMinute === 0) {
                                                     return label.date.toLocaleString('en-US', {
                                                         hour: '2-digit',
@@ -650,12 +675,12 @@
                                     }
                                 },
                                 y: {
-                                    title: { display: true, text: 'Net GEX (Millions)', color: '#968f92' },
+                                    title: { display: true, text: 'Net GEX (Millions)', color: getTextColor() },
                                     ticks: {
-                                        color: '#968f92',
+                                        color: getTextColor(),
                                         callback: val => (val >= 0 ? '+' : '') + val + 'M'
                                     },
-                                    grid: { color: '#968f92' }
+                                    grid: { color: getGridColor() }
                                 }
                             },
                             plugins: {
@@ -684,7 +709,7 @@
                                 const xAxis = chart.scales.x;
                                 ctx.save();
                                 ctx.textAlign = 'center';
-                                ctx.fillStyle = '#968f92';
+                                ctx.fillStyle = getTextColor();
                                 ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
                                 const dateGroups = {};
@@ -739,7 +764,6 @@
                         date: new Date(d.timestamp)
                     }));
 
-                    // Generate hourly ticks - first point in each hour
                     const hourlyIndices = [];
                     const seenHours = new Set();
                     labels.forEach((label, idx) => {
@@ -764,14 +788,9 @@
                     const spyPoints = filtered.map((d, idx) => ({ x: idx, y: d.underlying_price }));
                     const gammaPoints = filtered.map((d, idx) => ({ x: idx, y: d.max_gamma_strike }));
 
-                    // Build per-point colors based on whether SPY is above or below gamma
-                    const aboveColor  = 'rgba(244, 88, 84, 0.25)';   // red   - SPY above gamma
-                    const belowColor  = 'rgba(16, 185, 129, 0.25)';  // green - SPY below gamma
+                    const aboveColor  = 'rgba(244, 88, 84, 0.25)';
+                    const belowColor  = 'rgba(16, 185, 129, 0.25)';
 
-                    // We draw two filled area datasets - one for each color zone.
-                    // Where SPY is above gamma  -> fill down to gamma with red
-                    // Where SPY is below gamma  -> fill up to gamma with green
-                    // We do this by clamping each point to the gamma line.
                     const spyAboveGamma = spyPoints.map((p, i) => ({
                         x: p.x,
                         y: p.y > gammaPoints[i].y ? p.y : gammaPoints[i].y
@@ -789,25 +808,23 @@
                             labels: labels,
                             datasets: [
                                 {
-                                    // Red fill - SPY above gamma
                                     label: '_above',
                                     data: spyAboveGamma,
                                     borderColor: 'transparent',
                                     backgroundColor: aboveColor,
                                     pointRadius: 0,
-                                    fill: '+1',   // fill down to next dataset (gamma)
+                                    fill: '+1',
                                     tension: 0.4,
                                     yAxisID: 'y',
                                     order: 3
                                 },
                                 {
-                                    // Green fill - SPY below gamma
                                     label: '_below',
                                     data: spyBelowGamma,
                                     borderColor: 'transparent',
                                     backgroundColor: belowColor,
                                     pointRadius: 0,
-                                    fill: '+1',   // fill down to next dataset (gamma)
+                                    fill: '+1',
                                     tension: 0.4,
                                     yAxisID: 'y',
                                     order: 3
@@ -854,7 +871,7 @@
                                         axis.ticks = hourlyIndices.map(i => ({ value: i }));
                                     },
                                     ticks: {
-                                        color: '#968f92',
+                                        color: getTextColor(),
                                         maxRotation: 90,
                                         minRotation: 90,
                                         autoSkip: false,
@@ -865,7 +882,6 @@
                                                     minute: '2-digit',
                                                     timeZone: 'America/New_York'
                                                 }));
-                                                // Only show label if at top of hour
                                                 if (etMinute === 0) {
                                                     return label.date.toLocaleString('en-US', {
                                                         hour: '2-digit',
@@ -880,19 +896,19 @@
                                     }
                                 },
                                 y: {
-                                    title: { display: true, text: 'Price ($)', color: '#968f92' },
+                                    title: { display: true, text: 'Price ($)', color: getTextColor() },
                                     ticks: {
-                                        color: '#968f92',
+                                        color: getTextColor(),
                                         callback: val => '$' + val.toFixed(2)
                                     },
-                                    grid: { color: '#968f92' }
+                                    grid: { color: getGridColor() }
                                 }
                             },
                             plugins: {
                                 legend: {
                                     position: 'top',
                                     labels: {
-                                        color: '#f2f2f2',
+                                        color: getTextColor(),
                                         filter: item => !item.text.startsWith('_')
                                     }
                                 },
@@ -927,7 +943,7 @@
                                 const xAxis = chart.scales.x;
                                 ctx.save();
                                 ctx.textAlign = 'center';
-                                ctx.fillStyle = '#968f92';
+                                ctx.fillStyle = getTextColor();
                                 ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
                                 const dateGroups = {};
@@ -977,6 +993,14 @@
                     if (charts.strikeProfile) charts.strikeProfile.destroy();
 
                     const ctx = document.getElementById('strikeProfileChart');
+
+                    // FIXED: Store the strike that's closest to spot price
+                    let closestStrikeIndex = strikes.findIndex((s, i) => {
+                        if (i === strikes.length - 1) return false;
+                        return s.strike <= spotPrice && strikes[i + 1].strike > spotPrice;
+                    });
+                    if (closestStrikeIndex === -1) closestStrikeIndex = 0;
+
                     charts.strikeProfile = new Chart(ctx, {
                         type: 'bar',
                         data: {
@@ -1022,28 +1046,29 @@
                             scales: {
                                 x: {
                                     stacked: false,
-                                    title: { display: true, text: 'Strike Price', color: '#968f92' },
+                                    title: { display: true, text: 'Strike Price', color: getTextColor() },
                                     ticks: { 
-                                        color: '#968f92',
+                                        color: getTextColor(),
                                         callback: function(value, index) {
                                             const strike = strikes[index].strike;
-                                            if (Math.abs(strike - spotPrice) < 5) {
+                                            // FIXED: Only add arrow to the one strike closest to spot
+                                            if (index === closestStrikeIndex) {
                                                 return '$' + strike + ' ◄';
                                             }
                                             return '$' + strike;
                                         }
                                     },
-                                    grid: { color: '#968f92' }
+                                    grid: { color: getGridColor() }
                                 },
                                 y: {
-                                    title: { display: true, text: 'Call/Put Gamma (Millions)', color: '#968f92' },
+                                    title: { display: true, text: 'Call/Put Gamma (Millions)', color: getTextColor() },
                                     ticks: { 
-                                        color: '#968f92',
+                                        color: getTextColor(),
                                         callback: function(value) {
                                             return (value >= 0 ? '+' : '') + value.toFixed(0) + 'M';
                                         }
                                     },
-                                    grid: { color: '#968f92' },
+                                    grid: { color: getGridColor() },
                                     position: 'left'
                                 },
                                 y1: {
@@ -1062,20 +1087,17 @@
                                 legend: { 
                                     position: 'top',
                                     labels: { 
-                                        color: '#f2f2f2',
+                                        color: getTextColor(),
                                         usePointStyle: true,
                                         generateLabels: function(chart) {
                                             const original = Chart.defaults.plugins.legend.labels.generateLabels;
                                             const labels = original.call(this, chart);
-
-                                            // Change the Total Gamma Exposure legend item to show a line
                                             labels.forEach((label, index) => {
-                                                if (index === 2) { // Third dataset (Total Gamma Exposure)
+                                                if (index === 2) {
                                                     label.pointStyle = 'line';
                                                     label.fillStyle = 'transparent';
                                                 }
                                             });
-
                                             return labels;
                                         }
                                     }
@@ -1180,7 +1202,7 @@
         updateKeyLevels();
         updateRegimeChanges();
 
-        // Auto-refresh every 10 seconds
+        // Auto-refresh
         setInterval(updateCurrentGEX, 10000);
         setInterval(updateGEXHistory, 30000);
         setInterval(updatePriceVsGamma, 30000);
@@ -1195,7 +1217,6 @@
     </div>
 
     <script>
-        // Update timestamp function
         function updateTimestamp() {
             const now = new Date();
             document.getElementById('lastUpdated').textContent =
@@ -1210,10 +1231,7 @@
                 }) + ' ET';
         }
 
-        // Initial update
         updateTimestamp();
-
-        // Update every second
         setInterval(updateTimestamp, 1000);
     </script>
 </body>

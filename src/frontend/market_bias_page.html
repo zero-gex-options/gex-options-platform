@@ -111,12 +111,13 @@
         body.light-mode .card h3 {
             color: #423d3f;
         }
+	body.light-mode .card h2 {
+            color: #423d3f;
+        }
         body.light-mode .metric-label {
             color: #423d3f;
         }
-        body.light-mode .metric-value,
-        body.light-mode .metric-large,
-        body.light-mode .metric-medium {
+        body.light-mode .metric-score {
             color: #423d3f;
         }
         body.light-mode .neutral {
@@ -131,39 +132,6 @@
             border-color: transparent transparent #ffffff transparent;
         }
         body.light-mode .info-icon {
-            color: #423d3f;
-        }
-        body.light-mode .loading {
-            color: #423d3f;
-        }
-        body.light-mode .level-item,
-        body.light-mode .regime-timeline-item,
-        body.light-mode .metric-box,
-        body.light-mode .feature-box {
-            background: #f2f2f2;
-            border: 1px solid #968f92;
-        }
-        body.light-mode .regime-time,
-        body.light-mode .regime-price,
-        body.light-mode .level-gamma {
-            color: #423d3f;
-        }
-        body.light-mode .footer {
-            background: #ffffff;
-            border-top: 1px solid #968f92;
-        }
-        body.light-mode .footer-text,
-        body.light-mode .footer-tagline {
-            color: #423d3f;
-        }
-        body.light-mode .spy-banner {
-            background: linear-gradient(135deg, #ffffff 0%, #f2f2f2 100%);
-            border: 1px solid #968f92;
-        }
-        body.light-mode .banner-timestamp {
-            color: #423d3f;
-        }
-        body.light-mode .market-status-badge {
             color: #423d3f;
         }
     </style>
@@ -218,6 +186,31 @@
 
         let chart = null;
 
+        function getTextColor() {
+            return document.body.classList.contains('light-mode') ? '#423d3f' : '#f2f2f2';
+        }
+
+        function getGridColor() {
+            return '#968f92';
+        }
+
+        // Redraw chart on theme change
+        document.addEventListener('themeChanged', () => {
+            updateChart();
+        });
+
+        function filterToTradingHours(data) {
+            return data.filter(d => {
+                const date = new Date(d.timestamp);
+                const day = date.getDay();
+                if (day === 0 || day === 6) return false;
+                const hour = date.getHours();
+                const minute = date.getMinutes();
+                const timeInMinutes = hour * 60 + minute;
+                return timeInMinutes >= 240 && timeInMinutes <= 1200;
+            });
+        }
+
         // Plugin to draw background zones
         const backgroundZonesPlugin = {
             id: 'backgroundZones',
@@ -250,7 +243,9 @@
             }
         };
 
-        Chart.register(backgroundZonesPlugin);
+        if (typeof Chart !== 'undefined') {
+            Chart.register(backgroundZonesPlugin);
+        }
 
         function updateCurrentBias() {
             fetch('/api/market/bias/current')
@@ -270,19 +265,49 @@
         function updateChart() {
             fetch('/api/market/bias/score-history')
                 .then(response => response.json())
-                .then(data => {
-                    if (data.error || data.length === 0) return;
+                .then(rawData => {
+                    if (rawData.error || rawData.length === 0) return;
+
+                    // Filter to trading hours
+                    const data = filterToTradingHours(rawData);
+                    if (data.length === 0) return;
 
                     if (chart) chart.destroy();
+
+                    // Create labels
+                    const labels = data.map((d, idx) => ({
+                        index: idx,
+                        timestamp: d.timestamp,
+                        date: new Date(d.timestamp)
+                    }));
+
+                    // Find hourly indices
+                    const hourlyIndices = [];
+                    const seenHours = new Set();
+                    labels.forEach((label, idx) => {
+                        const hour = label.date.getHours();
+                        const dateKey = label.date.toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            timeZone: 'America/New_York'
+                        });
+                        const hourKey = `${dateKey}-${hour}`;
+                        if (!seenHours.has(hourKey) && hour !== 4 && hour !== 20) {
+                            seenHours.add(hourKey);
+                            hourlyIndices.push(idx);
+                        }
+                    });
 
                     const ctx = document.getElementById('biasChart');
                     chart = new Chart(ctx, {
                         type: 'line',
                         data: {
+                            labels: labels,
                             datasets: [{
                                 label: 'Market Bias Score',
-                                data: data.map(d => ({
-                                    x: new Date(d.timestamp).getTime(),
+                                data: data.map((d, idx) => ({
+                                    x: idx,
                                     y: d.score
                                 })),
                                 borderColor: '#f45854',
@@ -290,7 +315,7 @@
                                 fill: true,
                                 tension: 0.4,
                                 borderWidth: 3,
-                                pointRadius: 2,
+                                pointRadius: 0,
                                 pointHoverRadius: 6,
                                 pointBackgroundColor: '#f45854',
                                 pointBorderColor: '#423d3f',
@@ -303,26 +328,51 @@
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            animation: false,
                             interaction: {
                                 mode: 'index',
                                 intersect: false
                             },
+                            layout: {
+                                padding: { bottom: 30 }
+                            },
                             scales: {
                                 x: {
-                                    type: 'time',
-                                    time: {
-                                        unit: 'hour',
-                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    type: 'linear',
+                                    min: 0,
+                                    max: labels.length - 1,
+                                    afterBuildTicks: axis => {
+                                        axis.ticks = hourlyIndices.map(i => ({ value: i }));
                                     },
-                                    ticks: { color: '#968f92' },
-                                    grid: { color: '#968f92' }
+                                    ticks: {
+                                        color: getTextColor(),
+                                        maxRotation: 90,
+                                        minRotation: 90,
+                                        autoSkip: false,
+                                        callback: (value) => {
+                                            if (hourlyIndices.includes(value)) {
+                                                const label = labels[value];
+                                                const minute = label.date.getMinutes();
+                                                if (minute === 0) {
+                                                    return label.date.toLocaleString('en-US', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                        hour12: false,
+                                                        timeZone: 'America/New_York'
+                                                    });
+                                                }
+                                            }
+                                            return '';
+                                        }
+                                    },
+                                    grid: { display: false }
                                 },
                                 y: {
                                     min: -100,
                                     max: 100,
-                                    title: { display: true, text: 'Bias Score', color: '#968f92' },
+                                    title: { display: true, text: 'Bias Score', color: getTextColor() },
                                     ticks: {
-                                        color: '#968f92',
+                                        color: getTextColor(),
                                         stepSize: 25,
                                         callback: function(value) {
                                             if (value === 100) return 'Bullish (+100)';
@@ -333,7 +383,7 @@
                                             return value;
                                         }
                                     },
-                                    grid: { color: '#968f92' }
+                                    grid: { color: getGridColor() }
                                 }
                             },
                             plugins: {
@@ -342,12 +392,13 @@
                                     enabled: true,
                                     callbacks: {
                                         title: function(context) {
-                                            const date = new Date(context[0].parsed.x);
-                                            return date.toLocaleString('en-US', {
+                                            const label = labels[context[0].dataIndex];
+                                            return new Date(label.timestamp).toLocaleString('en-US', {
                                                 month: 'short',
                                                 day: 'numeric',
                                                 hour: '2-digit',
-                                                minute: '2-digit'
+                                                minute: '2-digit',
+                                                timeZone: 'America/New_York'
                                             });
                                         },
                                         label: function(context) {
@@ -361,7 +412,43 @@
                                     }
                                 }
                             }
-                        }
+                        },
+                        plugins: [{
+                            id: 'dateLabels',
+                            afterDraw: (chart) => {
+                                const ctx = chart.ctx;
+                                const xAxis = chart.scales.x;
+                                ctx.save();
+                                ctx.textAlign = 'center';
+                                ctx.fillStyle = getTextColor();
+                                ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+                                const dateGroups = {};
+                                labels.forEach((label, idx) => {
+                                    const dateStr = label.date.toLocaleString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        timeZone: 'America/New_York'
+                                    });
+                                    if (!dateGroups[dateStr]) dateGroups[dateStr] = [];
+                                    dateGroups[dateStr].push(idx);
+                                });
+
+                                Object.keys(dateGroups).forEach(dateStr => {
+                                    const indices = dateGroups[dateStr];
+                                    let noonIdx = indices.find(idx => {
+                                        const hour = labels[idx].date.getHours();
+                                        return hour === 12;
+                                    });
+                                    if (noonIdx === undefined) noonIdx = indices[Math.floor(indices.length / 2)];
+                                    const x = xAxis.getPixelForValue(noonIdx);
+                                    const y = chart.chartArea.bottom + 55;
+                                    ctx.fillText(dateStr, x, y);
+                                });
+
+                                ctx.restore();
+                            }
+                        }]
                     });
                 })
                 .catch(error => console.error('Error fetching chart data:', error));
@@ -382,7 +469,6 @@
     </div>
 
     <script>
-        // Update timestamp function
         function updateTimestamp() {
             const now = new Date();
             document.getElementById('lastUpdated').textContent =
@@ -396,11 +482,7 @@
                     timeZone: 'America/New_York'
                 }) + ' ET';
         }
-
-        // Initial update
         updateTimestamp();
-
-        // Update every second
         setInterval(updateTimestamp, 1000);
     </script>
 </body>

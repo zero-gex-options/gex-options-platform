@@ -181,15 +181,11 @@
                     <span class="info-icon">ℹ️</span>
                     <span class="tooltiptext">
                         <strong>Put vs Call Notional Exposure</strong><br><br>
-                        Compares the total dollar value of put positions (red) versus call positions (green) in eac
-h 5-minute bucket.<br><br>
-                        <strong>Green line above red:</strong> More bullish positioning - higher call exposure<br><
-br>
-                        <strong>Red line above green:</strong> More bearish positioning or hedging - higher put exp
-osure<br><br>
+                        Compares the total dollar value of put positions (red) versus call positions (green) in each 5-minute bucket.<br><br>
+                        <strong>Green line above red:</strong> More bullish positioning - higher call exposure<br><br>
+                        <strong>Red line above green:</strong> More bearish positioning or hedging - higher put exposure<br><br>
                         <strong>Lines converging:</strong> Balanced market sentiment<br><br>
-                        Notional value = contracts × underlying price × 100, representing the total market exposure
-.
+                        Notional value = contracts × underlying price × 100, representing the total market exposure.
                     </span>
                 </span>
             </h3>
@@ -255,6 +251,19 @@ osure<br><br>
 
         let charts = {};
 
+        function getTextColor() {
+            return document.body.classList.contains('light-mode') ? '#423d3f' : '#f2f2f2';
+        }
+
+        function getGridColor() {
+            return '#968f92';
+        }
+
+        // Redraw charts on theme change
+        document.addEventListener('themeChanged', () => {
+            updateCharts();
+        });
+
         function formatCurrency(value) {
             if (value >= 1e9) {
                 return '$' + (value / 1e9).toFixed(2) + 'B';
@@ -264,6 +273,18 @@ osure<br><br>
                 return '$' + (value / 1e3).toFixed(0) + 'K';
             }
             return '$' + value.toFixed(0);
+        }
+
+        function filterToTradingHours(data) {
+            return data.filter(d => {
+                const date = new Date(d.timestamp);
+                const day = date.getDay();
+                if (day === 0 || day === 6) return false;
+                const hour = date.getHours();
+                const minute = date.getMinutes();
+                const timeInMinutes = hour * 60 + minute;
+                return timeInMinutes >= 240 && timeInMinutes <= 1200;
+            });
         }
 
         function updateCurrentMetrics() {
@@ -293,11 +314,40 @@ osure<br><br>
         function updateCharts() {
             fetch('/api/flows/history')
                 .then(response => response.json())
-                .then(data => {
-                    if (data.error || data.length === 0) {
+                .then(rawData => {
+                    if (rawData.error || rawData.length === 0) {
                         console.log('No flow data for charts');
                         return;
                     }
+
+                    // Filter to trading hours
+                    const data = filterToTradingHours(rawData);
+                    if (data.length === 0) return;
+
+                    // Create labels
+                    const labels = data.map((d, idx) => ({
+                        index: idx,
+                        timestamp: d.timestamp,
+                        date: new Date(d.timestamp)
+                    }));
+
+                    // Find hourly indices
+                    const hourlyIndices = [];
+                    const seenHours = new Set();
+                    labels.forEach((label, idx) => {
+                        const hour = label.date.getHours();
+                        const dateKey = label.date.toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            timeZone: 'America/New_York'
+                        });
+                        const hourKey = `${dateKey}-${hour}`;
+                        if (!seenHours.has(hourKey) && hour !== 4 && hour !== 20) {
+                            seenHours.add(hourKey);
+                            hourlyIndices.push(idx);
+                        }
+                    });
 
                     // Premium Chart
                     if (charts.premium) charts.premium.destroy();
@@ -305,10 +355,11 @@ osure<br><br>
                     charts.premium = new Chart(premiumCtx, {
                         type: 'bar',
                         data: {
+                            labels: labels,
                             datasets: [{
                                 label: 'Premium Spent',
-                                data: data.map(d => ({
-                                    x: new Date(d.timestamp).getTime(),
+                                data: data.map((d, idx) => ({
+                                    x: idx,
                                     y: d.premium_spent || 0
                                 })),
                                 backgroundColor: 'rgba(16, 185, 129, 0.7)',
@@ -319,50 +370,122 @@ osure<br><br>
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            animation: false,
+                            layout: {
+                                padding: { bottom: 30 }
+                            },
                             scales: {
                                 x: {
-                                    type: 'time',
-                                    time: {
-                                        unit: 'hour',
-                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    type: 'linear',
+                                    min: 0,
+                                    max: labels.length - 1,
+                                    afterBuildTicks: axis => {
+                                        axis.ticks = hourlyIndices.map(i => ({ value: i }));
                                     },
-                                    ticks: { color: '#968f92' },
-                                    grid: { color: '#968f92' }
+                                    ticks: {
+                                        color: getTextColor(),
+                                        maxRotation: 90,
+                                        minRotation: 90,
+                                        autoSkip: false,
+                                        callback: (value) => {
+                                            if (hourlyIndices.includes(value)) {
+                                                const label = labels[value];
+                                                const minute = label.date.getMinutes();
+                                                if (minute === 0) {
+                                                    return label.date.toLocaleString('en-US', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                        hour12: false,
+                                                        timeZone: 'America/New_York'
+                                                    });
+                                                }
+                                            }
+                                            return '';
+                                        }
+                                    },
+                                    grid: { display: false }
                                 },
                                 y: {
-                                    title: { display: true, text: 'Premium ($)', color: '#968f92' },
+                                    title: { display: true, text: 'Premium ($)', color: getTextColor() },
                                     ticks: { 
-                                        color: '#968f92',
+                                        color: getTextColor(),
                                         callback: function(value) {
                                             return formatCurrency(value);
                                         }
                                     },
-                                    grid: { color: '#968f92' }
+                                    grid: { color: getGridColor() }
                                 }
                             },
                             plugins: {
                                 legend: { display: false },
                                 tooltip: {
                                     callbacks: {
+                                        title: context => {
+                                            const label = labels[context[0].dataIndex];
+                                            return new Date(label.timestamp).toLocaleString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                timeZone: 'America/New_York'
+                                            });
+                                        },
                                         label: function(context) {
                                             return 'Premium: ' + formatCurrency(context.parsed.y);
                                         }
                                     }
                                 }
                             }
-                        }
+                        },
+                        plugins: [{
+                            id: 'dateLabels',
+                            afterDraw: (chart) => {
+                                const ctx = chart.ctx;
+                                const xAxis = chart.scales.x;
+                                ctx.save();
+                                ctx.textAlign = 'center';
+                                ctx.fillStyle = getTextColor();
+                                ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+                                const dateGroups = {};
+                                labels.forEach((label, idx) => {
+                                    const dateStr = label.date.toLocaleString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        timeZone: 'America/New_York'
+                                    });
+                                    if (!dateGroups[dateStr]) dateGroups[dateStr] = [];
+                                    dateGroups[dateStr].push(idx);
+                                });
+
+                                Object.keys(dateGroups).forEach(dateStr => {
+                                    const indices = dateGroups[dateStr];
+                                    let noonIdx = indices.find(idx => {
+                                        const hour = labels[idx].date.getHours();
+                                        return hour === 12;
+                                    });
+                                    if (noonIdx === undefined) noonIdx = indices[Math.floor(indices.length / 2)];
+                                    const x = xAxis.getPixelForValue(noonIdx);
+                                    const y = chart.chartArea.bottom + 55;
+                                    ctx.fillText(dateStr, x, y);
+                                });
+
+                                ctx.restore();
+                            }
+                        }]
                     });
 
-                    // Delta Flow Chart (cumulative line)
+                    // Delta Flow Chart
                     if (charts.deltaFlow) charts.deltaFlow.destroy();
                     const deltaFlowCtx = document.getElementById('deltaFlowChart');
                     charts.deltaFlow = new Chart(deltaFlowCtx, {
                         type: 'line',
                         data: {
+                            labels: labels,
                             datasets: [{
                                 label: 'Delta-Weighted Flow',
-                                data: data.map(d => ({
-                                    x: new Date(d.timestamp).getTime(),
+                                data: data.map((d, idx) => ({
+                                    x: idx,
                                     y: d.delta_weighted_flow || 0
                                 })),
                                 borderColor: '#f45854',
@@ -376,31 +499,66 @@ osure<br><br>
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            animation: false,
+                            layout: {
+                                padding: { bottom: 30 }
+                            },
                             scales: {
                                 x: {
-                                    type: 'time',
-                                    time: {
-                                        unit: 'hour',
-                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    type: 'linear',
+                                    min: 0,
+                                    max: labels.length - 1,
+                                    afterBuildTicks: axis => {
+                                        axis.ticks = hourlyIndices.map(i => ({ value: i }));
                                     },
-                                    ticks: { color: '#968f92' },
-                                    grid: { color: '#968f92' }
+                                    ticks: {
+                                        color: getTextColor(),
+                                        maxRotation: 90,
+                                        minRotation: 90,
+                                        autoSkip: false,
+                                        callback: (value) => {
+                                            if (hourlyIndices.includes(value)) {
+                                                const label = labels[value];
+                                                const minute = label.date.getMinutes();
+                                                if (minute === 0) {
+                                                    return label.date.toLocaleString('en-US', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                        hour12: false,
+                                                        timeZone: 'America/New_York'
+                                                    });
+                                                }
+                                            }
+                                            return '';
+                                        }
+                                    },
+                                    grid: { display: false }
                                 },
                                 y: {
-                                    title: { display: true, text: 'Delta Flow ($)', color: '#968f92' },
+                                    title: { display: true, text: 'Delta Flow ($)', color: getTextColor() },
                                     ticks: { 
-                                        color: '#968f92',
+                                        color: getTextColor(),
                                         callback: function(value) {
                                             return formatCurrency(value);
                                         }
                                     },
-                                    grid: { color: '#968f92' }
+                                    grid: { color: getGridColor() }
                                 }
                             },
                             plugins: {
                                 legend: { display: false },
                                 tooltip: {
                                     callbacks: {
+                                        title: context => {
+                                            const label = labels[context[0].dataIndex];
+                                            return new Date(label.timestamp).toLocaleString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                timeZone: 'America/New_York'
+                                            });
+                                        },
                                         label: function(context) {
                                             const value = context.parsed.y;
                                             const sign = value >= 0 ? '+' : '';
@@ -409,20 +567,57 @@ osure<br><br>
                                     }
                                 }
                             }
-                        }
+                        },
+                        plugins: [{
+                            id: 'dateLabels',
+                            afterDraw: (chart) => {
+                                const ctx = chart.ctx;
+                                const xAxis = chart.scales.x;
+                                ctx.save();
+                                ctx.textAlign = 'center';
+                                ctx.fillStyle = getTextColor();
+                                ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+                                const dateGroups = {};
+                                labels.forEach((label, idx) => {
+                                    const dateStr = label.date.toLocaleString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        timeZone: 'America/New_York'
+                                    });
+                                    if (!dateGroups[dateStr]) dateGroups[dateStr] = [];
+                                    dateGroups[dateStr].push(idx);
+                                });
+
+                                Object.keys(dateGroups).forEach(dateStr => {
+                                    const indices = dateGroups[dateStr];
+                                    let noonIdx = indices.find(idx => {
+                                        const hour = labels[idx].date.getHours();
+                                        return hour === 12;
+                                    });
+                                    if (noonIdx === undefined) noonIdx = indices[Math.floor(indices.length / 2)];
+                                    const x = xAxis.getPixelForValue(noonIdx);
+                                    const y = chart.chartArea.bottom + 55;
+                                    ctx.fillText(dateStr, x, y);
+                                });
+
+                                ctx.restore();
+                            }
+                        }]
                     });
 
-                    // Notional Chart (Put vs Call)
+                    // Notional Chart
                     if (charts.notional) charts.notional.destroy();
                     const notionalCtx = document.getElementById('notionalChart');
                     charts.notional = new Chart(notionalCtx, {
                         type: 'line',
                         data: {
+                            labels: labels,
                             datasets: [
                                 {
                                     label: 'Call Notional Value',
-                                    data: data.map(d => ({
-                                        x: new Date(d.timestamp).getTime(),
+                                    data: data.map((d, idx) => ({
+                                        x: idx,
                                         y: d.call_notional || 0
                                     })),
                                     borderColor: '#10b981',
@@ -435,8 +630,8 @@ osure<br><br>
                                 },
                                 {
                                     label: 'Put Notional Value',
-                                    data: data.map(d => ({
-                                        x: new Date(d.timestamp).getTime(),
+                                    data: data.map((d, idx) => ({
+                                        x: idx,
                                         y: d.put_notional || 0
                                     })),
                                     borderColor: '#f45854',
@@ -452,42 +647,113 @@ osure<br><br>
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            animation: false,
                             interaction: { mode: 'index', intersect: false },
+                            layout: {
+                                padding: { bottom: 30 }
+                            },
                             scales: {
                                 x: {
-                                    type: 'time',
-                                    time: {
-                                        unit: 'hour',
-                                        displayFormats: { hour: 'MMM dd HH:mm' }
+                                    type: 'linear',
+                                    min: 0,
+                                    max: labels.length - 1,
+                                    afterBuildTicks: axis => {
+                                        axis.ticks = hourlyIndices.map(i => ({ value: i }));
                                     },
-                                    ticks: { color: '#968f92' },
-                                    grid: { color: '#968f92' }
+                                    ticks: {
+                                        color: getTextColor(),
+                                        maxRotation: 90,
+                                        minRotation: 90,
+                                        autoSkip: false,
+                                        callback: (value) => {
+                                            if (hourlyIndices.includes(value)) {
+                                                const label = labels[value];
+                                                const minute = label.date.getMinutes();
+                                                if (minute === 0) {
+                                                    return label.date.toLocaleString('en-US', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                        hour12: false,
+                                                        timeZone: 'America/New_York'
+                                                    });
+                                                }
+                                            }
+                                            return '';
+                                        }
+                                    },
+                                    grid: { display: false }
                                 },
                                 y: {
-                                    title: { display: true, text: 'Notional Value ($)', color: '#968f92' },
+                                    title: { display: true, text: 'Notional Value ($)', color: getTextColor() },
                                     ticks: { 
-                                        color: '#968f92',
+                                        color: getTextColor(),
                                         callback: function(value) {
                                             return formatCurrency(value);
                                         }
                                     },
-                                    grid: { color: '#968f92' }
+                                    grid: { color: getGridColor() }
                                 }
                             },
                             plugins: {
                                 legend: { 
-                                    labels: { color: '#f2f2f2' },
+                                    labels: { color: getTextColor() },
                                     position: 'top'
                                 },
                                 tooltip: {
                                     callbacks: {
+                                        title: context => {
+                                            const label = labels[context[0].dataIndex];
+                                            return new Date(label.timestamp).toLocaleString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                timeZone: 'America/New_York'
+                                            });
+                                        },
                                         label: function(context) {
                                             return context.dataset.label + ': ' + formatCurrency(context.parsed.y);
                                         }
                                     }
                                 }
                             }
-                        }
+                        },
+                        plugins: [{
+                            id: 'dateLabels',
+                            afterDraw: (chart) => {
+                                const ctx = chart.ctx;
+                                const xAxis = chart.scales.x;
+                                ctx.save();
+                                ctx.textAlign = 'center';
+                                ctx.fillStyle = getTextColor();
+                                ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+                                const dateGroups = {};
+                                labels.forEach((label, idx) => {
+                                    const dateStr = label.date.toLocaleString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        timeZone: 'America/New_York'
+                                    });
+                                    if (!dateGroups[dateStr]) dateGroups[dateStr] = [];
+                                    dateGroups[dateStr].push(idx);
+                                });
+
+                                Object.keys(dateGroups).forEach(dateStr => {
+                                    const indices = dateGroups[dateStr];
+                                    let noonIdx = indices.find(idx => {
+                                        const hour = labels[idx].date.getHours();
+                                        return hour === 12;
+                                    });
+                                    if (noonIdx === undefined) noonIdx = indices[Math.floor(indices.length / 2)];
+                                    const x = xAxis.getPixelForValue(noonIdx);
+                                    const y = chart.chartArea.bottom + 55;
+                                    ctx.fillText(dateStr, x, y);
+                                });
+
+                                ctx.restore();
+                            }
+                        }]
                     });
                 })
                 .catch(error => console.error('Error fetching chart data:', error));

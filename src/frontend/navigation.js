@@ -34,6 +34,9 @@ function initializeNavigation() {
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             applyTheme(newTheme);
             localStorage.setItem('theme', newTheme);
+
+            // Dispatch theme change event so charts can redraw
+            document.dispatchEvent(new Event('themeChanged'));
         });
     }
 
@@ -43,7 +46,7 @@ function initializeNavigation() {
             themeToggle.classList.add('light');
             themeLabel.textContent = 'Light';
 
-            // Switch to light logos (use querySelectorAll for multiple elements)
+            // Switch to light logos
             const headerLogos = document.querySelectorAll('.header-logo');
             const headerHelmets = document.querySelectorAll('.header-helmet');
             const footerLogos = document.querySelectorAll('.footer-logo');
@@ -56,7 +59,7 @@ function initializeNavigation() {
             themeToggle.classList.remove('light');
             themeLabel.textContent = 'Dark';
 
-            // Switch to dark logos (use querySelectorAll for multiple elements)
+            // Switch to dark logos
             const headerLogos = document.querySelectorAll('.header-logo');
             const headerHelmets = document.querySelectorAll('.header-helmet');
             const footerLogos = document.querySelectorAll('.footer-logo');
@@ -100,15 +103,14 @@ function initializeNavigation() {
                 // Close dropdown
                 dropdown.classList.remove('open');
 
-                // Store selected symbol in localStorage for future use
+                // Store selected symbol
                 localStorage.setItem('selectedSymbol', symbol);
 
-                // Log for now (in future this will reload data for the selected symbol)
                 console.log('Selected symbol:', symbol);
             });
         });
 
-        // Load saved symbol on page load
+        // Load saved symbol
         const savedSymbol = localStorage.getItem('selectedSymbol') || 'SPY';
         document.getElementById('selectedSymbol').textContent = savedSymbol;
         document.querySelectorAll('.nav-dropdown-item').forEach(item => {
