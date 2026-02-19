@@ -703,7 +703,7 @@ def get_flows_history():
         import pytz
         eastern = pytz.timezone('America/New_York')
 
-        # Aggregate by timestamp (combine calls and puts)
+        # Aggregate by timestamp
         buckets = {}
         for row in rows:
             ts = row['timestamp']
@@ -711,9 +711,7 @@ def get_flows_history():
                 ts = eastern.localize(ts)
             else:
                 ts = ts.astimezone(eastern)
-
             ts_str = ts.isoformat()
-
             if ts_str not in buckets:
                 buckets[ts_str] = {
                     'timestamp': ts_str,
@@ -722,15 +720,15 @@ def get_flows_history():
                     'call_notional': 0,
                     'put_notional': 0
                 }
-
-            # Add to aggregated values
+            # Add to aggregated values - premium and delta flow are summed
             buckets[ts_str]['premium_spent'] += float(row['total_premium'] or 0)
             buckets[ts_str]['delta_weighted_flow'] += float(row['delta_weighted_volume'] or 0)
 
+            # For notional, just assign (don't accumulate) since we have separate rows per option_type
             if row['option_type'] == 'call':
-                buckets[ts_str]['call_notional'] += float(row['total_notional'] or 0)
+                buckets[ts_str]['call_notional'] = float(row['total_notional'] or 0)
             else:
-                buckets[ts_str]['put_notional'] += float(row['total_notional'] or 0)
+                buckets[ts_str]['put_notional'] = float(row['total_notional'] or 0)
 
         # Convert to sorted list
         result = sorted(buckets.values(), key=lambda x: x['timestamp'])

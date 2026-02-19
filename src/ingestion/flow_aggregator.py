@@ -321,7 +321,7 @@ class OptionFlowAggregator:
         async with self.lock:
             for key, bucket in list(self.buckets.items()):
                 # Flush if bucket is complete (older than current bucket) or force_all
-                if force_all or bucket.bucket_start < current_bucket_ts:
+                if force_all or bucket.bucket_start <= current_bucket_ts:
                     buckets_to_flush.append(bucket)
                     del self.buckets[key]
 
