@@ -1486,6 +1486,67 @@ def get_max_pain_analysis():
         if conn:
             return_db_connection(conn)
 
+@app.route('/api/max-pain/history')
+@cache_query(ttl_seconds=30)
+def get_max_pain_history():
+    """Get historical max pain data for time series chart - last 2 trading sessions"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SET TIME ZONE 'America/New_York'")
+
+        # Get last 48 hours of GEX metrics (covers 2 trading sessions)
+        cursor.execute("""
+            SELECT
+                timestamp,
+                max_pain,
+                underlying_price,
+                expiration
+            FROM gex_metrics
+            WHERE symbol = 'SPY'
+                AND max_pain IS NOT NULL
+                AND timestamp > NOW() - INTERVAL '48 hours'
+            ORDER BY timestamp ASC
+        """)
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        if not rows:
+            return jsonify({'error': 'No historical max pain data available'}), 404
+
+        import pytz
+        eastern = pytz.timezone('America/New_York')
+        result = []
+
+        for row in rows:
+            ts = row['timestamp']
+            if ts.tzinfo is None:
+                ts = eastern.localize(ts)
+            else:
+                ts = ts.astimezone(eastern)
+
+            result.append({
+                'timestamp': ts.isoformat(),
+                'max_pain': float(row['max_pain']) if row['max_pain'] else 0,
+                'underlying_price': float(row['underlying_price']) if row['underlying_price'] else 0,
+                'expiration': row['expiration'].isoformat() if row['expiration'] else None
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in get_max_pain_history: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 @app.route('/api/market-status')
 def get_market_status():
     """Get detailed market status based on time and recent quote freshness"""

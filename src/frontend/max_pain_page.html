@@ -249,6 +249,27 @@
                 <canvas id="maxPainChart"></canvas>
             </div>
         </div>
+
+        <!-- Max Pain Time Series Chart -->
+        <div class="card">
+            <h3>
+                Max Pain vs SPY Price
+                <span class="tooltip">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="tooltiptext">
+                        <strong>Max Pain Over Time</strong><br><br>
+                        Tracks how max pain evolves throughout trading sessions compared to SPY's actual price.<br><br>
+                        <strong>Purple Line:</strong> Max Pain strike price<br>
+                        <strong>Blue Line:</strong> SPY actual price<br><br>
+                        Price tends to gravitate toward max pain as expiration approaches. Large divergences can indicate potential dir
+ectional pressure.
+                    </span>
+                </span>
+            </h3>
+            <div class="chart-container">
+                <canvas id="maxPainTimeSeriesChart"></canvas>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -264,6 +285,21 @@
             .catch(error => console.error('Error loading navigation:', error));
 
         let maxPainChart = null;
+        let maxPainTimeSeriesChart = null;
+
+        function getTextColor() {
+            return document.body.classList.contains('light-mode') ? '#423d3f' : '#f2f2f2';
+        }
+
+        function getGridColor() {
+            return document.body.classList.contains('light-mode') ? 'rgba(150, 143, 146, 0.3)' : 'rgba(150, 143, 146, 0.2)';
+        }
+
+        // Redraw charts on theme change
+        document.addEventListener('themeChanged', () => {
+            updateMaxPainData();
+            updateTimeSeriesChart();
+        });
 
         function formatCurrency(value) {
             if (value >= 1e9) {
@@ -274,6 +310,18 @@
                 return '$' + (value / 1e3).toFixed(0) + 'K';
             }
             return '$' + value.toFixed(0);
+        }
+
+        function filterToTradingHours(data) {
+            return data.filter(d => {
+                const date = new Date(d.timestamp);
+                const day = date.getDay();
+                if (day === 0 || day === 6) return false;
+                const hour = date.getHours();
+                const minute = date.getMinutes();
+                const timeInMinutes = hour * 60 + minute;
+                return timeInMinutes >= 240 && timeInMinutes <= 1200;
+            });
         }
 
         async function updateMaxPainData() {
@@ -298,6 +346,294 @@
 
             } catch (error) {
                 console.error('Error fetching max pain data:', error);
+            }
+        }
+
+        async function updateTimeSeriesChart() {
+            try {
+                // Fetch historical max pain data
+                const response = await fetch('/api/max-pain/history');
+                const data = await response.json();
+
+                if (data.error || data.length === 0) {
+                    console.log('No time series data available');
+                    return;
+                }
+
+                // Filter to trading hours
+                const filteredData = filterToTradingHours(data);
+                if (filteredData.length === 0) return;
+
+                // Create labels with indices
+                const labels = filteredData.map((d, idx) => ({
+                    index: idx,
+                    timestamp: d.timestamp,
+                    date: new Date(d.timestamp)
+                }));
+
+                // Find hourly indices for x-axis ticks
+                const hourlyIndices = [];
+                const seenHours = new Set();
+                labels.forEach((label, idx) => {
+                    const hour = label.date.getHours();
+                    const dateKey = label.date.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        timeZone: 'America/New_York'
+                    });
+                    const hourKey = `${dateKey}-${hour}`;
+                    if (!seenHours.has(hourKey) && hour !== 4 && hour !== 20) {
+                        seenHours.add(hourKey);
+                        hourlyIndices.push(idx);
+                    }
+                });
+
+                if (maxPainTimeSeriesChart) {
+                    maxPainTimeSeriesChart.destroy();
+                }
+
+                const ctx = document.getElementById('maxPainTimeSeriesChart');
+                
+                // Create gradient for max pain line
+                const gradient1 = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
+                gradient1.addColorStop(0, 'rgba(168, 85, 247, 0.3)');
+                gradient1.addColorStop(1, 'rgba(168, 85, 247, 0.0)');
+
+                // Create gradient for SPY line
+                const gradient2 = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
+                gradient2.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
+                gradient2.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+
+                maxPainTimeSeriesChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Max Pain',
+                                data: filteredData.map((d, idx) => ({
+                                    x: idx,
+                                    y: d.max_pain
+                                })),
+                                borderColor: '#a855f7',
+                                backgroundColor: gradient1,
+                                borderWidth: 3,
+                                pointRadius: 0,
+                                pointHoverRadius: 6,
+                                pointHoverBorderWidth: 3,
+                                pointHoverBackgroundColor: '#a855f7',
+                                pointHoverBorderColor: '#ffffff',
+                                tension: 0.3,
+                                fill: true,
+                                order: 1
+                            },
+                            {
+                                label: 'SPY Price',
+                                data: filteredData.map((d, idx) => ({
+                                    x: idx,
+                                    y: d.underlying_price
+                                })),
+                                borderColor: '#3b82f6',
+                                backgroundColor: gradient2,
+                                borderWidth: 2.5,
+                                pointRadius: 0,
+                                pointHoverRadius: 6,
+                                pointHoverBorderWidth: 3,
+                                pointHoverBackgroundColor: '#3b82f6',
+                                pointHoverBorderColor: '#ffffff',
+                                tension: 0.3,
+                                fill: true,
+                                order: 2
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: {
+                            duration: 750,
+                            easing: 'easeInOutQuart'
+                        },
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        layout: {
+                            padding: { bottom: 30 }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                min: 0,
+                                max: labels.length - 1,
+                                afterBuildTicks: axis => {
+                                    axis.ticks = hourlyIndices.map(i => ({ value: i }));
+                                },
+                                ticks: {
+                                    color: getTextColor(),
+                                    maxRotation: 90,
+                                    minRotation: 90,
+                                    autoSkip: false,
+                                    font: {
+                                        size: 11,
+                                        weight: 500
+                                    },
+                                    callback: (value) => {
+                                        if (hourlyIndices.includes(value)) {
+                                            const label = labels[value];
+                                            const minute = label.date.getMinutes();
+                                            if (minute === 0) {
+                                                return label.date.toLocaleString('en-US', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                    hour12: false,
+                                                    timeZone: 'America/New_York'
+                                                });
+                                            }
+                                        }
+                                        return '';
+                                    }
+                                },
+                                grid: { 
+                                    display: true,
+                                    color: getGridColor(),
+                                    lineWidth: 1
+                                },
+                                border: {
+                                    display: true,
+                                    color: getGridColor()
+                                }
+                            },
+                            y: {
+                                title: { 
+                                    display: true, 
+                                    text: 'Price ($)', 
+                                    color: getTextColor(),
+                                    font: {
+                                        size: 13,
+                                        weight: 600
+                                    }
+                                },
+                                ticks: { 
+                                    color: getTextColor(),
+                                    font: {
+                                        size: 11,
+                                        weight: 500
+                                    },
+                                    callback: function(value) {
+                                        return '$' + value.toFixed(2);
+                                    },
+                                    padding: 8
+                                },
+                                grid: { 
+                                    color: getGridColor(),
+                                    lineWidth: 1
+                                },
+                                border: {
+                                    display: true,
+                                    color: getGridColor()
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: { 
+                                    color: getTextColor(),
+                                    font: {
+                                        size: 13,
+                                        weight: 600
+                                    },
+                                    padding: 15,
+                                    usePointStyle: true,
+                                    pointStyle: 'circle'
+                                },
+                                position: 'top'
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                                titleColor: '#ffffff',
+                                bodyColor: '#ffffff',
+                                borderColor: '#968f92',
+                                borderWidth: 1,
+                                padding: 12,
+                                displayColors: true,
+                                titleFont: {
+                                    size: 13,
+                                    weight: 'bold'
+                                },
+                                bodyFont: {
+                                    size: 12,
+                                    weight: 'normal'
+                                },
+                                callbacks: {
+                                    title: context => {
+                                        const label = labels[context[0].dataIndex];
+                                        return new Date(label.timestamp).toLocaleString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            timeZone: 'America/New_York'
+                                        });
+                                    },
+                                    label: function(context) {
+                                        return context.dataset.label + ': $' + context.parsed.y.toFixed(2);
+                                    },
+                                    afterLabel: function(context) {
+                                        const idx = context.dataIndex;
+                                        const maxPain = filteredData[idx].max_pain;
+                                        const spyPrice = filteredData[idx].underlying_price;
+                                        const distance = spyPrice - maxPain;
+                                        const distancePct = (distance / maxPain * 100).toFixed(2);
+                                        const arrow = distance > 0 ? '▲' : '▼';
+                                        return `Distance: ${arrow} $${Math.abs(distance).toFixed(2)} (${Math.abs(distancePct)}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    plugins: [{
+                        id: 'dateLabels',
+                        afterDraw: (chart) => {
+                            const ctx = chart.ctx;
+                            const xAxis = chart.scales.x;
+                            ctx.save();
+                            ctx.textAlign = 'center';
+                            ctx.fillStyle = getTextColor();
+                            ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                            ctx.fontWeight = '600';
+
+                            const dateGroups = {};
+                            labels.forEach((label, idx) => {
+                                const dateStr = label.date.toLocaleString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    timeZone: 'America/New_York'
+                                });
+                                if (!dateGroups[dateStr]) dateGroups[dateStr] = [];
+                                dateGroups[dateStr].push(idx);
+                            });
+
+                            Object.keys(dateGroups).forEach(dateStr => {
+                                const indices = dateGroups[dateStr];
+                                let noonIdx = indices.find(idx => {
+                                    const hour = labels[idx].date.getHours();
+                                    return hour === 12;
+                                });
+                                if (noonIdx === undefined) noonIdx = indices[Math.floor(indices.length / 2)];
+                                const x = xAxis.getPixelForValue(noonIdx);
+                                const y = chart.chartArea.bottom + 55;
+                                ctx.fillText(dateStr, x, y);
+                            });
+
+                            ctx.restore();
+                        }
+                    }]
+                });
+
+            } catch (error) {
+                console.error('Error fetching time series data:', error);
             }
         }
 
@@ -401,11 +737,11 @@
                             title: { 
                                 display: true, 
                                 text: 'Strike Price ($)', 
-                                color: '#968f92',
+                                color: getTextColor(),
                                 font: { size: 14, weight: 'bold' }
                             },
                             ticks: { 
-                                color: '#968f92',
+                                color: getTextColor(),
                                 callback: function(value, index) {
                                     const strike = data.strikes[index].strike;
                                     // Highlight current price and max pain
@@ -417,28 +753,28 @@
                                     return '$' + strike;
                                 }
                             },
-                            grid: { color: '#334155' }
+                            grid: { color: getGridColor() }
                         },
                         y: {
                             stacked: true,
                             title: { 
                                 display: true, 
                                 text: 'Total Option Value ($)', 
-                                color: '#968f92',
+                                color: getTextColor(),
                                 font: { size: 14, weight: 'bold' }
                             },
                             ticks: { 
-                                color: '#968f92',
+                                color: getTextColor(),
                                 callback: function(value) {
                                     return formatCurrency(value);
                                 }
                             },
-                            grid: { color: '#334155' }
+                            grid: { color: getGridColor() }
                         }
                     },
                     plugins: {
                         legend: {
-                            labels: { color: '#f2f2f2' },
+                            labels: { color: getTextColor() },
                             position: 'top'
                         },
                         tooltip: {
@@ -472,9 +808,11 @@
 
         // Initial load
         updateMaxPainData();
+        updateTimeSeriesChart();
 
         // Auto-refresh every 30 seconds
         setInterval(updateMaxPainData, 30000);
+        setInterval(updateTimeSeriesChart, 30000);
     </script>
 
     <!-- Last Updated Footer -->
