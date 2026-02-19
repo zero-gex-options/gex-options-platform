@@ -677,7 +677,7 @@ def get_flows_history():
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("SET TIME ZONE 'America/New_York'")
 
-        # Query the NEW option_flow_metrics table - last 48 hours
+        # Query the option_flow_metrics table
         cursor.execute("""
             SELECT 
                 timestamp,
@@ -693,7 +693,7 @@ def get_flows_history():
                 avg_underlying_price
             FROM option_flow_metrics
             WHERE symbol = 'SPY'
-                AND timestamp > NOW() - INTERVAL '48 hours'
+                AND timestamp > NOW() - INTERVAL '5 days'
             ORDER BY timestamp ASC
         """)
 
@@ -726,9 +726,9 @@ def get_flows_history():
 
             # For notional, just assign (don't accumulate) since we have separate rows per option_type
             if row['option_type'] == 'call':
-                buckets[ts_str]['call_notional'] = float(row['total_notional'] or 0)
+                buckets[ts_str]['call_notional'] += float(row['total_notional'] or 0)
             else:
-                buckets[ts_str]['put_notional'] = float(row['total_notional'] or 0)
+                buckets[ts_str]['put_notional'] += float(row['total_notional'] or 0)
 
         # Convert to sorted list
         result = sorted(buckets.values(), key=lambda x: x['timestamp'])

@@ -7,6 +7,7 @@ Aggregates streaming option data into 5-minute buckets to track:
 - Notional value
 - Buy/sell pressure
 - Strike distribution
+- Tracks volume deltas to avoid counting the same volume multiple times
 """
 
 import asyncio
@@ -64,14 +65,36 @@ class FlowBucket:
     # OI tracking
     oi_samples: List[int] = field(default_factory=list)
 
+    # NEW: Track last seen volume per contract to calculate deltas
+    last_volumes: Dict[str, int] = field(default_factory=dict)
+
     def add_quote(self, quote: Dict):
-        """Add an option quote to this bucket"""
+        """Add an option quote to this bucket - only counting NEW volume"""
         try:
-            volume = quote.get('volume', 0)
-            if volume <= 0:
+            # Get contract identifier
+            contract_key = quote.get('symbol')  # The full option symbol
+            if not contract_key:
                 return
 
-            # Update trade count
+            current_volume = quote.get('volume', 0)
+            if current_volume <= 0:
+                return
+
+            # Calculate volume delta (new volume since last update)
+            last_volume = self.last_volumes.get(contract_key, 0)
+            volume_delta = current_volume - last_volume
+
+            # If volume decreased or stayed same, skip (no new trades)
+            if volume_delta <= 0:
+                return
+
+            # Update tracked volume
+            self.last_volumes[contract_key] = current_volume
+
+            # Now use volume_delta instead of volume for all calculations
+            volume = volume_delta
+
+            # Update trade count (treat each volume delta as potential new trade)
             self.trade_count += 1
 
             # Volume metrics
@@ -251,11 +274,13 @@ class OptionFlowAggregator:
         # Stats
         self.stats = {
             'quotes_processed': 0,
+            'quotes_skipped_no_new_volume': 0,
             'buckets_flushed': 0,
             'last_flush': datetime.now(timezone.utc)
         }
 
         logger.info(f"✅ OptionFlowAggregator initialized ({self.BUCKET_INTERVAL_MINUTES}-minute buckets)")
+        logger.info("   📊 Volume delta tracking enabled (prevents double-counting)")
 
     def _get_bucket_timestamp(self, dt: datetime) -> datetime:
         """
@@ -299,7 +324,7 @@ class OptionFlowAggregator:
                         bucket_end=bucket_end
                     )
 
-                # Add quote to bucket
+                # Add quote to bucket (will only count volume delta)
                 self.buckets[bucket_key].add_quote(quote)
                 self.stats['quotes_processed'] += 1
 
@@ -321,7 +346,7 @@ class OptionFlowAggregator:
         async with self.lock:
             for key, bucket in list(self.buckets.items()):
                 # Flush if bucket is complete (older than current bucket) or force_all
-                if force_all or bucket.bucket_start <= current_bucket_ts:
+                if force_all or bucket.bucket_start < current_bucket_ts:
                     buckets_to_flush.append(bucket)
                     del self.buckets[key]
 
