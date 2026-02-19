@@ -49,6 +49,7 @@ function initializeNavigation() {
             const footerLogos = document.querySelectorAll('.footer-logo');
 
             headerLogos.forEach(logo => logo.src = '/logo_title_light');
+            headerHelmets.forEach(helmet => helmet.src = '/logo_icon_helmet_light');
             footerLogos.forEach(logo => logo.src = '/logo_full_light');
         } else {
             document.body.classList.remove('light-mode');
@@ -61,7 +62,7 @@ function initializeNavigation() {
             const footerLogos = document.querySelectorAll('.footer-logo');
 
             headerLogos.forEach(logo => logo.src = '/logo_title');
-            headerHelmets.forEach(helmet => helmet.src = '/logo_icon');
+            headerHelmets.forEach(helmet => helmet.src = '/logo_icon_helmet_light');
             footerLogos.forEach(logo => logo.src = '/logo_full');
         }
     }

@@ -196,7 +196,7 @@ def spy_page():
 @app.route('/api/gex/current')
 @cache_query(ttl_seconds=10)
 def get_current_gex():
-    """Get current GEX metrics"""
+    """Get current GEX metrics - shows latest available data"""
     conn = None
     try:
         conn = get_db_connection()
@@ -205,7 +205,7 @@ def get_current_gex():
 
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get latest GEX metrics for today's expiration
+        # Get latest GEX metrics for ANY expiration (most recent first)
         cursor.execute("""
             SELECT 
                 timestamp,
@@ -230,7 +230,6 @@ def get_current_gex():
                 charm_exposure
             FROM gex_metrics
             WHERE symbol = 'SPY'
-                AND expiration = CURRENT_DATE
             ORDER BY timestamp DESC
             LIMIT 1
         """)
@@ -320,7 +319,7 @@ def get_gex_history():
 @app.route('/api/gex/strike-profile')
 @cache_query(ttl_seconds=10)
 def get_strike_profile():
-    """Get gamma exposure by strike price"""
+    """Get gamma exposure by strike price - shows latest available data"""
     conn = None
     try:
         conn = get_db_connection()
@@ -340,7 +339,25 @@ def get_strike_profile():
         spot_result = cursor.fetchone()
         spot_price = float(spot_result['spot_price']) if spot_result else 600.0
 
-        # Get options data for today's expiration
+        # Get the most recent expiration date that has data
+        cursor.execute("""
+            SELECT DATE(expiration) as latest_exp
+            FROM options_quotes
+            WHERE symbol LIKE 'SPY%%'
+                AND last_updated > NOW() - INTERVAL '4 hours'
+                AND gamma IS NOT NULL
+                AND gamma > 0
+            ORDER BY expiration ASC, last_updated DESC
+            LIMIT 1
+        """)
+        exp_result = cursor.fetchone()
+
+        if not exp_result:
+            return jsonify({'error': 'No options data available'}), 404
+
+        latest_exp = exp_result['latest_exp']
+
+        # Get options data for the latest expiration
         cursor.execute("""
             SELECT DISTINCT ON (strike, option_type)
                 strike,
@@ -350,12 +367,12 @@ def get_strike_profile():
                 underlying_price
             FROM options_quotes
             WHERE symbol LIKE 'SPY%%'
-                AND DATE(expiration) = CURRENT_DATE
-                AND last_updated > NOW() - INTERVAL '30 minutes'
+                AND DATE(expiration) = %s
+                AND last_updated > NOW() - INTERVAL '4 hours'
                 AND gamma IS NOT NULL
                 AND gamma > 0
             ORDER BY strike, option_type, last_updated DESC
-        """)
+        """, (latest_exp,))
 
         rows = cursor.fetchall()
         cursor.close()
@@ -403,6 +420,7 @@ def get_strike_profile():
 
         return jsonify({
             'spot_price': spot_price,
+            'expiration': latest_exp.isoformat(),
             'strikes': result
         })
 
@@ -510,6 +528,23 @@ def get_key_levels():
         spot_result = cursor.fetchone()
         spot_price = float(spot_result['spot_price']) if spot_result else 600.0
 
+        # Get the most recent expiration with data
+        cursor.execute("""
+            SELECT DATE(expiration) as latest_exp
+            FROM options_quotes
+            WHERE symbol LIKE 'SPY%%'
+                AND last_updated > NOW() - INTERVAL '4 hours'
+                AND gamma IS NOT NULL
+            ORDER BY expiration ASC
+            LIMIT 1
+        """)
+        exp_result = cursor.fetchone()
+
+        if not exp_result:
+            return jsonify({'error': 'No options data available'}), 404
+
+        latest_exp = exp_result['latest_exp']
+
         # Get options with significant gamma
         cursor.execute("""
             SELECT DISTINCT ON (strike, option_type)
@@ -519,11 +554,11 @@ def get_key_levels():
                 open_interest
             FROM options_quotes
             WHERE symbol LIKE 'SPY%%'
-                AND DATE(expiration) = CURRENT_DATE
-                AND last_updated > NOW() - INTERVAL '30 minutes'
+                AND DATE(expiration) = %s
+                AND last_updated > NOW() - INTERVAL '4 hours'
                 AND gamma IS NOT NULL
             ORDER BY strike, option_type, last_updated DESC
-        """)
+        """, (latest_exp,))
 
         rows = cursor.fetchall()
         cursor.close()
@@ -644,7 +679,7 @@ def get_flows_history():
 
         # Query the NEW option_flow_metrics table - last 48 hours
         cursor.execute("""
-            SELECT
+            SELECT 
                 timestamp,
                 symbol,
                 option_type,
@@ -1033,7 +1068,7 @@ def get_bias_history():
 @app.route('/api/market/bias/current')
 @cache_query(ttl_seconds=10)
 def get_current_bias_score():
-    """Get current market bias with calculated score"""
+    """Get current market bias with calculated score - shows latest available data"""
     conn = None
     try:
         conn = get_db_connection()
@@ -1042,10 +1077,11 @@ def get_current_bias_score():
 
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get latest GEX metrics
+        # Get latest GEX metrics for ANY expiration
         cursor.execute("""
             SELECT
                 timestamp,
+                expiration,
                 net_gex,
                 underlying_price,
                 gamma_flip_point,
@@ -1053,7 +1089,6 @@ def get_current_bias_score():
                 max_gamma_strike
             FROM gex_metrics
             WHERE symbol = 'SPY'
-                AND expiration = CURRENT_DATE
             ORDER BY timestamp DESC
             LIMIT 1
         """)
@@ -1100,6 +1135,7 @@ def get_current_bias_score():
 
         return jsonify({
             'timestamp': data['timestamp'].isoformat(),
+            'expiration': data['expiration'].isoformat() if data['expiration'] else None,
             'bias': bias,
             'score': round(score, 1),
             'css_class': css_class,
@@ -1117,7 +1153,6 @@ def get_current_bias_score():
     finally:
         if conn:
             return_db_connection(conn)
-
 
 @app.route('/api/market/bias/score-history')
 @cache_query(ttl_seconds=30)
@@ -1297,7 +1332,7 @@ def get_spy_change():
 @app.route('/api/max-pain/analysis')
 @cache_query(ttl_seconds=10)
 def get_max_pain_analysis():
-    """Get max pain analysis with strike-by-strike breakdown"""
+    """Get max pain analysis with strike-by-strike breakdown - shows latest available data"""
     conn = None
     try:
         conn = get_db_connection()
@@ -1306,21 +1341,6 @@ def get_max_pain_analysis():
 
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("SET TIME ZONE 'America/New_York'")
-
-        # Determine target expiration (today if before 4PM, else next trading day)
-        eastern = pytz.timezone('America/New_York')
-        now_et = datetime.now(eastern)
-
-        # If it's after 4 PM ET or weekend, target next trading day
-        if now_et.time() >= dt_time(16, 0) or now_et.weekday() >= 5:
-            # Find next trading day
-            target_date = now_et.date()
-            while True:
-                target_date = target_date + timedelta(days=1)
-                if target_date.weekday() < 5:  # Monday = 0, Friday = 4
-                    break
-        else:
-            target_date = now_et.date()
 
         # Get current SPY price
         cursor.execute("""
@@ -1333,33 +1353,25 @@ def get_max_pain_analysis():
         price_result = cursor.fetchone()
         current_price = float(price_result['current_price']) if price_result else 600.0
 
-        # Get max pain - fall back to today if next-day data not available
-        from datetime import date as date_class
-        today = date_class.today()
-        max_pain_result = None
-        for query_date in [target_date, today]:
-            query_date_str = str(query_date)
-            cursor.execute("""
-                SELECT max_pain, timestamp
-                FROM gex_metrics
-                WHERE symbol = 'SPY'
-                    AND DATE(expiration) = %s::date
-                ORDER BY timestamp DESC
-                LIMIT 1
-            """, (query_date_str,))
-            max_pain_result = cursor.fetchone()
-            if max_pain_result and max_pain_result['max_pain']:
-                target_date = query_date
-                break
+        # Get the most recent max pain data (any expiration)
+        cursor.execute("""
+            SELECT max_pain, timestamp, expiration
+            FROM gex_metrics
+            WHERE symbol = 'SPY'
+                AND max_pain IS NOT NULL
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+        max_pain_result = cursor.fetchone()
 
         if not max_pain_result or not max_pain_result['max_pain']:
             return jsonify({'error': 'No max pain data available'}), 404
 
         max_pain = float(max_pain_result['max_pain'])
         timestamp = max_pain_result['timestamp']
+        target_date = max_pain_result['expiration']
 
-        # Get options data
-        target_date_str = str(target_date)
+        # Get options data for that expiration
         cursor.execute("""
             SELECT
                 strike,
@@ -1380,13 +1392,12 @@ def get_max_pain_analysis():
                     ) as rn
                 FROM options_quotes
                 WHERE symbol LIKE 'SPY%%'
-                    AND DATE(expiration) = %s::date
-                    AND last_updated > NOW() - INTERVAL '30 minutes'
+                    AND expiration = %s
                     AND open_interest > 0
             ) latest
             WHERE rn = 1
             ORDER BY strike, option_type
-        """, (target_date_str,))
+        """, (target_date,))
 
         options_rows = cursor.fetchall()
         cursor.close()
@@ -1396,7 +1407,7 @@ def get_max_pain_analysis():
 
         # Build strikes_dict
         strikes_dict = {}
-        for i, row in enumerate(options_rows):
+        for row in options_rows:
             try:
                 strike = float(row['strike'])
                 opt_type = row['option_type']
@@ -1450,6 +1461,10 @@ def get_max_pain_analysis():
         total_value_at_max_pain = max_pain_data['total_value'] if max_pain_data else 0
 
         # Format expiration display
+        import pytz
+        eastern = pytz.timezone('America/New_York')
+        now_et = datetime.now(eastern)
+
         expiration_display = target_date.strftime('%b %d, %Y')
         if target_date == now_et.date():
             expiration_display += ' (0DTE)'
@@ -1572,7 +1587,6 @@ def get_market_status():
                 'color': 'gray'
             })
 
-
     except Exception as e:
         print(f"Error getting market status: {e}")
         traceback.print_exc()
@@ -1615,18 +1629,18 @@ def get_logo_title_light():
         print(f"Error serving logo: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/logo_icon')
-def get_logo_icon():
+@app.route('/logo_icon_helmet')
+def get_logo_icon_helmet():
     try:
-        return send_from_directory('/opt/zerogex/frontend/static', 'Light_Helmet.png')
+        return send_from_directory('/opt/zerogex/frontend/static', 'Dark_Helmet.png')
     except Exception as e:
         print(f"Error serving logo: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/logo_icon_target')
-def get_logo_icon_target():
+@app.route('/logo_icon_helmet_light')
+def get_logo_icon_helmet_light():
     try:
-        return send_from_directory('/opt/zerogex/frontend/static', 'Light_Crosshairs.png')
+        return send_from_directory('/opt/zerogex/frontend/static', 'Light_Helmet.png')
     except Exception as e:
         print(f"Error serving logo: {e}")
         return jsonify({'error': str(e)}), 500
