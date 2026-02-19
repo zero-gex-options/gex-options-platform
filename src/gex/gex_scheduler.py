@@ -1,11 +1,15 @@
 """
-GEX Calculation Scheduler
+GEX Calculation Scheduler - WITH CONNECTION RESILIENCE
 
-Runs GEX calculations periodically during market hours with fresh underlying prices.
+Key changes:
+1. Added connection health check before each operation
+2. Automatic reconnection on connection failure
+3. Connection keepalive settings
 """
 
 import asyncio
 import psycopg2
+from psycopg2 import OperationalError, InterfaceError
 from datetime import datetime, date, time as dt_time
 import pytz
 import os
@@ -29,7 +33,7 @@ logger = get_logger(__name__)
 
 
 class GEXScheduler:
-    """Schedule and run GEX calculations with fresh price data"""
+    """Schedule and run GEX calculations with connection resilience"""
 
     def __init__(
         self,
@@ -56,23 +60,20 @@ class GEXScheduler:
         logger.info(f"  Target expiration: {target_expiration}")
 
         # Load database credentials
-        db_creds = self._load_db_credentials()
+        self.db_creds = self._load_db_credentials()
 
-        # Database connection
-        try:
-            self.db_conn = psycopg2.connect(**db_creds)
-            logger.info("✅ Database connection established")
-        except Exception as e:
-            logger.critical(f"Failed to connect to database: {e}", exc_info=True)
-            raise
+        # Database connection (will be initialized in _ensure_connection)
+        self.db_conn = None
+        self.calculator = None
 
-        # GEX calculator
-        self.calculator = GEXCalculator(self.db_conn)
+        # Initialize connection
+        self._ensure_connection()
 
         # Statistics
         self.stats = {
             'calculations': 0,
             'errors': 0,
+            'reconnections': 0,
             'start_time': datetime.now(pytz.timezone('America/New_York'))
         }
 
@@ -96,13 +97,62 @@ class GEXScheduler:
                     key, value = line.split('=', 1)
                     creds[key] = value
 
+        # Add connection keepalive settings
         return {
             'host': creds.get('DB_HOST', 'localhost'),
             'port': int(creds.get('DB_PORT', '5432')),
             'database': creds.get('DB_NAME', 'gex_db'),
             'user': creds.get('DB_USER', 'gex_user'),
             'password': creds.get('DB_PASSWORD', ''),
+            'keepalives': 1,
+            'keepalives_idle': 30,
+            'keepalives_interval': 10,
+            'keepalives_count': 5,
+            'connect_timeout': 10
         }
+
+    def _ensure_connection(self) -> bool:
+        """
+        Ensure database connection is alive, reconnect if needed
+
+        Returns:
+            True if connection is healthy, False otherwise
+        """
+        # Check if connection exists and is open
+        if self.db_conn is not None:
+            try:
+                # Test connection with a simple query
+                cursor = self.db_conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.close()
+                return True
+            except (OperationalError, InterfaceError) as e:
+                logger.warning(f"Connection test failed: {e}")
+                # Connection is dead, will reconnect below
+                try:
+                    self.db_conn.close()
+                except:
+                    pass
+                self.db_conn = None
+                self.calculator = None
+
+        # Need to establish new connection
+        try:
+            logger.info("Establishing database connection...")
+            self.db_conn = psycopg2.connect(**self.db_creds)
+            logger.info("✅ Database connection established")
+
+            # Recreate calculator with new connection
+            self.calculator = GEXCalculator(self.db_conn)
+
+            self.stats['reconnections'] += 1
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to connect to database: {e}", exc_info=True)
+            self.db_conn = None
+            self.calculator = None
+            return False
 
     def is_market_open(self) -> bool:
         """
@@ -119,10 +169,7 @@ class GEXScheduler:
             logger.debug(f"Market closed: Weekend ({now_et.strftime('%A')})")
             return False
 
-        # Market hours (ET):
-        # 04:00 AM - 09:30 AM: Pre-Market
-        # 09:30 AM - 04:00 PM: Regular
-        # 04:00 PM - 08:00 PM: After-Hours
+        # Market hours (ET): 04:00 AM - 08:00 PM (extended hours)
         market_open = dt_time(4, 0)
         market_close = dt_time(20, 0)
         current_time = now_et.time()
@@ -160,6 +207,11 @@ class GEXScheduler:
         Returns:
             Latest price or None if not found
         """
+        # Ensure connection is alive
+        if not self._ensure_connection():
+            logger.error("Cannot query price: database connection failed")
+            return None
+
         cursor = self.db_conn.cursor()
 
         try:
@@ -198,6 +250,11 @@ class GEXScheduler:
             True if successful, False otherwise
         """
         try:
+            # Ensure connection is alive before starting
+            if not self._ensure_connection():
+                logger.error(f"Cannot calculate GEX: database connection unavailable")
+                return False
+
             # Get latest price from database
             logger.debug(f"Fetching latest {symbol} price from database...")
             current_price = self.get_latest_underlying_price(symbol)
@@ -232,6 +289,11 @@ class GEXScheduler:
                 logger.warning(f"No GEX metrics calculated for {symbol}")
                 return False
 
+        except (OperationalError, InterfaceError) as e:
+            logger.error(f"Database connection error for {symbol}: {e}")
+            self.stats['errors'] += 1
+            # Connection will be re-established on next cycle
+            return False
         except Exception as e:
             logger.error(f"Error calculating GEX for {symbol}: {e}", exc_info=True)
             self.stats['errors'] += 1
@@ -306,6 +368,7 @@ class GEXScheduler:
         logger.info(f"Uptime: {uptime_hours:.1f} hours")
         logger.info(f"Total calculations: {self.stats['calculations']}")
         logger.info(f"Errors: {self.stats['errors']}")
+        logger.info(f"Reconnections: {self.stats['reconnections']}")
 
         if uptime_hours > 0:
             calc_per_hour = self.stats['calculations'] / uptime_hours
@@ -330,6 +393,7 @@ class GEXScheduler:
         logger.info("="*60)
         logger.info(f"Total calculations: {self.stats['calculations']}")
         logger.info(f"Total errors: {self.stats['errors']}")
+        logger.info(f"Total reconnections: {self.stats['reconnections']}")
         logger.info("="*60)
         logger.info("GEX Scheduler stopped")
 
