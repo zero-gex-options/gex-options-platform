@@ -5,12 +5,13 @@ Key changes:
 1. Added connection health check before each operation
 2. Automatic reconnection on connection failure
 3. Connection keepalive settings
+4. Auto-rollover to next day's expiration after 4 PM ET
 """
 
 import asyncio
 import psycopg2
 from psycopg2 import OperationalError, InterfaceError
-from datetime import datetime, date, time as dt_time
+from datetime import datetime, date, time as dt_time, timedelta
 import pytz
 import os
 import sys
@@ -185,11 +186,27 @@ class GEXScheduler:
         """
         Get expiration date based on target_expiration setting
 
+        For 'today' mode: Returns today's date before 4 PM ET, next trading day after 4 PM ET
+
         Returns:
             Date object for expiration
         """
         if self.target_expiration == 'today':
-            return date.today()
+            et_tz = pytz.timezone('America/New_York')
+            now_et = datetime.now(et_tz)
+
+            # After 4 PM ET, roll to next trading day
+            if now_et.time() >= dt_time(16, 0):
+                next_day = date.today() + timedelta(days=1)
+
+                # Skip weekends
+                while next_day.weekday() >= 5:
+                    next_day += timedelta(days=1)
+
+                logger.info(f"After 4 PM ET - rolling to next expiration: {next_day}")
+                return next_day
+            else:
+                return date.today()
         else:
             try:
                 return datetime.strptime(self.target_expiration, '%Y-%m-%d').date()

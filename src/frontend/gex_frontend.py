@@ -24,6 +24,34 @@ _query_cache = {}
 # Global connection pool
 db_pool = None
 
+def get_target_expiration():
+    """
+    Get the appropriate expiration date based on current market time.
+    Same logic as streaming_ingestion_engine.py
+
+    For 0DTE trading:
+    - Before 4:00 PM ET: Use today's date
+    - After 4:00 PM ET: Use next trading day's date
+
+    Returns:
+        date: Target expiration date
+    """
+    now_et = datetime.now(pytz.timezone('America/New_York'))
+    current_date = now_et.date()
+
+    # If after 4:00 PM ET (options expiration time), move to next day
+    if now_et.time() >= dt_time(16, 0):
+        # Move to next day
+        next_day = current_date + timedelta(days=1)
+
+        # Skip weekends (Saturday=5, Sunday=6)
+        while next_day.weekday() >= 5:
+            next_day += timedelta(days=1)
+
+        return next_day
+
+    return current_date
+
 def load_db_config():
     """Load database configuration from ~/.zerogex_db_creds"""
     try:
@@ -196,7 +224,7 @@ def spy_page():
 @app.route('/api/gex/current')
 @cache_query(ttl_seconds=10)
 def get_current_gex():
-    """Get current GEX metrics - shows latest available data"""
+    """Get current GEX metrics - uses dynamic expiration"""
     conn = None
     try:
         conn = get_db_connection()
@@ -205,7 +233,10 @@ def get_current_gex():
 
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get latest GEX metrics for ANY expiration (most recent first)
+        # Get target expiration based on time of day
+        target_exp = get_target_expiration()
+
+        # Get latest GEX metrics for the target expiration
         cursor.execute("""
             SELECT 
                 timestamp,
@@ -230,9 +261,10 @@ def get_current_gex():
                 charm_exposure
             FROM gex_metrics
             WHERE symbol = 'SPY'
+                AND DATE(expiration) = %s
             ORDER BY timestamp DESC
             LIMIT 1
-        """)
+        """, (target_exp,))
 
         row = cursor.fetchone()
         cursor.close()
@@ -319,7 +351,7 @@ def get_gex_history():
 @app.route('/api/gex/strike-profile')
 @cache_query(ttl_seconds=10)
 def get_strike_profile():
-    """Get gamma exposure by strike price - shows latest available data"""
+    """Get gamma exposure by strike price - uses dynamic expiration"""
     conn = None
     try:
         conn = get_db_connection()
@@ -339,25 +371,10 @@ def get_strike_profile():
         spot_result = cursor.fetchone()
         spot_price = float(spot_result['spot_price']) if spot_result else 600.0
 
-        # Get the most recent expiration date that has data
-        cursor.execute("""
-            SELECT DATE(expiration) as latest_exp
-            FROM options_quotes
-            WHERE symbol LIKE 'SPY%%'
-                AND last_updated > NOW() - INTERVAL '4 hours'
-                AND gamma IS NOT NULL
-                AND gamma > 0
-            ORDER BY expiration ASC, last_updated DESC
-            LIMIT 1
-        """)
-        exp_result = cursor.fetchone()
+        # Get target expiration based on time of day
+        target_exp = get_target_expiration()
 
-        if not exp_result:
-            return jsonify({'error': 'No options data available'}), 404
-
-        latest_exp = exp_result['latest_exp']
-
-        # Get options data for the latest expiration
+        # Get options data for the target expiration
         cursor.execute("""
             SELECT DISTINCT ON (strike, option_type)
                 strike,
@@ -372,7 +389,7 @@ def get_strike_profile():
                 AND gamma IS NOT NULL
                 AND gamma > 0
             ORDER BY strike, option_type, last_updated DESC
-        """, (latest_exp,))
+        """, (target_exp,))
 
         rows = cursor.fetchall()
         cursor.close()
@@ -420,7 +437,7 @@ def get_strike_profile():
 
         return jsonify({
             'spot_price': spot_price,
-            'expiration': latest_exp.isoformat(),
+            'expiration': target_exp.isoformat(),
             'strikes': result
         })
 
@@ -508,7 +525,7 @@ def get_regime_changes():
 @app.route('/api/gex/key-levels')
 @cache_query(ttl_seconds=30)
 def get_key_levels():
-    """Get key support/resistance levels based on gamma"""
+    """Get key support/resistance levels based on gamma - uses dynamic expiration"""
     conn = None
     try:
         conn = get_db_connection()
@@ -528,22 +545,8 @@ def get_key_levels():
         spot_result = cursor.fetchone()
         spot_price = float(spot_result['spot_price']) if spot_result else 600.0
 
-        # Get the most recent expiration with data
-        cursor.execute("""
-            SELECT DATE(expiration) as latest_exp
-            FROM options_quotes
-            WHERE symbol LIKE 'SPY%%'
-                AND last_updated > NOW() - INTERVAL '4 hours'
-                AND gamma IS NOT NULL
-            ORDER BY expiration ASC
-            LIMIT 1
-        """)
-        exp_result = cursor.fetchone()
-
-        if not exp_result:
-            return jsonify({'error': 'No options data available'}), 404
-
-        latest_exp = exp_result['latest_exp']
+        # Get target expiration based on time of day
+        target_exp = get_target_expiration()
 
         # Get options with significant gamma
         cursor.execute("""
@@ -558,7 +561,7 @@ def get_key_levels():
                 AND last_updated > NOW() - INTERVAL '4 hours'
                 AND gamma IS NOT NULL
             ORDER BY strike, option_type, last_updated DESC
-        """, (latest_exp,))
+        """, (target_exp,))
 
         rows = cursor.fetchall()
         cursor.close()
@@ -601,6 +604,7 @@ def get_key_levels():
 
         return jsonify({
             'spot_price': spot_price,
+            'expiration': target_exp.isoformat(),
             'support': sorted(support_levels, key=lambda x: x['strike'], reverse=True)[:5],
             'resistance': sorted(resistance_levels, key=lambda x: x['strike'])[:5]
         })
@@ -677,7 +681,7 @@ def get_flows_history():
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("SET TIME ZONE 'America/New_York'")
 
-        # Query the option_flow_metrics table
+        # Query the option_flow_metrics table - last 48 hours
         cursor.execute("""
             SELECT 
                 timestamp,
@@ -693,7 +697,7 @@ def get_flows_history():
                 avg_underlying_price
             FROM option_flow_metrics
             WHERE symbol = 'SPY'
-                AND timestamp > NOW() - INTERVAL '5 days'
+                AND timestamp > NOW() - INTERVAL '48 hours'
             ORDER BY timestamp ASC
         """)
 
@@ -705,6 +709,8 @@ def get_flows_history():
 
         # Aggregate by timestamp
         buckets = {}
+        cumulative_delta_flow = 0  # Track cumulative delta flow
+
         for row in rows:
             ts = row['timestamp']
             if ts.tzinfo is None:
@@ -712,19 +718,24 @@ def get_flows_history():
             else:
                 ts = ts.astimezone(eastern)
             ts_str = ts.isoformat()
+
             if ts_str not in buckets:
                 buckets[ts_str] = {
                     'timestamp': ts_str,
                     'premium_spent': 0,
-                    'delta_weighted_flow': 0,
+                    'delta_weighted_flow': 0,  # This will be cumulative
                     'call_notional': 0,
                     'put_notional': 0
                 }
-            # Add to aggregated values - premium and delta flow are summed
-            buckets[ts_str]['premium_spent'] += float(row['total_premium'] or 0)
-            buckets[ts_str]['delta_weighted_flow'] += float(row['delta_weighted_volume'] or 0)
 
-            # For notional, just assign (don't accumulate) since we have separate rows per option_type
+            # Premium is per-bucket (sum calls + puts)
+            buckets[ts_str]['premium_spent'] += float(row['total_premium'] or 0)
+
+            # Delta flow is cumulative across the entire time series
+            cumulative_delta_flow += float(row['delta_weighted_volume'] or 0)
+            buckets[ts_str]['delta_weighted_flow'] = cumulative_delta_flow
+
+            # Notional values are per-bucket, separate for calls and puts
             if row['option_type'] == 'call':
                 buckets[ts_str]['call_notional'] += float(row['total_notional'] or 0)
             else:
@@ -1066,7 +1077,7 @@ def get_bias_history():
 @app.route('/api/market/bias/current')
 @cache_query(ttl_seconds=10)
 def get_current_bias_score():
-    """Get current market bias with calculated score - shows latest available data"""
+    """Get current market bias with calculated score - uses dynamic expiration"""
     conn = None
     try:
         conn = get_db_connection()
@@ -1075,7 +1086,10 @@ def get_current_bias_score():
 
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get latest GEX metrics for ANY expiration
+        # Get target expiration based on time of day
+        target_exp = get_target_expiration()
+
+        # Get latest GEX metrics for target expiration
         cursor.execute("""
             SELECT
                 timestamp,
@@ -1087,9 +1101,10 @@ def get_current_bias_score():
                 max_gamma_strike
             FROM gex_metrics
             WHERE symbol = 'SPY'
+                AND DATE(expiration) = %s
             ORDER BY timestamp DESC
             LIMIT 1
-        """)
+        """, (target_exp,))
 
         row = cursor.fetchone()
         cursor.close()
@@ -1330,7 +1345,7 @@ def get_spy_change():
 @app.route('/api/max-pain/analysis')
 @cache_query(ttl_seconds=10)
 def get_max_pain_analysis():
-    """Get max pain analysis with strike-by-strike breakdown - shows latest available data"""
+    """Get max pain analysis with strike-by-strike breakdown - uses dynamic expiration"""
     conn = None
     try:
         conn = get_db_connection()
@@ -1351,15 +1366,19 @@ def get_max_pain_analysis():
         price_result = cursor.fetchone()
         current_price = float(price_result['current_price']) if price_result else 600.0
 
-        # Get the most recent max pain data (any expiration)
+        # Get target expiration based on time of day
+        target_date = get_target_expiration()
+
+        # Get the most recent max pain data for target expiration
         cursor.execute("""
             SELECT max_pain, timestamp, expiration
             FROM gex_metrics
             WHERE symbol = 'SPY'
+                AND DATE(expiration) = %s
                 AND max_pain IS NOT NULL
             ORDER BY timestamp DESC
             LIMIT 1
-        """)
+        """, (target_date,))
         max_pain_result = cursor.fetchone()
 
         if not max_pain_result or not max_pain_result['max_pain']:
@@ -1367,7 +1386,6 @@ def get_max_pain_analysis():
 
         max_pain = float(max_pain_result['max_pain'])
         timestamp = max_pain_result['timestamp']
-        target_date = max_pain_result['expiration']
 
         # Get options data for that expiration
         cursor.execute("""
@@ -1501,7 +1519,7 @@ def get_max_pain_history():
 
         # Get last 48 hours of GEX metrics (covers 2 trading sessions)
         cursor.execute("""
-            SELECT
+            SELECT 
                 timestamp,
                 max_pain,
                 underlying_price,
