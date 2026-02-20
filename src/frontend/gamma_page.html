@@ -42,6 +42,9 @@
             border: 1px solid #968f92;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
+        .card.compact {
+            padding: 16px;
+        }
         .card h3 {
             font-size: 14px;
             font-weight: 600;
@@ -50,6 +53,9 @@
             color: #968f92;
             margin-bottom: 16px;
         }
+        .card.compact h3 {
+            margin-bottom: 8px;
+        }
         .metric-large {
             font-size: 48px;
             font-weight: 700;
@@ -57,15 +63,15 @@
             margin-bottom: 8px;
         }
         .metric-medium {
-            font-size: 32px;
+            font-size: 48px;
             font-weight: 600;
             line-height: 1;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .metric-label {
             color: #968f92;
-            font-size: 12px;
-            margin-bottom: 8px;
+            font-size: 11px;
+            margin-bottom: 4px;
         }
         .metric-value {
             font-size: 24px;
@@ -78,6 +84,15 @@
             position: relative;
             height: 400px;
             margin-top: 16px;
+            margin-bottom: 24px;
+        }
+        .chart-container.compact {
+            height: 300px;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+        .chart-container.tall {
+            height: 550px;
             margin-bottom: 24px;
         }
         .level-item {
@@ -312,10 +327,11 @@
             </div>
         </div>
 
-        <!-- Secondary Metrics -->
-        <div class="grid">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px;">
-                <div class="card">
+        <!-- Row with 2x2 metrics grid and Historical Net GEX chart -->
+        <div class="grid grid-2">
+            <!-- 2x2 grid of metrics -->
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                <div class="card compact">
                     <h3>
                         Max Gamma Strike
                         <span class="tooltip">
@@ -328,10 +344,10 @@
                             </span>
                         </span>
                     </h3>
-                    <div id="maxGammaStrike" class="metric-medium neutral">--</div>
+                    <div id="maxGammaStrike2" class="metric-medium neutral">--</div>
                     <div class="metric-label">Price Magnet</div>
                 </div>
-                <div class="card">
+                <div class="card compact">
                     <h3>
                         Gamma Flip Point
                         <span class="tooltip">
@@ -344,10 +360,10 @@
                             </span>
                         </span>
                     </h3>
-                    <div id="gammaFlip" class="metric-medium neutral">--</div>
+                    <div id="gammaFlip2" class="metric-medium neutral">--</div>
                     <div class="metric-label">Zero-Gamma Level</div>
                 </div>
-                <div class="card">
+                <div class="card compact">
                     <h3>
                         Max Pain
                         <span class="tooltip">
@@ -359,10 +375,10 @@
                             </span>
                         </span>
                     </h3>
-                    <div id="maxPain" class="metric-medium neutral">--</div>
+                    <div id="maxPain2" class="metric-medium neutral">--</div>
                     <div class="metric-label">Max Loss Point</div>
                 </div>
-                <div class="card">
+                <div class="card compact">
                     <h3>
                         Put/Call Ratio
                         <span class="tooltip">
@@ -376,15 +392,13 @@
                             </span>
                         </span>
                     </h3>
-                    <div id="putCallRatio" class="metric-medium neutral">--</div>
+                    <div id="putCallRatio2" class="metric-medium neutral">--</div>
                     <div class="metric-label">Open Interest Ratio</div>
                 </div>
             </div>
-        </div>
 
-        <!-- Charts Row 1 -->
-        <div class="grid grid-2">
-            <div class="card">
+            <!-- Historical Net GEX chart -->
+            <div class="card compact">
                 <h3>
                     Historical Net GEX
                     <span class="tooltip">
@@ -397,28 +411,30 @@
                         </span>
                     </span>
                 </h3>
-                <div class="chart-container">
+                <div class="chart-container compact">
                     <canvas id="gexHistoryChart"></canvas>
                 </div>
             </div>
-            <div class="card">
-                <h3>
-                    Gamma Exposure by Strike
-                    <span class="tooltip">
-                        <span class="info-icon">ℹ️</span>
-                        <span class="tooltiptext">
-                            <strong>Current Gamma Profile</strong><br><br>
-                            Shows gamma exposure distribution across strike prices for today's 0DTE options.<br><br>
-                            <strong>Green bars (calls):</strong> Strikes where dealers are long call gamma<br>
-                            <strong>Red bars (puts):</strong> Strikes where dealers are long put gamma<br>
-                            <strong>Red line (total):</strong> Combined gamma at each strike<br><br>
-                            Tall bars indicate strong hedging pressure at that price level. The current SPY price is marked with ◄.
-                        </span>
+        </div>
+
+        <!-- Gamma Exposure by Strike - Full Width -->
+        <div class="card" style="margin-bottom: 24px;">
+            <h3>
+                Gamma Exposure by Strike
+                <span class="tooltip">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="tooltiptext">
+                        <strong>Current Gamma Profile</strong><br><br>
+                        Shows gamma exposure distribution across strike prices for today's 0DTE options.<br><br>
+                        <strong>Green bars (calls):</strong> Strikes where dealers are long call gamma<br>
+                        <strong>Red bars (puts):</strong> Strikes where dealers are long put gamma<br>
+                        <strong>Red line (total):</strong> Combined gamma at each strike<br><br>
+                        Tall bars indicate strong hedging pressure at that price level. The current SPY price is marked with ◄.
                     </span>
-                </h3>
-                <div class="chart-container">
-                    <canvas id="strikeProfileChart"></canvas>
-                </div>
+                </span>
+            </h3>
+            <div class="chart-container tall">
+                <canvas id="strikeProfileChart"></canvas>
             </div>
         </div>
 
@@ -497,6 +513,9 @@
 
         let charts = {};
 
+        // Set Chart.js defaults to ensure legends are visible
+        Chart.defaults.plugins.legend.display = true;
+
         // Get text color based on theme
         function getTextColor() {
             return document.body.classList.contains('light-mode') ? '#423d3f' : '#f2f2f2';
@@ -537,10 +556,10 @@
                     const timestamp = new Date(data.timestamp);
                     document.getElementById('spyTimestamp').textContent = timestamp.toLocaleTimeString();
 
-                    document.getElementById('maxGammaStrike').textContent = `$${data.max_gamma_strike.toFixed(2)}`;
-                    document.getElementById('gammaFlip').textContent = data.gamma_flip_point ? `$${data.gamma_flip_point.toFixed(2)}` : 'N/A';
-                    document.getElementById('maxPain').textContent = data.max_pain ? `$${data.max_pain.toFixed(2)}` : 'N/A';
-                    document.getElementById('putCallRatio').textContent = data.put_call_ratio.toFixed(2);
+                    document.getElementById('maxGammaStrike2').textContent = `$${data.max_gamma_strike.toFixed(2)}`;
+                    document.getElementById('gammaFlip2').textContent = data.gamma_flip_point ? `$${data.gamma_flip_point.toFixed(2)}` : 'N/A';
+                    document.getElementById('maxPain2').textContent = data.max_pain ? `$${data.max_pain.toFixed(2)}` : 'N/A';
+                    document.getElementById('putCallRatio2').textContent = data.put_call_ratio.toFixed(2);
 
                 })
                 .catch(error => console.error('Error fetching current GEX:', error));
@@ -614,6 +633,13 @@
                     });
 
                     const ctx = document.getElementById('gexHistoryChart');
+
+                    // Determine color based on whether data is predominantly positive or negative
+                    const avgGex = filtered.reduce((sum, d) => sum + d.net_gex_millions, 0) / filtered.length;
+                    const isPositive = avgGex > 0;
+                    const lineColor = isPositive ? '#10b981' : '#f45854';
+                    const fillColor = isPositive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(244, 88, 84, 0.1)';
+
                     charts.gexHistory = new Chart(ctx, {
                         type: 'line',
                         data: {
@@ -624,13 +650,23 @@
                                     x: idx,
                                     y: d.net_gex_millions
                                 })),
-                                borderColor: '#f45854',
-                                backgroundColor: 'rgba(244, 88, 84, 0.1)',
+                                borderColor: lineColor,
+                                backgroundColor: fillColor,
                                 borderWidth: 2,
                                 pointRadius: 0,
                                 pointHoverRadius: 5,
                                 tension: 0.4,
-                                fill: true
+                                fill: true,
+                                segment: {
+                                    borderColor: ctx => {
+                                        const value = ctx.p1.parsed.y;
+                                        return value >= 0 ? '#10b981' : '#f45854';
+                                    },
+                                    backgroundColor: ctx => {
+                                        const value = ctx.p1.parsed.y;
+                                        return value >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(244, 88, 84, 0.1)';
+                                    }
+                                }
                             }]
                         },
                         options: {
@@ -803,7 +839,6 @@
                     const ctx = document.getElementById('priceVsGammaChart');
                     charts.priceVsGamma = new Chart(ctx, {
                         type: 'line',
-                        plugins: [],
                         data: {
                             labels: labels,
                             datasets: [
@@ -839,7 +874,8 @@
                                     pointRadius: 0,
                                     fill: false,
                                     yAxisID: 'y',
-                                    order: 2
+                                    order: 2,
+                                    pointStyle: 'line'
                                 },
                                 {
                                     label: 'SPY Price',
@@ -850,7 +886,8 @@
                                     pointRadius: 0,
                                     fill: false,
                                     yAxisID: 'y',
-                                    order: 1
+                                    order: 1,
+                                    pointStyle: 'line'
                                 }
                             ]
                         },
@@ -906,9 +943,11 @@
                             },
                             plugins: {
                                 legend: {
+                                    display: true,
                                     position: 'top',
                                     labels: {
                                         color: getTextColor(),
+                                        usePointStyle: true,
                                         filter: item => !item.text.startsWith('_')
                                     }
                                 },
@@ -994,7 +1033,6 @@
 
                     const ctx = document.getElementById('strikeProfileChart');
 
-                    // FIXED: Store the strike that's closest to spot price
                     let closestStrikeIndex = strikes.findIndex((s, i) => {
                         if (i === strikes.length - 1) return false;
                         return s.strike <= spotPrice && strikes[i + 1].strike > spotPrice;
@@ -1051,7 +1089,6 @@
                                         color: getTextColor(),
                                         callback: function(value, index) {
                                             const strike = strikes[index].strike;
-                                            // FIXED: Only add arrow to the one strike closest to spot
                                             if (index === closestStrikeIndex) {
                                                 return '$' + strike + ' ◄';
                                             }
@@ -1085,21 +1122,11 @@
                             },
                             plugins: {
                                 legend: { 
+                                    display: true,
                                     position: 'top',
-                                    labels: { 
+                                    labels: {
                                         color: getTextColor(),
-                                        usePointStyle: true,
-                                        generateLabels: function(chart) {
-                                            const original = Chart.defaults.plugins.legend.labels.generateLabels;
-                                            const labels = original.call(this, chart);
-                                            labels.forEach((label, index) => {
-                                                if (index === 2) {
-                                                    label.pointStyle = 'line';
-                                                    label.fillStyle = 'transparent';
-                                                }
-                                            });
-                                            return labels;
-                                        }
+                                        usePointStyle: true
                                     }
                                 },
                                 tooltip: {
